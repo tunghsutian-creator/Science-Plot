@@ -2,6 +2,7 @@
 
 import json
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator
@@ -145,7 +146,23 @@ def test_summary_csv_projects_audited_values_and_binds_spec_without_statistics(t
     assert [float(row["mean"]) for row in rows] == [group["bar_mean"] for group in categorical["groups"]]
     assert [float(row["sample_sd"]) for row in rows] == [group["bar_error"] for group in categorical["groups"]]
     assert all(row["spec_sha256"] == file_sha256(spec_path) and row["source_sha256"] == source_tree_sha256(source) for row in rows)
-    assert summary["source_sha256"] == file_sha256(spec_path)
+    original_digest = file_sha256(spec_path)
+    assert summary["source_sha256"] == original_digest
+
+    # A replacement after reading must not relabel the already parsed values.
+    read_bytes = type(spec_path).read_bytes
+    def replace_after_read(path):
+        data = read_bytes(path)
+        if path == spec_path:
+            spec_path.write_text(json.dumps({**spec, "revision": "replacement"}))
+        return data
+    with monkeypatch.context() as patch:
+        patch.setattr(type(spec_path), "read_bytes", replace_after_read)
+        raced = build_plot_data_exports({"veusz_spec": str(spec_path)}, destination=tmp_path / "raced")
+    raced_summary = next(record for record in raced if record.get("data_role") == "mean_sample_sd_n")
+    assert raced_summary["source_sha256"] == original_digest != file_sha256(spec_path)
+    assert Path(raced_summary["path"]).read_bytes() == Path(summary["path"]).read_bytes()
+
     # Historical unmarked and raw-only specs keep their original data export.
     for request in ({}, {"summary_statistic": "raw_only"}):
         spec_path.write_text(json.dumps({**spec, "source_request": request}))

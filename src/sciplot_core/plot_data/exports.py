@@ -9,7 +9,7 @@ from typing import Any
 
 import pandas as pd
 
-from sciplot_core.foundation.file_hashing import existing_file_sha256, file_sha256
+from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.path_names import slug
 from sciplot_core.materials_rules.unit_formatting import looks_like_unit_expression
 from sciplot_core.plot_data.source_tables import (
@@ -19,7 +19,7 @@ from sciplot_core.plot_data.source_tables import (
 )
 from sciplot_core.plot_data.spec_tables import (
     replicate_summary_table,
-    read_json as _read_json,
+    read_spec,
     spec_paths as _spec_paths,
     spec_to_table as _spec_to_table,
     unit_from_label as _unit_from_label,
@@ -57,9 +57,8 @@ def build_plot_data_exports(
         )
         records.append(_data_record(output, source=source, source_kind="processed_source"))
     for index, spec_path in enumerate(specs, start=1):
-        spec = _read_json(spec_path)
+        spec, spec_digest = read_spec(spec_path)
         stem = project_name if index == 1 else f"{project_name}_{index:02d}"
-        spec_digest = file_sha256(spec_path)
         summary = replicate_summary_table(spec, spec_sha256=spec_digest)
         if summary is not None:
             output = destination / f"{stem}_replicate_summary.csv"

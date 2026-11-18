@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -71,12 +72,15 @@ def spec_paths(manifest: dict[str, Any]) -> list[Path]:
     return paths
 
 
-def read_json(path: Path) -> dict[str, Any]:
+def read_spec(path: Path) -> tuple[dict[str, Any], str]:
+    """Parse and identify the same bytes so exported data cannot cite a later revision."""
+    data = path.read_bytes()
+    digest = hashlib.sha256(data).hexdigest()
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
+        payload = json.loads(data.decode("utf-8"))
+    except ValueError:
+        payload = {}
+    return (payload if isinstance(payload, dict) else {}), digest
 
 
 def spec_to_table(
