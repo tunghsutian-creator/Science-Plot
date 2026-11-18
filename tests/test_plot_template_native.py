@@ -201,7 +201,7 @@ def test_template_creation_has_exactly_one_native_export_and_no_repeated_prepara
         replacement = service.create(replacement_request)
         assert replacement["ready_to_use"] and replacement["plot_id"] != first["plot_id"]
         real_load = service.repository.load_head
-        replacement_head = real_load(Path(replacement["plot"]))
+        replacement_head = load_head(Path(replacement["plot"]))
         replacement_native = Path(replacement_head["binding"]["document"])
         replacement_bytes = replacement_native.read_bytes()
         saved_workers = workers.copy()
@@ -210,12 +210,12 @@ def test_template_creation_has_exactly_one_native_export_and_no_repeated_prepara
         # returning the actual other complete project's head, not a forged head.
         with monkeypatch.context() as substitution:
             substitution.setattr(service.repository, "load_head",
-                                 lambda plot: real_load(Path(replacement["plot"]) if plot == original_plot else plot))
+                                 lambda plot: replacement_head if plot == original_plot else real_load(plot))
             with pytest.raises(EngineError) as error:
                 service.create(request)
         assert error.value.reason_code == "document_template_adoption_conflict"
         assert workers == saved_workers
-        assert replacement_native.read_bytes() == replacement_bytes and real_load(Path(replacement["plot"])) == replacement_head
+        assert replacement_native.read_bytes() == replacement_bytes and load_head(Path(replacement["plot"])) == replacement_head
         workers = original_workers
     report = {"status": "passed", "style_change": style_change, "native_workers": dict(workers),
               "baseline_export_performed": False, "replay_native_calls": 0,
