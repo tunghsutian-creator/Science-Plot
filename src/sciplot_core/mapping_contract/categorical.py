@@ -74,9 +74,9 @@ def validate_categorical_binding(value: Any, *, complete: bool = False) -> None:
     if (isinstance(value, dict) and value.get("mode") in ("mean_sample_sd", "mean_sample_sd_n")
             and ("legend_columns" in value or value.get("legend_position", "auto") != "auto")):
         raise ValueError("Explicit legend columns and corner placement require given_values point-lines with a native key. Repeated-measurement bars retain their existing fixed categorical legend.")
-    errors = list(Draft202012Validator(categorical_binding_schema(complete=complete)).iter_errors(value))
-    if errors:
-        raise ValueError(f"Invalid categorical binding at {list(errors[0].absolute_path)}: {errors[0].message}")
+    error = next(Draft202012Validator(categorical_binding_schema(complete=complete)).iter_errors(value), None)
+    if error is not None:
+        raise ValueError(f"Invalid categorical binding at {list(error.absolute_path)}: {error.message}")
     indices = [value[key] for key in ("sample_column", "condition_column") if value.get(key) is not None]
     indices.extend(item["column_index"] for item in value.get("value_columns", []))
     if any(type(index) is not int for index in indices):

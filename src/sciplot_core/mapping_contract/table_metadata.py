@@ -31,7 +31,6 @@ def metadata_confirmations_schema() -> dict[str, Any]:
 
 
 def validate_metadata_confirmations(value: Any) -> None:
-    errors = list(Draft202012Validator(metadata_confirmations_schema()).iter_errors(value))
-    if errors:
-        error = errors[0]
+    error = next(Draft202012Validator(metadata_confirmations_schema()).iter_errors(value), None)
+    if error is not None:
         raise ValueError(f"Invalid metadata confirmation at {list(error.absolute_path)}: {error.message}")

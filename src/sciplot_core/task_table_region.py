@@ -14,9 +14,9 @@ from sciplot_core.task_storage import load_task, task_path
 
 
 def inspect_table_region(task: Path, query: dict[str, Any]) -> dict[str, Any]:
-    errors = list(Draft202012Validator(table_region_schema()).iter_errors(query))
-    if errors:
-        raise TaskControlError("invalid_task_response", errors[0].message)
+    error = next(Draft202012Validator(table_region_schema()).iter_errors(query), None)
+    if error is not None:
+        raise TaskControlError("invalid_task_response", error.message)
     state = load_task(task_path(task))
     question = state.get("question", {})
     if (state["status"] != "needs_input" or question.get("field") not in {"rule_id", "table_selection", "column_mapping"}
