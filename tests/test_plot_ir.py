@@ -75,6 +75,8 @@ def test_rebuild_is_pure_identical_and_keeps_missing_values_and_stable_ids():
     assert [series["id"] for series in first["series"]] == ["series:A", "series:B"]
     assert rebuilt["scientific_hash"] == document["scientific_hash"]
     assert "backend" not in first and "native_path" not in str(first)
+    resolved["datasets"]["A-normalized"]["columns"]["column:1"]["values"][0] = 99
+    assert compile_document(document) == first
     unrelated = deepcopy(document)
     unrelated.update(plot_id="other-id", revision=123, backend={"name": "unrelated"})
     assert compile_document(unrelated)["ir_hash"] == first["ir_hash"]

@@ -28,12 +28,11 @@ def execute_node(node: Any, inputs: dict[str, dict[str, Any]], *,
     if any(name not in inputs for name in node["inputs"]):
         fail("transform_input_missing", "The named input dataset has not been resolved.", "/inputs", "existing_dataset")
     sources = [validate_dataset(inputs[name]) for name in node["inputs"]]
-    source = sources[0]
-    input_hashes = [dataset_hash(value) for value in sources]
-    key = digest({"node": node, "inputs": input_hashes})
     if implementation is not None:
         return implementation.execute(node, sources)
-    result, details = run_external(node, source, external_executors or {})
+    input_hashes = [dataset_hash(value) for value in sources]
+    key = digest({"node": node, "inputs": input_hashes})
+    result, details = run_external(node, sources[0], external_executors or {})
     return record_result(node, result, details, input_hashes, key), key
 
 
@@ -70,7 +69,8 @@ def resolve_transforms(document: Any, datasets: dict[str, dict[str, Any]], *,
             fail("transform_executor_changed", "Transform determinism or registered implementation cannot be reused.", "/transforms", "registered_deterministic_executor")
         if node["kind"] != "external":
             require_builtin(node)
-        key = digest({"node": node, "inputs": [dataset_hash(values[name]) for name in node["inputs"]]})
+        input_hashes = [dataset_hash(values[name]) for name in node["inputs"]]
+        key = digest({"node": node, "inputs": input_hashes})
         candidate = saved.get(key)
         if candidate is not None:
             candidate = validate_dataset(candidate)
@@ -95,8 +95,8 @@ def resolve_transforms(document: Any, datasets: dict[str, dict[str, Any]], *,
         values[node["output"]] = candidate
         records.append({"node_id": node["id"], "status": "complete", "determinism": node["determinism"],
                         "cache_key": key, "output_dataset": node["output"], "content_hash": dataset_hash(candidate),
-                        "executor": deepcopy(node["executor"]), "input_hashes": [dataset_hash(values[name]) for name in node["inputs"]]})
-    document["scientific"]["provenance"]["datasets"] = deepcopy(values)
+                        "executor": deepcopy(node["executor"]), "input_hashes": input_hashes})
+    document["scientific"]["provenance"]["datasets"] = values
     document["scientific"]["provenance"]["transform_execution"] = records
     document = seal_document(document)
     from .graph import dependency_graph
