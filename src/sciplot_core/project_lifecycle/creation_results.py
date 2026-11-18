@@ -23,6 +23,14 @@ def _result(service: PlotOpener, root: Path, state: dict[str, Any], task: dict[s
         if gaps:
             return _stale_result(root, task, gaps)
         plot = service.open(Path(task["project"]))
+        if plot.get("kind") == "sciplot_legacy_plot" and plot.get("status") == "opened" and plot.get("read_only") is True:
+            return {"kind": "sciplot_plot_creation", "status": "complete", "plot": plot["document"]["path"],
+                    "project": task["project"], "document": plot["document"],
+                    "plot_type": "LegacyPlot", "read_only": True, "new_features_require_conversion": True,
+                    "conversion": plot["conversion"], "creation_evidence": str(root / "creation.json"),
+                    "ready_to_use": True, "current_evidence": {key: current[key] for key in ("source", "qa", "delivery")},
+                    "figures": task["result"].get("figures", []), "delivery": task.get("next_step"),
+                    "next_step": {"action": "deliver"}}
         if plot.get("status") != "current":
             return _stale_result(root, task, ["semantic_document"], plot=plot)
         return {"kind": "sciplot_plot_creation", "status": "complete", "plot": plot["plot"],
@@ -46,7 +54,7 @@ def _result(service: PlotOpener, root: Path, state: dict[str, Any], task: dict[s
 
 def _stale_result(root: Path, task: dict[str, Any], gaps: list[str], *, plot: dict[str, Any] | None = None) -> dict[str, Any]:
     return {"kind": "sciplot_plot_creation", "status": "blocked", "creation_status": "complete",
-            "plot": plot["plot"] if plot else str(root), "project": task["project"], "ready_to_use": False,
+            "plot": (plot or {}).get("plot") or str(root), "project": task["project"], "ready_to_use": False,
             "creation_evidence": str(root / "creation.json"),
             "blocker": {"reason_code": "document_creation_evidence_stale",
                         "message": "Creation completed, but current source, native or delivery evidence is missing or changed.",

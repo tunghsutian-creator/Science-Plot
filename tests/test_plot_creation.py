@@ -67,6 +67,20 @@ def test_creation_reuses_current_evidence_but_checks_semantic_native_binding(tmp
     ready = creation._result(Opener(), tmp_path / "ready", {}, task())
     assert ready["status"] == "complete" and ready["ready_to_use"] is True
 
+    class NativeOnly(Opener):
+        def open(self, target: Path, figure_id: str | None = None) -> dict[str, Any]:
+            return {"kind": "sciplot_legacy_plot", "status": "opened", "read_only": True,
+                    "document": {"path": str(target / "studio/document.vsz"), "sha256": "saved"},
+                    "conversion": {"action": "legacy_convert"}}
+
+    completed = task()
+    completed["result"]["figures"] = [{"exports": [{"format": "pdf", "path": "/exports/figure.pdf"}]}]
+    legacy = creation._result(NativeOnly(), tmp_path / "legacy", {}, completed)
+    assert legacy["ready_to_use"] and legacy["plot_type"] == "LegacyPlot" and legacy["read_only"]
+    assert legacy["plot"] == legacy["document"]["path"] and legacy["project"] == completed["project"]
+    assert legacy["figures"] == completed["result"]["figures"] and legacy["delivery"] == completed["next_step"]
+    assert legacy["conversion"]["action"] == "legacy_convert" and "revision" not in legacy
+
 
 def test_creation_without_current_snapshot_queries_once_before_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     old = deepcopy(task())
