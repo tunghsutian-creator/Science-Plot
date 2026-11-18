@@ -43,6 +43,7 @@ def attempt_for(value):
 
 def test_exact_inspection_requires_native_domain_tool_target_and_system(inputs):
     tool, target, system = inputs
+    assert policy.native_probe_target(str(tool), [str(tool), '-L', str(target)], None, policy.probe_environment()) == target
     value = policy.native_probe_call(invocation(tool, target))
     records = {digest(str(p)): {'sha256': policy.file_sha256(p)} for p in inputs}
     assert policy.native_probe_bound(value, records, attempt_for(value))
@@ -72,6 +73,10 @@ def test_unreviewed_native_invocation_cannot_obtain_boundary(inputs, monkeypatch
     elif change == 'callsite':
         monkeypatch.setattr(policy, 'owned_caller', lambda *args: None)
     assert policy.native_probe_call(bound) is None
+    if change in {'loader', 'executable', 'cwd', 'binary', 'mode', 'relative', 'non_macho', 'callsite'}:
+        command = bound.arguments['args']
+        executable = str(target) if change == 'executable' else command[0]
+        assert policy.native_probe_target(executable, command, bound.arguments.get('cwd'), bound.arguments['env']) is None
 
 
 @pytest.mark.parametrize('field', ['owner', 'mode', 'environment_sha256', 'tool_sha256', 'tool_path_sha256', 'system_sha256', 'extra'])

@@ -147,7 +147,12 @@ def install() -> None:
                 except (ValueError, TypeError):
                     retained = False
                 if not retained:
-                    raise PermissionError("A public child cannot drop its input guard declaration.")
+                    from sciplot_core.verification.native_probe_boundary import native_probe_target
+
+                    # The owned non-Python inspector requires its exact closed environment.
+                    # Private operands have already been rejected above.
+                    if native_probe_target(executable, arguments, _cwd, environment) is None:
+                        raise PermissionError("A public child cannot drop its input guard declaration.")
 
     install_open_port()
     sys.addaudithook(hook)

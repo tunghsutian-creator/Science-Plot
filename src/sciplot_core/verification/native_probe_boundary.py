@@ -61,24 +61,34 @@ def _boundary(mode: str, target: Path) -> dict[str, Any]:
             'environment_sha256': canonical_json_sha256(probe_environment(), allow_nan=False), 'system_sha256': file_sha256(_SYSTEM)}
 
 
-def native_probe_call(bound: inspect.BoundArguments) -> dict[str, Any] | None:
-    """Recognize only the unchanged native discovery owner and exact invocation."""
-    command = bound.arguments.get('args')
-    allowed = {'self', 'args', 'stdout', 'stderr', 'text', 'env'}
-    if (set(bound.arguments) - allowed or not isinstance(command, (list, tuple)) or len(command) != 3
-            or not all(isinstance(part, str) for part in command)
-            or command[1] not in {'-L', '-l'}
-            or bound.arguments.get('env') != probe_environment()
-            or bound.arguments.get('stdout') != subprocess.PIPE or bound.arguments.get('stderr') != subprocess.PIPE
-            or bound.arguments.get('text') is not True
-            or owned_caller('evidence_runtime.py', 'native_dependencies') is None):
+def native_probe_target(executable: Any, command: Any, cwd: Any, environment: Any) -> Path | None:
+    """Recognize the exact closed-environment inspector call at either launch boundary."""
+    if (cwd is not None or not isinstance(command, (list, tuple)) or len(command) != 3
+            or not all(isinstance(part, str) for part in command) or executable != command[0]
+            or command[1] not in {"-L", "-l"} or environment != probe_environment()
+            or owned_caller("evidence_runtime.py", "native_dependencies") is None):
         return None
     try:
         target = Path(command[2])
         if (Path(command[0]) != inspector_path() or not target.is_absolute()
                 or target != target.resolve(strict=True) or not is_macho(target)):
             return None
-        return _boundary(command[1], target)
+        return target
+    except (OSError, ValueError):
+        return None
+
+
+def native_probe_call(bound: inspect.BoundArguments) -> dict[str, Any] | None:
+    """Recognize only the unchanged native discovery owner and exact invocation."""
+    command = bound.arguments.get("args")
+    allowed = {"self", "args", "stdout", "stderr", "text", "env"}
+    if (set(bound.arguments) - allowed or not isinstance(command, (list, tuple)) or not command
+            or bound.arguments.get("stdout") != subprocess.PIPE or bound.arguments.get("stderr") != subprocess.PIPE
+            or bound.arguments.get("text") is not True):
+        return None
+    target = native_probe_target(command[0], command, None, bound.arguments.get("env"))
+    try:
+        return _boundary(command[1], target) if target is not None else None
     except (OSError, ValueError):
         return None
 
