@@ -31,8 +31,11 @@ def test_affected_selection_is_exact_public_focused_and_preserves_canonical_prof
     assert public_stage._selected_public_nodes(manifest, source, "public-affected", ["tests/test_generated.py::test_value"]) == set(nodes[:2])
     assert public_stage._selected_public_nodes(manifest, source, "public-affected", [nodes[0]]) == {nodes[0]}
     assert public_stage._selected_public_nodes(manifest, source, "public-affected", ["tests/test_generated.py"]) == set(nodes[:3])
+    assert public_stage._selected_public_nodes(manifest, source, "public-affected-native", [nodes[3]]) == {nodes[3]}
+    with pytest.raises(ValueError, match="current tracked test in its public tier"):
+        public_stage._selected_public_nodes(manifest, source, "public-affected-native", [nodes[0]])
     for target in [nodes[3], nodes[4], "../tests/test_generated.py", "-q", "tests/untracked.py", "tests/test_generated.py::missing"]:
-        with pytest.raises(ValueError, match="current tracked public focused"):
+        with pytest.raises(ValueError, match="current tracked test in its public tier"):
             public_stage._selected_public_nodes(manifest, source, "public-affected", [target])
 
 
@@ -62,7 +65,9 @@ assert callable(validate_stage)
 @pytest.mark.parametrize("partial_collection", (False, True))
 def test_affected_selector_runs_after_exhaustive_scope_validation(tmp_path: Path, partial_collection: bool) -> None:
     nodes = ["test_generated.py::test_one", "test_generated.py::test_one_extra"]
-    manifest = {"scopes": {"public": nodes, "private": []}, "tiers": {"focused": nodes, "comprehensive": []}}
+    tier = "focused" if partial_collection else "comprehensive"
+    manifest = {"scopes": {"public": nodes, "private": []},
+                "tiers": {item: nodes if item == tier else [] for item in ("focused", "comprehensive")}}
     (tmp_path / "conftest.py").write_text(f'''import json
 from pathlib import Path
 import pytest
@@ -75,7 +80,7 @@ def pytest_collection_modifyitems(config, items):
     Path("collected.json").write_text(json.dumps(collected))
     try:
         select_scope(config.getoption("input_scope"), manifest={manifest!r}, collected=collected,
-                     tiers={{node: "focused" for node in collected}}, private_nodes=set())
+                     tiers={{node: {tier!r} for node in collected}}, private_nodes=set())
     except ValueError as error:
         raise pytest.UsageError(str(error)) from error
 ''')
@@ -87,7 +92,7 @@ def test_one_extra():
 ''')
     # cwd alone does not stop pytest discovering a parent project's root.
     command = [sys.executable, "-m", "pytest", "-q", f"--rootdir={tmp_path}", "-p", "sciplot_core.verification.public_stage_selection",
-               "--input-scope", "public-focused", "--sciplot-public-target", nodes[0]]
+               "--input-scope", f"public-{tier}", "--sciplot-public-target", nodes[0]]
     if partial_collection:
         command.append(nodes[0])
     environment = dict(os.environ)

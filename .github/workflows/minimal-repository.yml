@@ -77,6 +77,7 @@ jobs:
         env:
           PYTHONPATH: src
           SCIPLOT_EVENT_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          SCIPLOT_EVENT_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref && format('refs/heads/{0}', github.event.pull_request.base.ref) || github.ref }}
         run: python3 -m sciplot_core.verification.ci_feedback --base "$SCIPLOT_EVENT_BASE"
       - name: Enforce minimal runtime distribution
         if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}
@@ -200,7 +201,11 @@ jobs:
           PYFONT
       - name: Run lint gate
         if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}
-        run: python3 -m ruff check src tests
+        env:
+          SCIPLOT_FEEDBACK_LAYER: ${{ steps.native-feedback.outcome == 'success' && steps.native-feedback.outputs.layer == 'affected' && 'affected' || 'full' }}
+          SCIPLOT_EVENT_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          SCIPLOT_EVENT_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref && format('refs/heads/{0}', github.event.pull_request.base.ref) || github.ref }}
+        run: python3 -m sciplot_core.verification.ci_feedback --base "$SCIPLOT_EVENT_BASE" --lint "$SCIPLOT_FEEDBACK_LAYER"
       - name: Run shared source contracts
         if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}
         run: |
@@ -322,6 +327,7 @@ jobs:
         if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome == 'success' && steps.native-feedback.outputs.layer == 'affected' && github.event_name != 'workflow_dispatch') }}
         env:
           SCIPLOT_EVENT_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          SCIPLOT_EVENT_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref && format('refs/heads/{0}', github.event.pull_request.base.ref) || github.ref }}
         run: python3 -m sciplot_core.verification.ci_feedback --base "$SCIPLOT_EVENT_BASE" --run-affected
       - name: Run reviewed public focused behavior
         if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && ((steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch')) }}

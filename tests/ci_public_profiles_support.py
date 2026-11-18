@@ -98,6 +98,27 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
         context.setattr(task_timing_feedback, "task_timing_feedback_eligible", lambda _root: False)
         assert ci_feedback.ci_feedback_plan([leaf], root)["layer"] == "full"
 
+    paths = ["src/sciplot_core/source_tables/parsing.py", "src/sciplot_core/source_tables/curve_tables.py",
+             "src/sciplot_core/source_tables/heatmap_tables.py"]
+    regular = ci_feedback.ci_feedback_plan(paths, root, ref="refs/heads/main")
+    assert regular["layer"] == "affected" and not regular["native_targets"]
+    assert "tests/test_source_numeric_encodings.py" in regular["targets"]
+    paths = ["src/sciplot_core/intake/table_preview.py", "tests/test_intake_review_recovery.py",
+             "src/sciplot_core/panel_assembly/export.py", "src/sciplot_core/panel_assembly/preview.py",
+             "tests/test_panel_assembly_export.py"]
+    panel = ci_feedback.ci_feedback_plan(paths, root, event="pull_request")
+    assert panel["layer"] == "affected" and not panel["native_targets"]
+    assert {"tests/test_intake_review_recovery.py", "tests/test_panel_assembly_export.py"} <= set(panel["targets"])
+    for ref in ("refs/heads/integration", "refs/heads/release/next", "refs/tags/v1"):
+        assert ci_feedback.ci_feedback_plan(paths, root, ref=ref)["layer"] == "full"
+    for unsafe in ("src/sciplot_core/panel_assembly/unknown.py", "tests/test_private_observer.py",
+                   ".github/workflows/minimal-repository.yml"):
+        assert ci_feedback.ci_feedback_plan([*paths, unsafe], root)["layer"] == "full"
+    assert ci_feedback.ci_feedback_plan(paths, tmp_path)["layer"] == "full"
+    native_path = "src/sciplot_core/panel_assembly/native.py"
+    native = ci_feedback.ci_feedback_plan([native_path], root)
+    assert native["layer"] == "affected" and len(native["native_targets"]) == 2
+
     workflow = (root / ".github/workflows/minimal-repository.yml").read_text()
     steps = workflow.split("      - name: ")
     conditional = {step.splitlines()[0]: re.search(r"        if: \$\{\{ (.*?) \}\}", step).group(1)
@@ -151,6 +172,24 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
         result = ci_feedback.run_affected(tmp_path, "a" * 40, event="push")
         assert selected and result["full_public_profiles"] == "NOT_EXECUTED" and result["reusable_origin"] is False
         assert (tmp_path / ".tmp_verify/ci_public_affected/feedback-result.json").is_file()
+    with monkeypatch.context() as context:
+        staged = tmp_path / "native-case"
+        file = staged / native_path
+        file.parent.mkdir(parents=True)
+        file.touch()
+        context.setattr(ci_feedback, "changed_paths", lambda *_args: [native_path])
+        stages = []
+
+        def stage(_root, output, profile, *, targets=None):
+            stages.append((profile, targets))
+            output.mkdir(parents=True)
+            return {"status": "BLOCKED" if profile == "public-affected-native" else "PASS"}
+
+        context.setattr(public_stage, "run_public_stage", stage)
+        result = ci_feedback.run_affected(staged, "a" * 40, event="push")
+        assert [profile for profile, _ in stages] == ["public-affected", "public-affected-native"]
+        assert stages[1][1] == native["native_targets"]
+        assert result["status"] == "BLOCKED" and result["targeted_native"]["status"] == "BLOCKED"
     with monkeypatch.context() as context:
         context.setattr(ci_feedback, "changed_paths", lambda *_args: (_ for _ in ()).throw(OSError("unavailable")))
         context.setattr(sys, "argv", ["ci_feedback", "--base", "a" * 40])

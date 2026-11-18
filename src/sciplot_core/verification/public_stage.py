@@ -250,8 +250,11 @@ def create_stage(root: Path, output: Path, environment: dict[str, str]) -> tuple
     return stage, child_environment, receipt
 
 
+_TARGETED_SCOPES = {"public-affected": "public-focused", "public-affected-native": "public-comprehensive"}
+
+
 def _selected_public_nodes(manifest: dict[str, Any], source: dict[str, str], profile: str, targets: list[str] | None) -> set[str]:
-    scope = "public-focused" if profile == "public-affected" else profile
+    scope = _TARGETED_SCOPES.get(profile, profile)
     expected = set(manifest["scopes"]["public"])
     if scope != "public-all":
         expected.intersection_update(manifest["tiers"][scope.removeprefix("public-")])
@@ -262,17 +265,17 @@ def _selected_public_nodes(manifest: dict[str, Any], source: dict[str, str], pro
         filename = target.split("::", 1)[0]
         matches = {node for node in expected if node == target or node.startswith((target + "::", target + "["))}
         if not filename.startswith("tests/") or filename not in source or not matches:
-            raise ValueError("Affected selector must bind a current tracked public focused test.")
+            raise ValueError("Affected selector must bind a current tracked test in its public tier.")
         selected.update(matches)
     return selected
 
 
 def run_public_stage(root: Path, output: Path, profile: str, *, targets: list[str] | None = None) -> dict[str, Any]:
-    affected = profile == "public-affected"
-    if profile not in {"public-focused", "public-comprehensive", "public-all", "public-affected"}:
+    affected = profile in _TARGETED_SCOPES
+    if profile not in {"public-focused", "public-comprehensive", "public-all", *_TARGETED_SCOPES}:
         raise ValueError("Only exact public profiles may execute in a source stage.")
     if affected != bool(targets) or (targets is not None and not affected):
-        raise ValueError("Only public-affected requires explicit nonempty test selectors.")
+        raise ValueError("Only an affected public profile requires explicit nonempty test selectors.")
     root = root.expanduser().resolve()
     output = output.expanduser()
     output = output if output.is_absolute() else root / output
@@ -282,7 +285,7 @@ def run_public_stage(root: Path, output: Path, profile: str, *, targets: list[st
     stage, child_environment, before = create_stage(root, output, environment)
     from sciplot_core.verification.input_scope import load_manifest
     manifest = load_manifest(stage / "src/sciplot_core/verification/input_scope_manifest.json")
-    scope = "public-focused" if affected else profile
+    scope = _TARGETED_SCOPES.get(profile, profile)
     expected = _selected_public_nodes(manifest, before["source_bytes"], profile, targets)
     finish = output / "finish.json"
     command = [sys.executable, "-m", "pytest", "-vv", "-p", "sciplot_core.verification.pytest_finish",
@@ -382,7 +385,7 @@ def pytest_sessionfinish(session: Any, exitstatus: Any) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", required=True, type=Path)
-    parser.add_argument("--profile", choices=("public-focused", "public-comprehensive", "public-all", "public-affected"), default="public-comprehensive")
+    parser.add_argument("--profile", choices=("public-focused", "public-comprehensive", "public-all", *_TARGETED_SCOPES), default="public-comprehensive")
     parser.add_argument("--target", action="append", dest="targets")
     arguments = parser.parse_args()
     root = Path(__file__).resolve().parents[3]
