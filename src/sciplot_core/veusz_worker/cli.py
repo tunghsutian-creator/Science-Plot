@@ -71,6 +71,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "--font-evidence", action="store_true",
         help="Include read-only requested-font and Qt screen-match preflight evidence.",
     )
+    legacy_xy_parser = subparsers.add_parser("inspect-legacy-xy", help="Read one convertible saved XY plot.")
+    legacy_xy_parser.add_argument("document", type=Path)
     preview_parser = subparsers.add_parser(
         "preview-document", help="Render the exact saved first page as a PNG."
     )
@@ -185,6 +187,10 @@ def _execute(argv: list[str] | None = None) -> int:
     elif args.command == "inspect-document-state":
         payload = (inspect_document_state(args.document, include_font_evidence=True)
                    if args.font_evidence else inspect_document_state(args.document))
+    elif args.command == "inspect-legacy-xy":
+        from sciplot_core.veusz_worker.legacy_xy import inspect_legacy_xy
+
+        payload = inspect_legacy_xy(args.document)
     elif args.command == "preview-document":
         from sciplot_core.veusz_worker.document_edit import preview_document
 

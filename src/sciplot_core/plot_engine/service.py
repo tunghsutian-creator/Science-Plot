@@ -60,7 +60,9 @@ class PlotService(ProjectApplication):
             saved = self._read_legacy_saved(canonical_path(plot), figure_id)
             if saved is not None:
                 raise EngineError("legacy_conversion_required", "This saved legacy figure is read-only. Convert a separate copy to edit it.",
-                                  action="redraw_legacy", target=str(saved[1]))
+                                  action="legacy_convert", target=str(saved[1]),
+                                  cli_argv=["sciplot", "project", "legacy-convert", str(saved[1]), "--out"],
+                                  requires=["new_output_directory"])
 
     def describe(self, plot: Path, *, description: dict[str, Any] | None = None) -> dict[str, Any]:
         description = require_selector(description)

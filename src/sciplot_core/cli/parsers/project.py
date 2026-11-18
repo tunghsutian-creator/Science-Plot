@@ -27,6 +27,13 @@ def register_project_commands(subparsers: Any) -> None:
         "--out", type=Path, help="New source-adjacent visible delivery directory."
     )
     create.add_argument("--json", action="store_true")
+    conversion = actions.add_parser("legacy-convert", help="Make a new Managed project from a supported saved XY plot.")
+    conversion.add_argument("target", type=Path)
+    conversion.add_argument("--out", required=True, type=Path)
+    conversion.add_argument("--figure")
+    conversion.add_argument("--x-unit", help="Original X unit if absent from the saved axis label.")
+    conversion.add_argument("--y-unit", help="Original Y unit if absent from the saved axis label.")
+    conversion.add_argument("--json", action="store_true")
     redraw = actions.add_parser("legacy-redraw", help="Redraw an exact saved old plot into a new directory.")
     redraw.add_argument("target", type=Path, help="Saved project directory or exact VSZ.")
     redraw.add_argument("--figure", help="Exact saved figure ID in the project.")

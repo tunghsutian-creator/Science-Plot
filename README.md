@@ -286,9 +286,21 @@ skill/scripts/sciplot project legacy-redraw OLD_PROJECT --out NEW_DIRECTORY --fo
 Use `--figure` to select a registered figure in a multi-figure project, or
 give the exact saved `.vsz` instead. The new output directory must be outside
 the original project. Redraw uses the first page of the selected saved native
-document as-is, not the current recipes or raw-data pipeline. If the VSZ links external data, the
-original linked files are still needed. These commands do not convert or edit
-the plot; use a converted copy for new-format features.
+document as-is, not the current recipes or raw-data pipeline. If the VSZ links
+external data, the original linked files are still needed.
+
+For new-format editing, make a separate Managed project:
+
+```bash
+skill/scripts/sciplot project legacy-convert OLD_PROJECT --out NEW_DIRECTORY --json
+```
+
+Conversion currently accepts one page with one ordinary linear Cartesian XY
+curve and embedded finite values. Units come from the saved axis labels or
+explicit `--x-unit` and `--y-unit` values. Unsupported settings and objects
+block conversion rather than disappearing. The new copy preserves the exact
+plotted values and units, but uses Managed layout and typography. To reproduce
+the original appearance, use `legacy-redraw`.
 
 New Managed native builds are saved in an owned staging directory, audited and
 previewed before the complete VSZ is published without replacing an existing

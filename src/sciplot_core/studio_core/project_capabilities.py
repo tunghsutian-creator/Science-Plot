@@ -16,6 +16,7 @@ def project_control_capabilities() -> dict[str, Any]:
         "commands": {
             "create": "project create SOURCE --expected-plan PLAN_JSON [--out VISIBLE_DIRECTORY] --json",
             "legacy_open": "plot open TARGET [--figure-id FIGURE_ID] --json",
+            "legacy_convert": "project legacy-convert TARGET --out NEW_DIRECTORY [--figure FIGURE_ID] [--x-unit UNIT] [--y-unit UNIT] --json",
             "legacy_redraw": "project legacy-redraw TARGET --out NEW_DIRECTORY [--formats pdf,png_300] --json",
             "inspect": "project inspect PROJECT [--figure FIGURE_ID] [--object WIDGET_PATH] --json",
             "preview": "project preview PROJECT --figure FIGURE_ID --out NEW_DIRECTORY --json",

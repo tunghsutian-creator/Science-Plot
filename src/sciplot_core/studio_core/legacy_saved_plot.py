@@ -46,8 +46,11 @@ def open_legacy_document(root: Path, document: Path) -> dict[str, Any]:
             "read_only": True, "new_features_require_conversion": True,
             "next_step": {"action": "redraw_legacy", "target": str(document),
                           "cli_argv": ["sciplot", "project", "legacy-redraw", str(document), "--out"],
-                          "requires": ["new_output_directory"],
-                          "message": "Redraw the saved plot in a new directory. Editing it requires a separate converted copy."}}
+                          "requires": ["new_output_directory"]},
+            "conversion": {"action": "legacy_convert", "target": str(document),
+                           "cli_argv": ["sciplot", "project", "legacy-convert", str(document), "--out"],
+                           "requires": ["new_output_directory"],
+                           "message": "To edit a supported saved XY plot, convert a separate copy."}}
 
 
 def redraw_legacy_plot(target: Path, *, output: Path, formats: list[str],

@@ -29,6 +29,13 @@ def dispatch_project_control(args: Any) -> int:
         from sciplot_core.cli.dispatch.pdf_review import dispatch_pdf_review
 
         return dispatch_pdf_review(args)
+    if action == "legacy-convert":
+        from sciplot_core.studio_core.legacy_conversion import convert_legacy_plot
+
+        result = convert_legacy_plot(args.target, output=args.out, figure_id=args.figure,
+                                     x_unit=args.x_unit, y_unit=args.y_unit)
+        _print_json(result)
+        return 0 if result["status"] == "converted" else 1
     if action == "legacy-redraw":
         from sciplot_core.studio_core.legacy_saved_plot import redraw_legacy_plot
 
