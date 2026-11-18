@@ -515,7 +515,8 @@ skill/scripts/sciplot task create /absolute/raw.csv --rule dma_temperature_sweep
 
 The new plot keeps negative observations on the default linear scale. Its
 recorded kPa → Pa → MPa operations round separately. Older automatic DMA
-plots apply the combined factor once. For normal finite values, the results
-are equivalent to binary64 rounding precision, but are not bit-for-bit
-identical and can differ by more than one unit in the last place. This
-explicit route does not change the automatic DMA recipe or existing projects.
+plots apply the combined factor once. When the input, intermediate values
+and result stay in the normal finite binary64 range (zero converts exactly),
+the results agree within rounding precision but are not bit-for-bit identical.
+They can differ by more than one unit in the last place. This explicit route
+does not change the automatic DMA recipe or existing projects.
