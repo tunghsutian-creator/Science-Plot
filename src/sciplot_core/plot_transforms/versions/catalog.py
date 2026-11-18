@@ -239,7 +239,7 @@ LEGACY_ORIGINAL_PATHS: dict[str, Any] = {'foundation/text_values.py': '896b25c5b
  'semantic_sources/rheology_units.py': '1362844171acf2a989cc8926a4e8c9bbdab1f6a79aee859c7f055ab7c44ba4e3'}
 
 
-EXACT_X_MEAN_V1: dict[str, Any] = {'content_hash': '91afcb4655bdddfc8bc37c74c4b1f8921daed8900d75c407ea40fffc84e3c934',
+EXACT_X_MEAN_V1: dict[str, Any] = {'content_hash': '2f0ede9f46a9af650d96b7a18dc3e421b743c06a6572c8f912e50178814d65ef',
  'entry': 'v1.rheology_mean:mean_at_exact_x',
  'files': {'__init__.py': 'b2daada6018f878a102dd328dc2e96008061dc7325c03bfdf129942a350e925f',
            'v1/__init__.py': '665b4aff06139a06c7c2fd06b1e823d9804708494b698f31034db579fa8add87',
@@ -248,7 +248,7 @@ EXACT_X_MEAN_V1: dict[str, Any] = {'content_hash': '91afcb4655bdddfc8bc37c74c4b1
            'v1/json_values.py': '576a66e558d148b4b23d3bf8ba704feadb63f30816164e8aeceaa7477362483f',
            'v1/lineage.py': '6f6b9681880306e82623a955ca3277ffea078bb8e00cf2ceb29c6203a89f3fa4',
            'v1/node_contract.py': '036000b9c6b68658ddc1d7a581eec074a6d6bdad6d09b17eecb6418ba1854d53',
-           'v1/rheology_mean.py': '0b8863f573bc93ca4503ba9786b2ae90cc41dceb06d29cff8e3761ff89fe60d4',
+           'v1/rheology_mean.py': '6018132466e35abfd7b6b9848836e3e1ee6435e9f0b1b21f41d2f05a83027b99',
            'v1/runtime.py': '74b77455571b47b8e72f5714188c421c5f680686d351ff9904f6fd0271bcc1b8',
            'v1/schema.py': '129fe08661f02d539193ab22217faf65d7e2b78b221ccf20827d56d8172eb0f2',
            'v1/selection.py': '34c07aa09447eaddf9c9338c1d51c34f30c8b126e69d1a0ca406ecb366deaf31',

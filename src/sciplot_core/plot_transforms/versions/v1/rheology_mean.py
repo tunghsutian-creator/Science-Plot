@@ -13,18 +13,20 @@ from .runtime import record_result
 
 def mean_at_exact_x(node: dict[str, Any], sources: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[str, Any]]:
     x_name = node["parameters"]["x_column"]
-    columns = deepcopy(sources[0]["columns"])
-    metrics = [name for name in columns if name != x_name]
-    if x_name not in columns or not metrics:
-        fail("transform_sweep_columns_invalid", "A replicate group needs one measured x and at least one metric.",
-             "/parameters/x_column", "measured_x_and_metrics")
+    columns: dict[str, Any] = {}
     rows: dict[float, dict[str, list[float]]] = {}
     origins: dict[float, list[dict[str, Any]]] = {}
     for source in sources:
         observed = source["columns"]
-        if set(observed) != set(columns) or any(observed[name]["unit"] != columns[name]["unit"] for name in columns):
-            fail("transform_sweep_columns_invalid", "Bind the same quantities and output units across the replicate group.",
-                 "/inputs", "same_columns_and_units", dataset_id=source["id"])
+        if x_name not in observed:
+            fail("transform_sweep_columns_invalid", "Each replicate must bind the measured x column.",
+                 "/inputs", "measured_x", dataset_id=source["id"])
+        for name, column in observed.items():
+            prior = columns.setdefault(name, column)
+            if column["unit"] != prior["unit"]:
+                fail("transform_sweep_columns_invalid", "Bind the same output units for each shared quantity.",
+                     "/inputs", "same_shared_units", dataset_id=source["id"], column_id=name)
+        metrics = [name for name in observed if name != x_name]
         for index, (x_value, origin) in enumerate(zip(observed[x_name]["values"], row_origins(source), strict=True)):
             if x_value is None:
                 continue
@@ -36,6 +38,12 @@ def mean_at_exact_x(node: dict[str, Any], sources: list[dict[str, Any]]) -> tupl
                 if value is not None:
                     bucket.setdefault(name, []).append(value)
             origins.setdefault(x_value, []).extend(origin)
+
+    metrics = [name for name in columns if name != x_name]
+    if not metrics:
+        fail("transform_sweep_columns_invalid", "A replicate group needs at least one measured metric.",
+             "/parameters/x_column", "measured_metrics")
+    columns = deepcopy(columns)
 
     axis = sorted(rows)
     columns[x_name]["values"] = axis

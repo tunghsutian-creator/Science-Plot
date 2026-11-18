@@ -97,6 +97,15 @@ def test_exact_x_mean_matches_original_grouping_metric_tables_and_analysis(tmp_p
     reduced, _ = execute_node(node, adjacent)
     assert reduced["columns"]["x"]["values"][:2] == [1., adjacent_x]
 
+    # A replicate can lack an entire metric without asserting a nonexistent
+    # original column in its source or diluting the other replicate's value.
+    missing = deepcopy(sources)
+    missing["first"]["columns"].pop("complex_viscosity")
+    missing["first"]["provenance"]["sources"][0]["column_indices"].pop("complex_viscosity")
+    sparse, _ = execute_node(node, missing)
+    assert sparse["columns"]["complex_viscosity"]["values"] == [None, None, None, 400.]
+    assert "complex_viscosity" not in sparse["provenance"]["sources"][0]["column_indices"]
+
     # A singleton never gets a mean node. Reject incompatible units and the
     # original bundled descriptor; no historical identity can name this node.
     for invalid in ({**node, "inputs": ["first"]}, {**node, "executor": builtin_executor()}):
