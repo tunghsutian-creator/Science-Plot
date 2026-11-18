@@ -29,8 +29,8 @@ class _TemplateOpener:
 
 
 def _adoption(request: dict[str, Any]) -> tuple[dict[str, str], dict[str, Any]]:
-    recipe = {key: deepcopy(request[key]) for key in ("template_definition", "data_binding", "theme", "rule_id") if key in request}
-    identities = {slot["sample"]: slot["series_id"] for slot in request["data_binding"]["slots"].values()}
+    recipe: dict[str, Any] = {key: deepcopy(request[key]) for key in ("template_definition", "data_binding", "theme", "rule_id") if key in request}
+    identities: dict[str, str] = {slot["sample"]: slot["series_id"] for slot in request["data_binding"]["slots"].values()}
     return identities, recipe
 
 
