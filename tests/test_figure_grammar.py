@@ -37,6 +37,8 @@ def test_lossless_projection_theme_and_data_anchor_identity():
     second = resolve(changed, datasets)
     assert second["annotations"][0]["x"] == first["annotations"][0]["x"]
     assert second["annotations"][0]["position_mm"] != first["annotations"][0]["position_mm"]
+    datasets["raw:A"]["columns"]["column:1"]["values"][0] = 99
+    assert first["datasets"]["raw:A"]["columns"]["column:1"]["values"] == [1., 5., 15.]
     assert validate_ir(first) == first
     tampered = deepcopy(first)
     tampered["views"][0]["layers"][0]["marks"][0]["style"]["line_width_pt"] = 3

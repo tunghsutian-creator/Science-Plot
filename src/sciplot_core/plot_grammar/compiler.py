@@ -202,9 +202,10 @@ def compile_figure(spec: Any, datasets: dict[str, dict[str, Any]], *, scientific
                 "source": "resolved axis decoration budgets", "base_margins_mm": panel_margins,
                 "panels": additional, "native_text_verified": False}
     display = resolve_display_curves(views, datasets)
+    # The seal owns the detached IR snapshot, including its scientific arrays.
     return seal_ir_v2({"kind": "sciplot_plot_ir", "schema_version": 2, "scientific_hash": scientific_hash,
         "presentation_hash": presentation_hash, "figure": {"id": spec["id"], "background_color": spec["theme"].get("background_color", background).lower()},
-        "datasets": deepcopy(datasets), "scales": [{key: deepcopy(value) for key, value in scale.items() if key != "domain_rule"}
+        "datasets": datasets, "scales": [{key: deepcopy(value) for key, value in scale.items() if key != "domain_rule"}
                                                   for scale in spec["scales"]], "views": views,
         "layout": layout, "guides": guides, "annotations": annotations, "layout_qa": qa,
         **({"display_curves": display} if display else {}),
