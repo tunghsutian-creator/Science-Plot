@@ -10229,7 +10229,8 @@
       "tests/test_house_style_grammar.py::test_current_inside_best_keeps_each_legacy_corner_metric_and_anchor",
       "tests/test_house_style_native.py::test_current_inside_best_avoids_the_curve_on_reversed_y_pdf",
       "tests/test_frequency_interval_binding.py::test_frequency_managed_native_delivery_replays_registered_storage_modulus",
-      "tests/test_managed_dma_temperature.py::test_dma_managed_composes_canonical_pressure_steps_without_clipping_observations"
+      "tests/test_managed_dma_temperature.py::test_dma_managed_composes_canonical_pressure_steps_without_clipping_observations",
+      "tests/test_frequency_interval_binding.py::test_all_automatic_frequency_metrics_can_replay_individual_condition_data"
     ],
     "private": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
@@ -20286,7 +20287,8 @@
       "tests/test_legacy_saved_plot.py::test_public_task_and_native_edit_entrypoints_cannot_allocate_old_project_writes",
       "tests/test_legacy_saved_plot.py::test_registered_project_selects_legacy_or_managed_by_exact_figure_identity",
       "tests/test_house_style_grammar.py::test_current_minor_ticks_match_retained_edge_cases_and_separate_the_old_pin",
-      "tests/test_house_style_grammar.py::test_current_inside_best_keeps_each_legacy_corner_metric_and_anchor"
+      "tests/test_house_style_grammar.py::test_current_inside_best_keeps_each_legacy_corner_metric_and_anchor",
+      "tests/test_frequency_interval_binding.py::test_all_automatic_frequency_metrics_can_replay_individual_condition_data"
     ],
     "comprehensive": [
       "tests/test_annotation_operations_native.py::test_initial_crop_can_be_reviewed_and_exported_without_regeneration",
