@@ -84,7 +84,7 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
         ):
             plan = ci_feedback.ci_feedback_plan(paths, root)
             assert (plan["layer"] == "affected") is affected, (paths, plan)
-            assert plan["native_preflight"] is not affected
+            assert "native_preflight" not in plan
             assert plan["reusable_origin"] is False
             if affected:
                 assert set(ARCHITECTURE_CORE_TARGETS) <= set(plan["targets"])
@@ -125,14 +125,13 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
                    for step in steps if "        if: ${{ " in step}
     full_names = ("Run reviewed public focused behavior",
                   "Run reviewed public comprehensive behavior", "Run readiness check",
-                  "Run fixture-free lifecycle smoke",
-                  "Check known native CI regressions before the public suites")
-    def enabled(expression, outcome, layer, event, admission_outcome="success", referenced="false"):
+                  "Run fixture-free lifecycle smoke")
+    def enabled(expression, outcome, layer, event, admission_outcome="success", referenced="false", diagnostic=False):
         values = {"steps.native-feedback.outcome": outcome, "steps.native-feedback.outputs.layer": layer,
                   "steps.main-admission.outcome": admission_outcome,
                   "steps.main-admission.outputs.referenced": referenced,
                   "github.event_name": event,
-                  "inputs.native_regression_preflight": False}
+                  "inputs.native_regression_preflight": diagnostic}
         for key, value in values.items():
             expression = expression.replace(key, repr(value))
         return eval(expression.replace("&&", " and ").replace("||", " or ").replace("== true", "== True"),
@@ -146,6 +145,10 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
         assert enabled(conditional["Run reviewed affected public feedback"], outcome, layer, event) is not full
         for name in full_names:
             assert enabled(conditional[name], outcome, layer, event) is full, name
+    preflight = conditional["Check known native CI regressions before the public suites"]
+    assert not enabled(preflight, "success", "full", "push", diagnostic=True)
+    assert not enabled(preflight, "success", "full", "workflow_dispatch")
+    assert enabled(preflight, "success", "full", "workflow_dispatch", diagnostic=True)
     for name in ("Run lint gate", "Run shared source contracts", "Run scoped static type gate", "Build vendored Veusz helpers",
                  "Verify vendored Veusz helpers", "Verify minimal wheel surface", "Verify Qt build and runtime identity"):
         expression = conditional[name]
@@ -196,7 +199,7 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
         destination = tmp_path / "missing-plan-output"
         context.setenv("GITHUB_OUTPUT", str(destination))
         assert ci_feedback.main() == 0
-        assert destination.read_text() == "preflight=true\nlayer=full\n"
+        assert destination.read_text() == "layer=full\n"
         context.setattr(sys, "argv", ["ci_feedback", "--base", "a" * 40, "--run-affected"])
         assert ci_feedback.main() == 4
         context.setattr(sys, "argv", ["ci_feedback", "--base", "a" * 40])

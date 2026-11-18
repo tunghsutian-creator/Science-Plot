@@ -65,7 +65,7 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
     assert "  push:\n  pull_request:\n  workflow_dispatch:" in workflow
     steps = workflow.split("      - name: ")
     diagnostic = next(step for step in steps if step.startswith("Check known native CI regressions"))
-    assert "steps.native-feedback.outputs.layer != 'affected'" in diagnostic
+    assert "github.event_name == 'workflow_dispatch' && inputs.native_regression_preflight == true" in diagnostic
     assert "inputs.native_regression_preflight" in diagnostic
     dispatch = workflow.split("  workflow_dispatch:", 1)[1].split("\njobs:", 1)[0]
     assert "native_regression_preflight:" in dispatch
@@ -199,7 +199,7 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
         native_output = tmp_path / "native-output"
         context.setenv("GITHUB_OUTPUT", str(native_output))
         assert ci_feedback.main() == 0
-        assert native_output.read_text() == "preflight=true\nlayer=full\n"
+        assert native_output.read_text() == "layer=full\n"
     from ci_public_profiles_support import exercise_profile_stage_route
     exercise_profile_stage_route(tmp_path / "profile-routes", monkeypatch)
     from ci_public_profiles_support import exercise_ci_feedback_layers

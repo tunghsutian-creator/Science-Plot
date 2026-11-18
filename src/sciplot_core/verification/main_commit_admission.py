@@ -14,6 +14,7 @@ import urllib.request
 
 REPOSITORY = "tunghsutian-creator/Science-Plot"
 WORKFLOW = ".github/workflows/minimal-repository.yml"
+NATIVE_DIAGNOSTIC_STEP = "Check known native CI regressions before the public suites"
 REQUIRED_STEPS = (
     "Require a valid scheduling plan", "Run actions/checkout@v4", "Verify exact workflow checkout",
     "Check main commit admission", "Plan bounded public feedback", "Enforce minimal runtime distribution",
@@ -21,7 +22,7 @@ REQUIRED_STEPS = (
     "Verify Qt build and runtime identity", "Verify Chinese glyph fallback in the system Qt runtime",
     "Run lint gate", "Run shared source contracts", "Run scoped static type gate", "Build vendored Veusz helpers",
     "Verify vendored Veusz helpers", "Verify minimal wheel surface",
-    "Check known native CI regressions before the public suites", "Run reviewed public focused behavior",
+    NATIVE_DIAGNOSTIC_STEP, "Run reviewed public focused behavior",
     "Run reviewed public comprehensive behavior", "Verify source-checkout wrapper bootstrap",
     "Run readiness check", "Run fixture-free lifecycle smoke",
 )
@@ -136,7 +137,11 @@ def admit(environment: Mapping[str, str], read: Callable[[str], dict[str, Any]] 
                 or any(len({step[key] for step in steps}) != len(steps) for key in ("name", "number"))):
             raise Unavailable("unknown_or_duplicate_steps")
         by_name = {step["name"]: step for step in steps}
-        if not all(name in by_name and _successful(by_name[name]) for name in REQUIRED_STEPS):
+        # Only the early duplicate may be skipped. Its original nodes are
+        # still required by the comprehensive stage, whose success is mandatory.
+        if not all(name in by_name and (_successful(by_name[name]) or (
+                name == NATIVE_DIAGNOSTIC_STEP and by_name[name].get("status") == "completed"
+                and by_name[name].get("conclusion") == "skipped")) for name in REQUIRED_STEPS):
             raise Unavailable("full_source_checks_not_executed_successfully")
         if [by_name[name]["number"] for name in REQUIRED_STEPS] != sorted(by_name[name]["number"] for name in REQUIRED_STEPS):
             raise Unavailable("required_steps_out_of_order")

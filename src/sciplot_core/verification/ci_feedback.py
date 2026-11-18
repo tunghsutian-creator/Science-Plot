@@ -141,7 +141,8 @@ def ci_feedback_plan(paths: list[str], root: Path, *, event: str = "push", ref: 
     if affected and not reviewed_change:
         targets.extend((*ARCHITECTURE_CORE_TARGETS, *_AFFECTED_GUARDS))
     targets = sorted(set(targets))
-    result.update(layer="affected" if affected else "full", native_preflight=not affected, reason=reason,
+    result.pop("native_preflight")
+    result.update(layer="affected" if affected else "full", reason=reason,
                   targets=targets, native_targets=native_targets,
                   claim="limited_public_development_and_merge_feedback" if affected else "complete_public_gates_required",
                   full_public_profiles="NOT_EXECUTED" if affected else "REQUIRED",
@@ -187,7 +188,7 @@ def changed_paths(root: Path, base: str) -> list[str]:
         return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=False, timeout=30)
     if git("cat-file", "-e", base + "^{commit}").returncode:
         if git("fetch", "--no-tags", "--depth=1", "origin", base).returncode:
-            raise ValueError("Event base is unavailable; retain early diagnostics.")
+            raise ValueError("Event base is unavailable; retain complete gates.")
     diff = git("diff", "--name-only", "--no-renames", "-z", base, "HEAD", "--")
     if diff.returncode:
         raise ValueError("Cannot resolve event change scope.")
@@ -223,13 +224,13 @@ def main() -> int:
                               "full_public_profiles": "NOT_EXECUTED", "real_private_inputs": "NOT_EXECUTED",
                               "access_capture": "NOT_EXECUTED", "reusable_origin": False}))
             return 4
-        result = {"native_preflight": True, "layer": "full", "reason": "unavailable_scope", "detail": str(error)}
+        result = {"layer": "full", "reason": "unavailable_scope", "detail": str(error)}
     environment = os.environ
     print(json.dumps(result, sort_keys=True))
     output = environment.get("GITHUB_OUTPUT")
     if output and not args.run_affected:
         with Path(output).open("a") as stream:
-            stream.write(f"preflight={str(result['native_preflight']).lower()}\nlayer={result['layer']}\n")
+            stream.write(f"layer={result['layer']}\n")
     return (0 if result["status"] == "PASS" else 4) if args.run_affected else 0
 
 

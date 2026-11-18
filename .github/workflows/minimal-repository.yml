@@ -238,10 +238,9 @@ jobs:
             --wheel-dir /tmp/sciplot-wheel
           python3 tests/test_wheel_surface.py /tmp/sciplot-wheel/*.whl
       - name: Check known native CI regressions before the public suites
-        # These same 12 nodes remain in every full comprehensive suite.
-        # Only the explicitly closed affected layer omits native diagnostics and full profiles.
-        # Preserve all original predecessors, assertions and phase review below.
-        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch' || inputs.native_regression_preflight == true) }}
+        # The comprehensive profile already executes these nodes. Only an
+        # explicit manual diagnostic request repeats them as an early check.
+        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && github.event_name == 'workflow_dispatch' && inputs.native_regression_preflight == true }}
         run: |
           python3 - <<'PY'
           import hashlib

@@ -116,6 +116,17 @@ def test_complete_source_check_is_referenced_without_current_execution():
     assert result["origin_url"].endswith("/actions/runs/100/attempts/1")
     assert len(calls) == 3
 
+    steps = jobs["jobs"][0]["steps"]
+    diagnostic = next(step for step in steps if step["name"] == gate.NATIVE_DIAGNOSTIC_STEP)
+    diagnostic["conclusion"] = "skipped"
+    assert gate.admit(context(), reader(runs, jobs)[0])["referenced"] is True
+    comprehensive = next(step for step in steps if step["name"] == "Run reviewed public comprehensive behavior")
+    comprehensive["conclusion"] = "skipped"
+    assert gate.admit(context(), reader(runs, jobs)[0])["referenced"] is False
+    comprehensive["conclusion"] = "success"
+    diagnostic["conclusion"] = "failure"
+    assert gate.admit(context(), reader(runs, jobs)[0])["referenced"] is False
+
 
 @pytest.mark.parametrize(
     "mutation",
