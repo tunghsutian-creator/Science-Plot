@@ -257,3 +257,28 @@ EXACT_X_MEAN_V1: dict[str, Any] = {'content_hash': '2f0ede9f46a9af650d96b7a18dc3
  'operator': 'rheology_mean_exact_x',
  'runtime': 'v1.rheology_mean:execute',
  'version': '1'}
+
+
+FREQUENCY_COMPLETE_V1: dict[str, Any] = {'content_hash': 'f033f455c0cb4498785e00520e9d946302b3cdfbe8cb82a36a505c1e9ec108ff',
+ 'entry': 'v1.frequency_complete:complete',
+ 'files': {'__init__.py': 'b2daada6018f878a102dd328dc2e96008061dc7325c03bfdf129942a350e925f',
+           'v1/__init__.py': '665b4aff06139a06c7c2fd06b1e823d9804708494b698f31034db579fa8add87',
+           'v1/datasets.py': '2a50e284c6d535676e965641859d4c363a44a146a6f6d8690a81f631d0086c00',
+           'v1/frequency_complete.py': '9f35b3b5f9c8c8dcf8aa8e25b67e9d4d5d69a520f5487bd36de6f4b024d4c981',
+           'v1/hashing.py': 'df8925e9dbe054e13cfe6ff95133cf57a09c6214bdefcb0139053fec7e333658',
+           'v1/json_values.py': '576a66e558d148b4b23d3bf8ba704feadb63f30816164e8aeceaa7477362483f',
+           'v1/lineage.py': '6f6b9681880306e82623a955ca3277ffea078bb8e00cf2ceb29c6203a89f3fa4',
+           'v1/node_contract.py': '036000b9c6b68658ddc1d7a581eec074a6d6bdad6d09b17eecb6418ba1854d53',
+           'v1/rheology_metrics.py': '67130272954dfcb1fa672e3cad8215b65782998bd862dc0943434bbd61639f9a',
+           'v1/rheology_units.py': '00122ba6a69a410f31deea21df6646f08e0f294331cc5436052b214b844049fd',
+           'v1/runtime.py': '74b77455571b47b8e72f5714188c421c5f680686d351ff9904f6fd0271bcc1b8',
+           'v1/schema.py': '129fe08661f02d539193ab22217faf65d7e2b78b221ccf20827d56d8172eb0f2',
+           'v1/selection.py': '34c07aa09447eaddf9c9338c1d51c34f30c8b126e69d1a0ca406ecb366deaf31',
+           'v1/unit_data.py': '7733df69119ecfbd59d51ac8d750055bad939af7b044384a89e5fd4989833087',
+           'v1/unit_formatting.py': '8a46f3989c63cf71ce79e9fb3644308bec1f1305a9c5ee01cbd7dfae9532e06e',
+           'v1/unit_style.py': '6ed8b0a067d6b305c6fb04cf0291f90a7da6505483140e73832abe128ac4c6a3',
+           'v1/wire.py': '5e1d32287a115d1c7e1b5e0b87ed0d5d59764e8c110f81cc1f4e5a3743235d33'},
+ 'multiple_inputs': False,
+ 'operator': 'rheology_frequency_complete',
+ 'runtime': 'v1.frequency_complete:execute',
+ 'version': '1'}

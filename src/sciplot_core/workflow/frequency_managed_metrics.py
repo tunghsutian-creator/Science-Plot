@@ -8,7 +8,7 @@ from sciplot_core.semantic_sources.models import RheologySweepSample
 from sciplot_core.task_errors import TaskControlError
 
 
-def prepare_measured_replicate(
+def prepare_frequency_replicate(
     sample: RheologySweepSample, original: dict[str, Any], columns: list[dict[str, Any]],
     transforms: list[dict[str, Any]],
 ) -> tuple[dict[str, Any], str]:
@@ -51,21 +51,29 @@ def prepare_measured_replicate(
     for quantity, (_, unit, target) in selected.items():
         if unit != target:
             current = emit("convert_unit", current, {"columns": [quantity], "from_unit": unit, "to_unit": target})
+    derivations = []
+    known = {"complex_modulus": "derived_from_storage_and_loss_modulus",
+             "complex_viscosity": "derived_complex_modulus_over_angular_frequency"}
+    for quantity, evidence in measured.items():
+        if quantity in selected:
+            continue
+        if known.get(quantity) != evidence.get("method") or quantity not in known:
+            raise TaskControlError("frequency_managed_derivation_unavailable", "This legacy metric has no exact Managed derivation.")
+        derivations.append(quantity)
+    current = emit("rheology_frequency_complete", current, {"derivations": derivations})
     return source, current
 
 
-def prepare_measured_frequency_group(
+def prepare_frequency_metric_group(
     replicates: list[tuple[RheologySweepSample, dict[str, Any], list[dict[str, Any]]]], *, metric: str,
     transforms: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], str]:
     """Retain every measured x contributor before selecting the plotted metric."""
-    if not replicates or not any(
-            (sample.metric_conversions or {}).get(metric, {}).get("source_column") is not None
-            for sample, _, _ in replicates):
-        raise TaskControlError("frequency_managed_metric_unavailable", "The selected group needs an available measured metric.")
+    if not replicates or not any(metric in sample.metric_units for sample, _, _ in replicates):
+        raise TaskControlError("frequency_managed_metric_unavailable", "The selected group needs an available measured or derived metric.")
     sources, inputs = [], []
     for sample, original, columns in replicates:
-        source, dataset = prepare_measured_replicate(sample, original, columns, transforms)
+        source, dataset = prepare_frequency_replicate(sample, original, columns, transforms)
         sources.append(source)
         inputs.append(dataset)
     if len(inputs) == 1:
