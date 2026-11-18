@@ -2,7 +2,7 @@
 
 First identify the input:
 
-- A saved legacy VSZ is not a template. Open or redraw it without editing it. For a supported saved Cartesian XY figure, `sciplot project legacy-convert FIGURE --out NEW_DIRECTORY` creates a separate Managed copy. It refuses figures with settings it cannot preserve.
+- A saved legacy VSZ is not a template. Open or redraw it without editing it. For a supported saved Cartesian XY figure, `sciplot project legacy-convert FIGURE --out NEW_DIRECTORY` creates a separate Managed copy. Unsupported objects or settings are rejected. Accepted copies preserve the supported coordinates and units, not the original fonts, layout, or appearance. Redraw the saved VSZ when you need the original drawing.
 - An old `plot create` request with `mode: legacy` is a template recipe. The same frozen request and key may finish an existing operation; they cannot start a new one. Named workflow recipes under `sciplot recipe` and legacy workflow JSON are different interfaces, not reusable PlotTemplates.
 
 For a Cartesian template that uses known scientific and visual settings, reauthor
