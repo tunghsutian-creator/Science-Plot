@@ -296,9 +296,12 @@ skill/scripts/sciplot project legacy-convert OLD_PROJECT --out NEW_DIRECTORY --j
 ```
 
 Conversion currently accepts one page with one ordinary linear Cartesian XY
-curve and embedded finite values. Units come from the saved axis labels or
-explicit `--x-unit` and `--y-unit` values. Unsupported settings and objects
-block conversion rather than disappearing. The new copy preserves the exact
+curve and embedded finite values. A single recognized unit at the end of an
+axis label may be reused. If a label is ambiguous, use `--x-unit` or `--y-unit`
+to specify the original unit explicitly. Unsupported settings, objects and
+layouts are rejected before creating the copy. If conversion is interrupted
+after it starts, rerun the exact same command to continue the pending copy.
+The new copy preserves the exact
 plotted values and units, but uses Managed layout and typography. To reproduce
 the original appearance, use `legacy-redraw`.
 

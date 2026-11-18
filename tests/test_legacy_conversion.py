@@ -85,3 +85,70 @@ def test_legacy_conversion_refuses_unmapped_widget_before_allocating_copy(tmp_pa
     assert "without other objects" in rejected["message"]
     assert not destination.exists()
     assert _tree(archive) == before
+
+
+def test_legacy_unit_does_not_treat_sample_labels_as_scientific_units():
+    from sciplot_core.plot_document import DocumentError
+    from sciplot_core.studio_core.legacy_conversion import _axis_unit
+
+    with pytest.raises(DocumentError) as error:
+        _axis_unit("Voltage (V) (sample A)", None)
+    assert error.value.reason_code == "legacy_conversion_unit_required"
+    assert _axis_unit("Voltage (V) (sample A)", "V") == "V"
+    with pytest.raises(DocumentError, match="does not unambiguously"):
+        _axis_unit("Voltage (sample A)", None)
+    assert _axis_unit("Voltage (V)", None) == "V"
+    with pytest.raises(DocumentError, match="declares"):
+        _axis_unit("Voltage (V)", "A")
+
+
+@pytest.mark.comprehensive
+def test_legacy_conversion_layout_rejection_leaves_no_partial_destination(tmp_path, capsys):
+    archive, native = _original(tmp_path)
+    with native.open("a") as stream:
+        stream.write("To('/page1')\nSet('width', '10mm')\nSet('height', '10mm')\n")
+    before = _tree(archive)
+    output = tmp_path / "tiny"
+    args = ["project", "legacy-convert", str(archive), "--out", str(output), "--json"]
+    for _ in range(2):
+        assert main(args) == 1
+        assert json.loads(capsys.readouterr().out)["reason_code"] == "figure_layout_no_space"
+        assert not output.exists()
+        assert _tree(archive) == before
+
+
+def test_pending_conversion_retries_exact_request_without_touching_unowned_files(tmp_path, monkeypatch):
+    from sciplot_core.plot_document import DocumentError
+    from sciplot_core.plot_engine.service import PlotService
+    from sciplot_core.studio_core import legacy_conversion
+
+    archive, native = _original(tmp_path)
+    saved = {"document_sha256": file_sha256(native), "coordinates": {"x": [0., 1., 2.], "y": [1., 3., 2.]},
+             "axes": {"x": {"label": "Time (s)", "domain": [0., 3.], "ticks": [0., 1., 2., 3.]},
+                      "y": {"label": "Signal (V)", "domain": [0., 4.], "ticks": [0., 2., 4.]}},
+             "marks": [{"id": "mark:line", "type": "line", "style": {}}],
+             "layout": {"width_mm": 150., "height_mm": 150.}}
+    monkeypatch.setattr(legacy_conversion, "_inspect", lambda _: saved)
+    calls = []
+
+    def create(_, request):
+        calls.append(request)
+        if len(calls) == 1:
+            raise OSError("lost native worker")
+        return {"ready_to_use": False}
+
+    monkeypatch.setattr(PlotService, "create", create)
+    output = tmp_path / "pending"
+    old = _tree(archive)
+    with pytest.raises(OSError, match="lost native worker"):
+        legacy_conversion.convert_legacy_plot(archive, output=output)
+    note = output / "user-note.txt"
+    note.write_text("not conversion-owned")
+    assert legacy_conversion.convert_legacy_plot(archive, output=output)["status"] == "blocked"
+    assert calls[0] == calls[1] and len(calls) == 2
+    saved["axes"]["x"]["label"] = "Time (min)"
+    with pytest.raises(DocumentError) as error:
+        legacy_conversion.convert_legacy_plot(archive, output=output)
+    assert error.value.reason_code == "legacy_conversion_retry_conflict"
+    assert note.read_text() == "not conversion-owned"
+    assert _tree(archive) == old

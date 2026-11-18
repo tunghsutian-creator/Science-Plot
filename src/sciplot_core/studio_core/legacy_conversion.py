@@ -1,5 +1,7 @@
 """One-way conversion of a supported saved XY plot into a new Managed project."""
 import csv
+from hashlib import sha256
+from io import StringIO
 import json
 from pathlib import Path
 from struct import pack
@@ -9,6 +11,7 @@ from typing import Any
 
 from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.foundation.research_destination import require_data_destination
 from sciplot_core.plot_document import DocumentError
 from sciplot_core.studio_core.legacy_saved_plot import _saved_plot
@@ -32,18 +35,24 @@ def _inspect(document: Path) -> dict[str, Any]:
 
 
 def _axis_unit(label: str, explicit: str | None) -> str:
+    from sciplot_core.materials_rules.unit_formatting import looks_like_unit_expression
     from sciplot_core.studio_core.annotation_axes import axis_unit
 
-    observed = axis_unit({"axes": {"saved": {"label": label}}}, "saved")
-    if observed and explicit is not None and explicit != observed:
+    # Parentheses in native labels also frequently contain conditions or sample
+    # names. Only a single recognized trailing expression is unit evidence.
+    observed = axis_unit({"axes": {"saved": {"label": label}}}, "saved").strip()
+    if label.count("(") != 1 or label.count(")") != 1 or not looks_like_unit_expression(observed):
+        observed = ""
+    explicit = (explicit or "").strip()
+    if observed and explicit and explicit != observed:
         raise DocumentError("legacy_conversion_unit_conflict", f"The saved axis label declares {observed!r}, not {explicit!r}.")
-    unit = observed or (explicit or "").strip()
+    unit = observed or explicit
     if not unit or "\n" in unit or "\r" in unit:
-        raise DocumentError("legacy_conversion_unit_required", "Provide the original unit of each unlabeled axis (use '1' only if dimensionless).")
+        raise DocumentError("legacy_conversion_unit_required", "Supply the original unit when the saved axis label does not unambiguously declare it (use '1' only if dimensionless).")
     return unit
 
 
-def _request(source: Path, output: Path, saved: dict[str, Any], units: dict[str, str], origin: Path) -> dict[str, Any]:
+def _request(source: Path, source_sha256: str, output: Path, saved: dict[str, Any], units: dict[str, str], origin: Path) -> dict[str, Any]:
     dataset, view, layer, template = "saved:xy", "view:main", "layer:curve", "legacy-xy-v1"
     scales = [{"id": f"scale:{axis}", "dimension": axis, "transform": "linear",
                "domain": saved["axes"][axis]["domain"], "direction": "ascending",
@@ -68,7 +77,7 @@ def _request(source: Path, output: Path, saved: dict[str, Any], units: dict[str,
                                     "template_id": template, "figure_spec": figure},
             "rule_id": "ordinary_xy",
             "data_binding": {"kind": "sciplot_binding", "schema_version": 1, "template_id": template,
-                "data_sources": [{"source_id": dataset, "path": str(source), "sha256": file_sha256(source),
+                "data_sources": [{"source_id": dataset, "path": str(source), "sha256": source_sha256,
                     "table_selection": {"sheet": None, "header_rows": [0], "unit_row": 1,
                         "data_start_row": 2, "data_end_row": len(saved["coordinates"]["x"]) + 2}}],
                 "slots": {layer: {"series_id": layer, "sample": "Saved curve",
@@ -76,6 +85,23 @@ def _request(source: Path, output: Path, saved: dict[str, Any], units: dict[str,
                     "y": {"source_id": dataset, "column": "y", "column_index": 1}, "y_unit": units["y"]}},
                 "transforms": [], "guards": {}, "provenance": {"legacy_conversion": {
                     "document": str(origin), "sha256": saved["document_sha256"], "data_authority": "embedded_saved_vsz"}}}}
+
+
+def _preflight_layout(request: dict[str, Any], saved: dict[str, Any], units: dict[str, str]) -> None:
+    from sciplot_core.plot_ir import compile_document, create_managed_document
+
+    # Reuse the actual layout compiler while inputs exist only in memory, so a
+    # deterministic unsupported picture never leaves a partial destination.
+    columns = {f"column:{index}": {"label": axis, "unit": units[axis], "values": saved["coordinates"][axis]}
+               for index, axis in enumerate(("x", "y"))}
+    document = create_managed_document(request["template_definition"], request["data_binding"], plot_id="conversion-preflight")
+    source = request["data_binding"]["data_sources"][0]
+    selection = source["table_selection"]
+    provenance = {"source_id": source["source_id"], "sha256": source["sha256"], "table_selection": selection,
+                  "column_indices": {"column:0": 0, "column:1": 1},
+                  "rows": list(range(selection["data_start_row"], selection["data_end_row"]))}
+    compile_document(document, {"saved:xy": {"id": "saved:xy", "columns": columns,
+                                              "provenance": {"sources": [provenance], "transforms": []}}})
 
 
 def convert_legacy_plot(target: Path, *, output: Path, figure_id: str | None = None,
@@ -87,21 +113,40 @@ def convert_legacy_plot(target: Path, *, output: Path, figure_id: str | None = N
     if destination.is_relative_to(root):
         raise ValueError("The converted copy must be outside the original project directory.")
     require_data_destination(destination)
+    checkpoint = canonical_path(destination / "legacy-conversion.json")
+    source = canonical_path(destination / "saved-coordinates.csv")
+    prior = None
     if destination.exists():
-        raise FileExistsError("Select a new directory for the converted project.")
+        if not checkpoint.is_file():
+            raise FileExistsError("Select a new directory; it has no matching legacy conversion.")
+        prior = json.loads(checkpoint.read_text(encoding="utf-8"))
+        if not isinstance(prior, dict) or prior.get("state") != "pending":
+            raise FileExistsError("Select a new directory; this conversion is not pending.")
     saved = _inspect(document)
     units = {axis: _axis_unit(saved["axes"][axis]["label"], value)
              for axis, value in (("x", x_unit), ("y", y_unit))}
-    if file_sha256(document) != saved["document_sha256"]:
-        raise ValueError("The original saved VSZ changed before conversion.")
-    destination.mkdir()
-    source = destination / "saved-coordinates.csv"
-    with source.open("x", encoding="utf-8", newline="") as stream:
-        writer = csv.writer(stream)
+    with StringIO(newline="") as buffer:
+        writer = csv.writer(buffer)
         writer.writerow(("x", "y"))
         writer.writerow((units["x"], units["y"]))
         writer.writerows(zip(saved["coordinates"]["x"], saved["coordinates"]["y"], strict=True))
-    request = _request(source, destination, saved, units, document)
+        coordinates = buffer.getvalue().encode("utf-8")
+    request = _request(source, sha256(coordinates).hexdigest(), destination, saved, units, document)
+    _preflight_layout(request, saved, units)
+    if file_sha256(document) != saved["document_sha256"]:
+        raise ValueError("The original saved VSZ changed before conversion.")
+    pending = {"kind": "sciplot_legacy_conversion_checkpoint", "version": 1, "state": "pending", "request": request}
+    if prior is None:
+        destination.mkdir()
+        with checkpoint.open("x", encoding="utf-8") as stream:
+            json.dump(pending, stream, ensure_ascii=False, allow_nan=False)
+    elif prior != pending:
+        raise DocumentError("legacy_conversion_retry_conflict", "Retry with the exact original saved VSZ, units and conversion directory, or choose a new directory.")
+    if not source.exists():
+        with source.open("xb") as stream:
+            stream.write(coordinates)
+    elif file_sha256(source) != request["data_binding"]["data_sources"][0]["sha256"]:
+        raise DocumentError("legacy_conversion_retry_conflict", "The converted coordinate copy changed; preserve it and choose a new directory.")
     service = PlotService()
     try:
         result = service.create(request)
@@ -123,6 +168,11 @@ def convert_legacy_plot(target: Path, *, output: Path, figure_id: str | None = N
                            for value, expected in zip(values, original, strict=True))):
                 raise DocumentError("legacy_conversion_science_changed",
                                     "Managed reconstruction did not preserve the original numeric values and units.")
+        atomic_write_json(checkpoint, {**pending, "state": "complete", "plot": result["plot"]})
+    else:
+        result["conversion_retry"] = {"action": "retry_legacy_conversion", "target": str(document),
+                                      "output": str(destination), "units": units,
+                                      "message": "Rerun the same conversion command without changing the saved source or units."}
     return {**result, "kind": "sciplot_legacy_conversion",
             "status": "converted" if result.get("ready_to_use") else "blocked",
             "original_vsz": {"path": str(document), "sha256": saved["document_sha256"]},
