@@ -214,10 +214,10 @@ def test_cli_preview_binding_errors_fail_before_read_or_resume(monkeypatch, argu
 def test_cli_resume_uses_caller_binding_without_reading_latest_task(monkeypatch, capsys, arguments, answer):
     calls = []
     monkeypatch.setattr(dispatch, "_object", lambda *_a: pytest.fail("read unnecessary JSON file"))
-    monkeypatch.setattr(dispatch, "resume_task", lambda target, response: calls.append((target, response)) or {"status": "complete"})
+    monkeypatch.setattr(dispatch, "resume_task", lambda target, response, *, _public_mutation: calls.append((target, response, _public_mutation)) or {"status": "complete"})
     args = build_parser().parse_args(["task", "resume", "/task with spaces", *arguments, "--json"])
     assert dispatch.dispatch_task(args) == 0
-    assert calls == [(Path("/task with spaces"), answer)]
+    assert calls == [(Path("/task with spaces"), answer, True)]
     assert json.loads(capsys.readouterr().out) == {"status": "complete"}
 
 
@@ -226,9 +226,9 @@ def test_cli_resume_response_file_remains_compatible(tmp_path, monkeypatch):
     path = tmp_path / "answer.json"
     path.write_text(json.dumps(answer))
     calls = []
-    monkeypatch.setattr(dispatch, "resume_task", lambda target, response: calls.append(response) or {"status": "cancelled"})
+    monkeypatch.setattr(dispatch, "resume_task", lambda target, response, *, _public_mutation: calls.append((response, _public_mutation)) or {"status": "cancelled"})
     args = build_parser().parse_args(["task", "resume", "/task", "--response", str(path)])
-    assert dispatch.dispatch_task(args) == 0 and calls == [answer]
+    assert dispatch.dispatch_task(args) == 0 and calls == [(answer, True)]
 
 
 def test_guidance_carries_exact_current_arguments_without_shell_concatenation():
