@@ -1,6 +1,7 @@
 """Public generated DMA control through the explicit Managed entrypoint."""
 import math
 from pathlib import Path
+from sys import float_info
 
 import pytest
 
@@ -17,8 +18,9 @@ def test_dma_managed_composes_canonical_pressure_steps_without_clipping_observat
     from sciplot_core.task_semantic_plan import prepare_plan
 
     source = tmp_path / "Sample A.csv"
-    source.write_text("Temperature (K),Sample A Storage Modulus (kPa)\n"
-                      "273.15,1000\n283.15,-5\n293.15,570\n")
+    raw_pressures = (1000., -5., 570., 3.611, -3.611, .000001, 1e6, 0.)
+    source.write_text("Temperature (K),Sample A Storage Modulus (kPa)\n" + "".join(
+        f"{273.15 + 10 * index!r},{pressure!r}\n" for index, pressure in enumerate(raw_pressures)))
     original = source.read_bytes()
     old = resolve_dma_temperature_transform(source).series[0]
     intent = {
@@ -48,12 +50,20 @@ def test_dma_managed_composes_canonical_pressure_steps_without_clipping_observat
         columns = ir["datasets"][layer["dataset_id"]]["columns"]
         assert (columns["x"]["unit"], columns["y"]["unit"]) == (old.x_unit, old.y_unit) == ("°C", "MPa")
         assert columns["x"]["values"] == [temperature for temperature, _ in old.points]
-        assert columns["y"]["values"] == [value * 1000. * 1e-6 for value in (1000., -5., 570.)]
-        # The native DMA reader multiplies by the composed factor once;
-        # the two sealed Managed steps round independently at canonical Pa.
-        for value, (_, native_value) in zip(columns["y"]["values"], old.points, strict=True):
-            assert abs(value - native_value) <= math.ulp(native_value)
-        assert min(columns["y"]["values"]) == -.005
+        values = columns["y"]["values"]
+        assert values == [value * 1000. * 1e-6 for value in raw_pressures]
+        # Old: round the composed factor, then multiply a measurement.
+        # Managed: round the measurement at Pa, then multiply to MPa.
+        # On normal binary64 values both chains have two rounding steps
+        # (each <= epsilon/2 relative), so 4*epsilon safely bounds their
+        # relative difference. No absolute slack hides a changed sign or zero.
+        for value, (_, native_value) in zip(values, old.points, strict=True):
+            assert math.isclose(value, native_value, rel_tol=4 * float_info.epsilon, abs_tol=0.)
+        # The signed 3.611 kPa counterexamples are not within one ULP.
+        for index in (3, 4):
+            native_value = old.points[index][1]
+            assert abs(values[index] - native_value) == 2 * math.ulp(native_value)
+        assert min(values) == -.005
         assert compiler.audit_ir(ir, Path(head["binding"]["document"]))["status"] == "passed"
         with pymupdf.open(next(p["path"] for p in result["exports"] if p["format"] == "pdf")) as pdf:
             assert pdf[0].get_drawings()
