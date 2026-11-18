@@ -50,7 +50,8 @@ def test_public_default_attached_checkpoint_is_committed_before_patch(tmp_path, 
 
 
 @pytest.mark.parametrize("operation", ["common", "style"])
-def test_legacy_checkpoint_keeps_project_guard_and_public_style_is_read_only(tmp_path, monkeypatch, operation):
+def test_public_default_legacy_checkpoint_preserves_project_guard(tmp_path, monkeypatch, operation):
+    """An internal common edit keeps project ownership; public Legacy style is read-only."""
     from test_plot_engine import FakeBackend
     from sciplot_core.project_store.runtime import project_runtime
 
