@@ -9,7 +9,7 @@ from .ports import ProjectRepository, ProjectTargets
 from .targets import StoredTarget, ManagedDeliveryTarget, DecisionKind
 from .contracts import RevisionToken
 from .command_dispatch import CommandDispatch
-from .context import load_revision, validate_saved_command
+from .context import validate_saved_command
 from typing import Any
 
 from sciplot_core.plot_document import (
@@ -28,6 +28,8 @@ from sciplot_core.plot_engine.current import changed_inputs, dependency_state, e
 from sciplot_core.plot_engine.description_scope import require_selector
 from sciplot_core.project_lifecycle.errors import EngineError
 from sciplot_core.project_lifecycle.execution import advance, replay
+from sciplot_core.project_lifecycle.legacy_rollback import rollback_legacy
+from sciplot_core.project_lifecycle.managed_rollback import rollback_managed
 from sciplot_core.plot_engine.object_operations import attach_object_operations
 from sciplot_core.project_lifecycle.recovery import project_recovery, resume_transaction
 from sciplot_core.project_lifecycle.recovery import pending_edit_error as _pending_edit_error
@@ -309,37 +311,8 @@ class ProjectApplication(CommandDispatch):
         with external_project_session(root), admitted(root, "rollback", request):
             # Freeze the inverse request, so retrying after commit does not compute a new inverse.
             if load_head(root)["document"].get("plot_type") == "ManagedPlot":
-                from sciplot_core.project_lifecycle.managed_rollback import rollback_managed
-
                 return rollback_managed(root, request, self.backend)
-            saved = transaction_path(root, request["idempotency_key"])
-            if exists(saved):
-                tx = read(saved)
-                if tx.get("rollback_request") != request:
-                    raise EngineError("document_idempotency_conflict", "This key identifies another request.")
-                return replay(root, tx, self.backend)
-            head = load_head(root)["document"]
-            target = load_revision(root, request["target_revision"])["document"]
-            verify_document_content(root, target)
-            if head["revision"] != request["base_revision"]:
-                raise EngineError("document_revision_conflict", "Rollback requires the current revision.",
-                                  current_revision=head["revision"])
-            if head["scientific_hash"] != target["scientific_hash"]:
-                raise EngineError("document_scientific_rollback_unsupported", "Scientific history needs its explicit executor.")
-            current, previous = head["presentation"]["objects"], target["presentation"]["objects"]
-            if set(current) != set(previous):
-                raise EngineError("document_structural_rollback_unsupported", "Object membership differs between these revisions.")
-            changes = [{"op": "set", "target": [name], "property": prop, "value": value}
-                       for name, obj in previous.items() for prop, value in obj["properties"].items()
-                       if current[name]["properties"].get(prop) != value]
-            if not changes:
-                changes = [{"op": "set", "target": [name], "property": prop, "value": value}
-                           for name, obj in current.items() for prop, value in obj["properties"].items()][:1]
-                if not changes:
-                    raise EngineError("document_no_editable_objects", "This document has no represented property to roll back.")
-            patch = {"plot_id": head["plot_id"], "base_revision": request["base_revision"],
-                     "idempotency_key": request["idempotency_key"], "intent_class": "review", "changes": changes}
-            return self._patch(root, patch, rollback_request=request)
+            return rollback_legacy(root, request, self.backend, self._patch)
 
     def _cached_export(self, root: Path, head: dict[str, Any]) -> dict[str, Any] | None:
         path = root / "export-cache.json"
