@@ -10,6 +10,16 @@ from .io import STORE, StoreIO, digest, directory, member_names, parts, read_fil
 import sciplot_core.project_store.state as state
 
 _ADAPTER = "native_suite_create_v1"
+MANAGED_GROUP_PREPARE = "managed_attachment_group_prepare_v1"
+
+
+def _adapter(record: dict[str, Any]) -> str | None:
+    metadata = record.get("metadata", {})
+    if metadata.get("kind") == "native_create":
+        return _ADAPTER
+    if metadata.get("kind") == "semantic_record" and metadata.get("request", {}).get("adapter") == MANAGED_GROUP_PREPARE:
+        return MANAGED_GROUP_PREPARE
+    return None
 
 
 def resolve(io: StoreIO, value: dict[str, Any], actual: Path, *, expected_sha256: str | None = None,
@@ -56,17 +66,18 @@ def literal(io: StoreIO, value: dict[str, Any], actual: Path) -> str | None:
     return str(Path(value["locators"][""]) / selected.relative_to(io.root)) if selected is not None else None
 
 
-def _binding(record: dict[str, Any]) -> dict[str, str]:
+def _binding(record: dict[str, Any], adapter: str) -> dict[str, str]:
     return {"project_id": record["project_id"], "command_id": record["command_id"],
-            "command_digest": record["command_digest"], "adapter": _ADAPTER}
+            "command_digest": record["command_digest"], "adapter": adapter}
 
 
 def verify(io: StoreIO, record: dict[str, Any], *, relocating: bool = False) -> tuple[Path, dict[str, int]]:
     reference = record.get("native_workspace")
     relative = "native_work/" + digest(record["command_id"])
-    if not isinstance(reference, dict) or reference.get("adapter") != _ADAPTER or reference.get("relative") != relative:
+    adapter = _adapter(record)
+    if adapter is None or not isinstance(reference, dict) or reference.get("adapter") != adapter or reference.get("relative") != relative:
         raise ProjectRecoveryRequired("The native working root is not bound to this exact command.")
-    if io.read(relative + "/binding.json") != _binding(record):
+    if io.read(relative + "/binding.json") != _binding(record, adapter):
         raise ProjectRecoveryRequired("The native working root lost its exact owner binding.")
     with directory(io.fd, (*relative.split("/"), "candidate")) as fd:
         info = os.fstat(fd)
@@ -79,8 +90,8 @@ def verify(io: StoreIO, record: dict[str, Any], *, relocating: bool = False) -> 
 
 
 def claim(io: StoreIO, record: dict[str, Any], adapter: str) -> Path:
-    if adapter != _ADAPTER or record.get("metadata", {}).get("kind") != "native_create":
-        raise ProjectCommandConflict("Only the fixed NativeSuite creation adapter owns native working roots.")
+    if adapter != _adapter(record):
+        raise ProjectCommandConflict("Only the admitted native preparation adapter owns this working root.")
     if record.get("native_workspace") is not None:
         return verify(io, record)[0]
     if record["phase"] not in {"reserved", "applying"}:
@@ -92,7 +103,7 @@ def claim(io: StoreIO, record: dict[str, Any], adapter: str) -> Path:
         except FileExistsError as exc:
             raise ProjectRecoveryRequired("An unbound native working root needs explicit inspection.") from exc
         os.fsync(parent)
-    io.write(relative + "/binding.json", _binding(record), exclusive=True)
+    io.write(relative + "/binding.json", _binding(record, adapter), exclusive=True)
     with directory(io.fd, (*relative.split("/"), "candidate")) as fd:
         info = os.fstat(fd)
         record["native_workspace"] = {"adapter": adapter, "relative": relative,

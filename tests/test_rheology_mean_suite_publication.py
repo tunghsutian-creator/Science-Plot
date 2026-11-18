@@ -316,3 +316,91 @@ def test_frequency_group_binds_exact_files_and_metrics_even_if_local_ids_are_reo
         "Anonymous material · 150 °C": 171.,
         "Anonymous material · 170 °C": 515.,
     }
+
+
+def _prepare_in_process(root, *, interrupt):
+    """Exercise real candidate preparation under two independent processes."""
+    import os
+
+    from sciplot_core.materials_rules.analysis import frequency_terminal_analysis
+    from sciplot_core.plot_backends.managed import compiler_identity
+    from sciplot_core.project_lifecycle.attachment_group_prepare import prepare_attachment_group
+    from sciplot_core.project_lifecycle.repository import digest
+    from sciplot_core.semantic_sources.scientific_source import resolve_scientific_source
+
+    raw_data, workspace = root / "raw", root / "cold-workspace"
+    rule = "rheology_frequency_sweep"
+    resolved = resolve_scientific_source(raw_data, rule_id=rule, template="point_line", request={})
+    assert resolved is not None and resolved.figure_plan is not None
+    plan = resolved.figure_plan
+    store = FileProjectStore(workspace)
+    snapshot = store.snapshot(import_legacy=True)
+    source_tree = SourceTreeRead(str(raw_data), resolved.source_sha256)
+    requests = prepare_frequency_requests(resolved.domain, plan, task_root=root / "cold-tasks")
+    identity = {task.figure_id: digest(request) for task, request in zip(plan.tasks, requests, strict=True)}
+    compiler = ManagedVeuszCompiler(warm=False)
+    key = "cold-frequency-mean-suite"
+    figures = []
+    computed = []
+    try:
+        with prepare_attachment_group(store, key=key, plan=plan.to_payload(), figures=identity,
+                                      source_tree=source_tree, runtime=compiler_identity()) as pending:
+            for task, request in zip(plan.tasks, requests, strict=True):
+                def build(candidate_root, task=task, request=request):
+                    if interrupt and task is plan.tasks[-1]:
+                        os._exit(42)
+                    computed.append(task.figure_id)
+                    with (root / "native-invocations").open("a", encoding="utf-8") as stream:
+                        stream.write(task.figure_id + "\n")
+                    return _candidate_head(compiler, store, snapshot, task, request, candidate_root)[0]
+                figures.append(pending.figure(task.figure_id, build))
+            analysis_path = root / "cold-analysis.csv"
+            samples = [(s.sample, [row["x"] for row in s.rows], [row.get("storage_modulus") for row in s.rows])
+                       for s in resolved.domain.prepared_samples]
+            frequency_terminal_analysis(samples, semantic={"axis_plan": {"y": {"canonical_unit": "Pa"}}},
+                                        output=analysis_path)
+            outputs = {"analysis/frequency.csv": analysis_path.read_bytes(), "figure-plan.json": encode(plan.to_payload())}
+            result = publish_attachment_group(store, snapshot, key=key, selected_figures=plan.selected_figure_ids,
+                figures=tuple(figures), required_outputs=tuple(outputs), outputs=outputs, source_tree=source_tree)
+    finally:
+        compiler.close()
+    assert result["phase"] == "complete" and computed == [plan.tasks[-1].figure_id]
+
+
+@pytest.mark.comprehensive
+def test_frequency_suite_preaccept_retry_cold_resumes_only_the_unfinished_figure(tmp_path):
+    import subprocess
+    import sys
+
+    _mean_input(tmp_path)
+    workspace = tmp_path / "cold-workspace"
+    workspace.mkdir()
+    store = FileProjectStore(workspace)
+    before = store.snapshot(import_legacy=True)
+    command = [sys.executable, "-c",
+               "import sys; from pathlib import Path; from test_rheology_mean_suite_publication import _prepare_in_process; "
+               "_prepare_in_process(Path(sys.argv[1]), interrupt=sys.argv[2] == 'interrupt')", str(tmp_path)]
+    failed = subprocess.run([*command, "interrupt"], capture_output=True, text=True, timeout=120)
+    assert failed.returncode == 42, failed.stderr
+    before_retry = FileProjectStore(workspace).snapshot()
+    assert before_retry["generation"] == before["generation"] and before_retry["files"] == before["files"]
+    assert not (workspace / "figures").exists()
+    from sciplot_core.project_lifecycle.attachment_group_prepare import prepare_attachment_group
+
+    key = "cold-frequency-mean-suite"
+    saved = ProjectCommands(store).query(key + ":prepare")
+    assert saved is not None and saved["phase"] == "reserved"
+    original = saved["metadata"]["request"]
+    source_tree = SourceTreeRead(**original["original"])
+    with pytest.raises(ValueError, match="exact saved plan"):
+        with prepare_attachment_group(store, key=key, plan=original["plan"],
+                figures=dict(original["figures"]), source_tree=source_tree, runtime="different renderer"):
+            pytest.fail("A different renderer must not reuse the cold candidates")
+    completed = subprocess.run([*command, "continue"], capture_output=True, text=True, timeout=120)
+    assert completed.returncode == 0, completed.stderr
+    actual = FileProjectStore(workspace).snapshot()
+    assert actual["sequence"] == before["sequence"] + 1
+    names = (tmp_path / "native-invocations").read_text().splitlines()
+    assert names == ["storage_modulus_vs_frequency", "loss_modulus_vs_frequency",
+                     "loss_factor_vs_frequency", "complex_viscosity_vs_frequency"]
+    assert (workspace / "analysis/frequency.csv").is_file()
