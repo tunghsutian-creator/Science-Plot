@@ -10233,7 +10233,9 @@
       "tests/test_frequency_interval_binding.py::test_all_automatic_frequency_metrics_can_replay_individual_condition_data",
       "tests/test_rheology_exact_x_mean.py::test_exact_x_mean_matches_original_grouping_metric_tables_and_analysis",
       "tests/test_rheology_exact_x_mean.py::test_managed_exact_x_mean_rebuilds_from_its_originals_and_cache",
-      "tests/test_rheology_mean_suite_publication.py::test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_generation"
+      "tests/test_rheology_mean_suite_publication.py::test_frequency_mean_suite_publishes_real_managed_heads_and_analysis_as_one_generation",
+      "tests/test_rheology_mean_suite_publication.py::test_automatic_frequency_groups_bind_original_regions_not_condition_display_labels",
+      "tests/test_rheology_mean_suite_publication.py::test_frequency_group_binds_exact_files_and_metrics_even_if_local_ids_are_reordered"
     ],
     "private": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
@@ -20293,7 +20295,9 @@
       "tests/test_house_style_grammar.py::test_current_inside_best_keeps_each_legacy_corner_metric_and_anchor",
       "tests/test_frequency_interval_binding.py::test_all_automatic_frequency_metrics_can_replay_individual_condition_data",
       "tests/test_rheology_exact_x_mean.py::test_exact_x_mean_matches_original_grouping_metric_tables_and_analysis",
-      "tests/test_rheology_exact_x_mean.py::test_managed_exact_x_mean_rebuilds_from_its_originals_and_cache"
+      "tests/test_rheology_exact_x_mean.py::test_managed_exact_x_mean_rebuilds_from_its_originals_and_cache",
+      "tests/test_rheology_mean_suite_publication.py::test_automatic_frequency_groups_bind_original_regions_not_condition_display_labels",
+      "tests/test_rheology_mean_suite_publication.py::test_frequency_group_binds_exact_files_and_metrics_even_if_local_ids_are_reordered"
     ],
     "comprehensive": [
       "tests/test_annotation_operations_native.py::test_initial_crop_can_be_reviewed_and_exported_without_regeneration",
