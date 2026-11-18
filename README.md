@@ -279,14 +279,14 @@ To open or redraw an archived plot without creating an editable project or
 rewriting its saved content, use:
 
 ```bash
-skill/scripts/sciplot project legacy-open OLD_PROJECT --json
+skill/scripts/sciplot plot open OLD_PROJECT --json
 skill/scripts/sciplot project legacy-redraw OLD_PROJECT --out NEW_DIRECTORY --formats pdf,png_300 --json
 ```
 
 Use `--figure` to select a registered figure in a multi-figure project, or
 give the exact saved `.vsz` instead. The new output directory must be outside
-the original project. Redraw uses the saved native document as-is, not the
-current recipes or raw-data pipeline. If the VSZ links external data, the
+the original project. Redraw uses the first page of the selected saved native
+document as-is, not the current recipes or raw-data pipeline. If the VSZ links external data, the
 original linked files are still needed. These commands do not convert or edit
 the plot; use a converted copy for new-format features.
 

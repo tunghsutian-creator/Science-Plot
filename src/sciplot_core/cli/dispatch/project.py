@@ -29,12 +29,10 @@ def dispatch_project_control(args: Any) -> int:
         from sciplot_core.cli.dispatch.pdf_review import dispatch_pdf_review
 
         return dispatch_pdf_review(args)
-    if action in {"legacy-open", "legacy-redraw"}:
-        from sciplot_core.studio_core.legacy_saved_plot import open_legacy_plot, redraw_legacy_plot
+    if action == "legacy-redraw":
+        from sciplot_core.studio_core.legacy_saved_plot import redraw_legacy_plot
 
-        result = (open_legacy_plot(args.target, figure_id=args.figure) if action == "legacy-open"
-                  else redraw_legacy_plot(args.target, output=args.out, formats=args.formats.split(","), figure_id=args.figure))
-        _print_json(result)
+        _print_json(redraw_legacy_plot(args.target, output=args.out, formats=args.formats.split(","), figure_id=args.figure))
         return 0
     if action == "capabilities":
         payload = project_control_capabilities()

@@ -50,11 +50,12 @@ def test_legacy_open_and_redraw_read_exact_saved_vsz_without_writing_project(tmp
     project, native = _old_project(tmp_path)
     expected = export_document(native, formats=["png_300"], output_dir=tmp_path / "before")
     old_tree = _tree(project)
-    assert main(["project", "legacy-open", str(project), "--json"]) == 0
+    assert main(["plot", "open", str(project), "--direct", "--json"]) == 0
     opened = json.loads(capsys.readouterr().out)
     assert opened["read_only"] and opened["new_features_require_conversion"]
     assert opened["document"] == {"path": str(native), "sha256": file_sha256(native)}
     assert opened["pages"] == ["page1"]
+    assert opened["next_step"]["action"] == "convert_to_new_format"
     assert _tree(project) == old_tree
 
     output = tmp_path / "redrawn"

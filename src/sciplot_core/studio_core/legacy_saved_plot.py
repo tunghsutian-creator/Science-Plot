@@ -6,16 +6,40 @@ from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.foundation.file_hashing import file_sha256
 
 
+def _native_file_root(target: Path) -> Path:
+    from sciplot_core.delivery_identity import DELIVERY_IDENTITY
+
+    return next((parent for parent in target.parents
+                 if (parent / "plot_request.json").is_file() or (parent / DELIVERY_IDENTITY).is_file()),
+                target.parent)
+
+
+def is_legacy_saved_target(target: Path) -> bool:
+    """Recognize an old saved figure before the editable project importer runs."""
+    from sciplot_core.project_store.io import STORE
+
+    if target.is_file() and target.suffix.lower() == ".vsz":
+        root = _native_file_root(target)
+    else:
+        root = target.parent if target.name == "plot_request.json" else target
+        if not ((root / "plot_request.json").is_file() and
+                (root / "studio" / "document.vsz").is_file()):
+            return False
+    return not ((root / "head.json").is_file() or (root / STORE / "head.json").is_file())
+
+
 def _saved_plot(target: Path, figure_id: str | None) -> tuple[Path, Path]:
     target = canonical_path(target)
     if target.is_file() and target.suffix.lower() == ".vsz":
+        root = _native_file_root(target)
         if figure_id is not None:
-            raise ValueError("Select a project directory to use --figure.")
-        from sciplot_core.delivery_identity import DELIVERY_IDENTITY
+            from sciplot_core.studio_core.project_query_paths import project_snapshot, select_figure
 
-        root = next((parent for parent in target.parents
-                     if (parent / "plot_request.json").is_file() or (parent / DELIVERY_IDENTITY).is_file()),
-                    target.parent)
+            if not (root / "plot_request.json").is_file():
+                raise ValueError("Select a project directory to use a figure ID.")
+            _, primary, figures = project_snapshot(root)
+            if select_figure(target, primary, figures, figure_id)["document"] != str(target):
+                raise ValueError("The figure ID does not match this saved VSZ.")
         return root, target
     if not ((target.is_dir() and (target / "plot_request.json").is_file())
             or (target.is_file() and target.name == "plot_request.json")):
@@ -34,7 +58,9 @@ def open_legacy_plot(target: Path, *, figure_id: str | None = None) -> dict[str,
     return {"kind": "sciplot_legacy_plot", "version": 1, "status": "opened",
             "project": str(root), "document": observed["document"],
             "pages": observed["pages"], "linked_files": observed["linked_files"],
-            "read_only": True, "new_features_require_conversion": True}
+            "read_only": True, "new_features_require_conversion": True,
+            "next_step": {"action": "convert_to_new_format", "target": str(document),
+                          "message": "To use new editing features, convert this plot into a separate project."}}
 
 
 def redraw_legacy_plot(target: Path, *, output: Path, formats: list[str],

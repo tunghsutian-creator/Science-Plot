@@ -26,7 +26,9 @@ from sciplot_core.plot_protocol.rpc import (
 def make_service() -> Service:
     from sciplot_core.plot_engine.service import PlotService
 
-    return PlotService()
+    # Public open observes old saved figures; internal adoption/recovery keeps
+    # the explicitly used historical composition path until conversion lands.
+    return PlotService(read_only_legacy=True)
 
 
 def read_frame(connection: socket.socket, limit: int, *, timeout: float | None = None) -> bytes:

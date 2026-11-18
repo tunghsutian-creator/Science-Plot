@@ -27,17 +27,12 @@ def register_project_commands(subparsers: Any) -> None:
         "--out", type=Path, help="New source-adjacent visible delivery directory."
     )
     create.add_argument("--json", action="store_true")
-    for name, description in (
-        ("legacy-open", "Open an exact saved old plot without changing its project."),
-        ("legacy-redraw", "Redraw an exact saved old plot into a new directory."),
-    ):
-        legacy = actions.add_parser(name, help=description)
-        legacy.add_argument("target", type=Path, help="Saved project directory or exact VSZ.")
-        legacy.add_argument("--figure", help="Exact saved figure ID in the project.")
-        legacy.add_argument("--json", action="store_true")
-        if name == "legacy-redraw":
-            legacy.add_argument("--out", required=True, type=Path, help="New directory outside the old project.")
-            legacy.add_argument("--formats", default="pdf", help="Comma-separated native export formats.")
+    redraw = actions.add_parser("legacy-redraw", help="Redraw an exact saved old plot into a new directory.")
+    redraw.add_argument("target", type=Path, help="Saved project directory or exact VSZ.")
+    redraw.add_argument("--figure", help="Exact saved figure ID in the project.")
+    redraw.add_argument("--out", required=True, type=Path, help="New directory outside the old project.")
+    redraw.add_argument("--formats", default="pdf", help="Comma-separated native export formats.")
+    redraw.add_argument("--json", action="store_true")
     for name, operation in (("pdf-review-create", "create"), ("pdf-review-read", "read")):
         review = actions.add_parser(name, help="Bind or read a separate PDF annotation reference; never apply its text as a command.")
         review.set_defaults(pdf_review_action=operation)

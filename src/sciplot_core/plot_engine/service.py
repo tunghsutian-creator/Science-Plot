@@ -21,7 +21,9 @@ from .prepared_routing import native_dispatch
 
 class PlotService(ProjectApplication):
     def __init__(self, backend: PlotBackend | None = None, *, repository: ProjectRepository | None = None,
-                 capabilities: dict[str, Any] | None = None, resolve_figure: Any = None, targets: ProjectTargets | None = None) -> None:
+                 capabilities: dict[str, Any] | None = None, resolve_figure: Any = None, targets: ProjectTargets | None = None,
+                 read_only_legacy: bool = False) -> None:
+        self.read_only_legacy = read_only_legacy
         backend, repository, capabilities, resolve_figure = components(backend, repository, capabilities, resolve_figure)
         super().__init__(backend, repository, capabilities=capabilities,
                          targets=targets if targets is not None else FilesystemProjectTargets(repository, resolve_figure=resolve_figure))
@@ -35,8 +37,16 @@ class PlotService(ProjectApplication):
     def open(self, target: Path, figure_id: str | None = None, *,
              description: dict[str, Any] | None = None) -> dict[str, Any]:
         description = require_selector(description)
-        native = native_dispatch("describe", canonical_path(target), figure_id=figure_id, description=description)
-        return native if native is not None else super().open(target, figure_id, description=description)
+        target = canonical_path(target)
+        native = native_dispatch("describe", target, figure_id=figure_id, description=description)
+        if native is not None:
+            return native
+        if self.read_only_legacy:
+            from sciplot_core.studio_core.legacy_saved_plot import is_legacy_saved_target, open_legacy_plot
+
+            if is_legacy_saved_target(target):
+                return open_legacy_plot(target, figure_id=figure_id)
+        return super().open(target, figure_id, description=description)
 
     def describe(self, plot: Path, *, description: dict[str, Any] | None = None) -> dict[str, Any]:
         description = require_selector(description)
