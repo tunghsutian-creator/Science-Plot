@@ -27,8 +27,7 @@ Read the matching self-contained route once per session while its contract is un
 | Change or debug this project's implementation | [Development](references/development.md) |
 
 For source revisions, groups/comparisons or legacy diagnostics, read only the relevant section of [advanced workflows](references/advanced-workflows.md).
-[External control](references/external-control.md) supplies operation examples
-and recovery detail only when the live response and chosen route leave a specific gap.
+[External control](references/external-control.md) supplies operation examples and recovery detail only when the live response and chosen route leave a specific gap.
 
 ## Minimize the agent loop
 - Reuse current session results, readiness, capability schemas and bindings until
