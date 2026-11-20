@@ -6,12 +6,31 @@ from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.foundation.file_hashing import file_sha256
 
 
-def _native_file_root(target: Path) -> Path:
+def _native_owner_root(target: Path) -> Path | None:
     from sciplot_core.delivery_identity import DELIVERY_IDENTITY
 
     return next((parent for parent in target.parents
                  if (parent / "plot_request.json").is_file() or (parent / DELIVERY_IDENTITY).is_file()),
-                target.parent)
+                None)
+
+
+def _native_file_root(target: Path) -> Path:
+    return _native_owner_root(target) or target.parent
+
+
+def is_standalone_export_target(document: Path, output: Path) -> bool:
+    """Allow exact export only from an unowned VSZ into a separate artifact tree."""
+    from sciplot_core.policy import DELIVERY_LAUNCHER, DELIVERY_PROJECT_DIR
+
+    document = canonical_path(document)
+    if not document.is_file() or _native_owner_root(document) is not None:
+        return False
+    if any(parent.name == DELIVERY_PROJECT_DIR and (parent.parent / DELIVERY_LAUNCHER).is_file()
+           for parent in document.parents):
+        return False
+    destination = canonical_path(output)
+    source = document.parent
+    return not (destination.is_relative_to(source) or source.is_relative_to(destination))
 
 
 def _saved_plot(target: Path, figure_id: str | None) -> tuple[Path, Path]:

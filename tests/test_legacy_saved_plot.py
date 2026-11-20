@@ -239,6 +239,26 @@ def test_public_task_and_native_edit_entrypoints_cannot_allocate_old_project_wri
     assert main(arguments) == 1
     assert json.loads(capsys.readouterr().out)["reason_code"] == "legacy_conversion_required"
     assert not (tmp_path / "candidate").exists()
+    standalone = tmp_path / "standalone.vsz"
+    standalone.write_bytes(native.read_bytes())
+    portable = tmp_path / "portable"
+    from sciplot_core.policy import DELIVERY_LAUNCHER, DELIVERY_PROJECT_DIR
+
+    portable_document = portable / DELIVERY_PROJECT_DIR / "figure.vsz"
+    portable_document.parent.mkdir(parents=True)
+    portable_document.write_bytes(native.read_bytes())
+    (portable / DELIVERY_LAUNCHER).write_text("# Historical launcher marker; never execute.")
+    separate = tmp_path.parent / (tmp_path.name + "-separate")
+    for target, options in (
+        (native, ["--out", str(separate), "--export", "pdf"]),
+        (portable_document, ["--out", str(separate), "--export", "pdf"]),
+        (standalone, ["--export", "pdf"]),
+        (standalone, ["--out", str(tmp_path / "inside"), "--export", "pdf"]),
+        (standalone, ["--out", str(separate), "--export", "pdf", "--prepare-only"]),
+    ):
+        assert main(["studio", str(target), *options, "--json"]) == 1
+        assert json.loads(capsys.readouterr().out)["reason_code"] == "legacy_conversion_required"
+    assert not separate.exists() and not (tmp_path / "inside").exists()
     request = tmp_path / "task-request.json"
     request.write_text(json.dumps({"version": 1, "action": "export", "project": str(project)}))
     assert main(["task", "start", "--request", str(request), "--task-dir", str(tmp_path / "new-task"), "--json"]) == 1

@@ -70,6 +70,7 @@ def dispatch_interfaces(
             )
         original_argv = list(sys.argv[1:] if argv is None else argv)
         studio_target = args.target.expanduser() if args.target else None
+        delivery_target = None
         if studio_target is not None:
             from sciplot_core.studio_core.delivery_target import resolve_delivery_target
 
@@ -83,7 +84,16 @@ def dispatch_interfaces(
         if studio_target is not None and not args.qt_smoke:
             from sciplot_core.project_lifecycle.legacy_public_policy import require_public_editable
 
-            require_public_editable(studio_target)
+            from sciplot_core.studio_core.legacy_saved_plot import is_standalone_export_target
+
+            standalone_export = (
+                delivery_target is None and studio_target.suffix.lower() == ".vsz"
+                and args.export and args.out is not None and not args.prepare_only
+                and all(value is None for value in (args.rule, args.template, args.name))
+                and is_standalone_export_target(studio_target, args.out)
+            )
+            if not standalone_export:
+                require_public_editable(studio_target)
         studio_output_root = args.out.expanduser() if args.out else None
         studio_delivery_root = None
         if studio_target is not None:
