@@ -333,6 +333,12 @@ def test_program_intents_mix_saved_projects_managed_and_image_with_scientific_qa
     added = compose({"action": "apply", "layout": str(layout), "expected_revision": 0, "operations": operations})
     assert [panel["source_kind"] for panel in added["panels"]] == ["project", "project", "managed", "image"]
     before_refusal = layout.read_bytes()
+    inspected = compose({"action": "inspect", "layout": str(layout), "check_sources": True})
+    assert inspected["source_validation"] == "current"
+    publication = inspected["panels"][2]["source_publication"]
+    assert publication["plot_id"] == canonical["document"]["plot_id"]
+    assert publication["revision"] == canonical["document"]["revision"] and publication["current"] is False
+    assert layout.read_bytes() == before_refusal
     with pytest.raises(AssemblyError) as rejected:
         compose({"action": "export", "layout": str(layout), "out": str(out)})
     assert rejected.value.code == "assembly_native_qa_failed"

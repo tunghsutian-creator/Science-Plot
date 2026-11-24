@@ -281,6 +281,16 @@ def continue_saved_work(source: Path, *, search_roots: list[Path] | None = None,
             current = document_evidence(selected)
             if not current["current"] or current != match["document"]:
                 raise ValueError("The selected semantic document has a conflict or pending transaction.")
+            from sciplot_core.task_semantic_owner import inspect_managed_publication
+
+            try:
+                publication = inspect_managed_publication(selected, plot_id=current["plot_id"],
+                                                          revision=current["revision"])["export_current"]
+            except (OSError, ValueError, RuntimeError, KeyError, TypeError) as exc:
+                if getattr(exc, "reason_code", None) == "managed_publication_selection_changed":
+                    raise
+                publication = {"current": False, "validation": "unknown"}
+            current["export_current"] = publication
             next_step = {"action": "plot.open", "arguments": {"target": str(selected)},
                          "plot_id": current["plot_id"], "revision": current["revision"]}
         else:

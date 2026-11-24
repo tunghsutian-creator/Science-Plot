@@ -50,6 +50,23 @@ def describe_managed(plot: Path) -> dict[str, Any]:
     return call("plot.describe", {"plot": str(plot), "description": {"scope": "summary"}})
 
 
+def inspect_managed_publication(plot: Path, *, plot_id: str,
+                                revision: int | None = None) -> dict[str, Any]:
+    """Observe the selected head in the existing read owner, never start a writer."""
+    from sciplot_core.foundation.canonical_paths import canonical_path
+    from sciplot_core.plot_engine.errors import EngineError
+
+    plot = canonical_path(plot)
+    current = describe_managed(plot)
+    if (current.get("plot_type") != "ManagedPlot" or current.get("plot") != str(plot)
+            or current.get("plot_id") != plot_id or type(current.get("revision")) is not int
+            or revision is not None and current["revision"] != revision):
+        raise EngineError("managed_publication_selection_changed",
+                          "The observed publication does not identify the exact selected Managed figure.")
+    return {key: current[key] for key in ("plot", "plot_id", "revision", "scientific_hash", "presentation_hash",
+            "artifact", "export_current", "status", "pending", "changed_inputs")}
+
+
 def deliver_managed(request: dict[str, Any]) -> dict[str, Any]:
     local = _MANAGED_LOCAL.get()
     if local is not None:

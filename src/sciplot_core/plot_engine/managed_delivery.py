@@ -210,6 +210,8 @@ def _summary(root: Path, state: dict[str, Any]) -> dict[str, Any]:
 
 def inspect(service: DeliveryService, request: dict[str, Any]) -> dict[str, Any]:
     """Observe the existing owner receipt and seals; never acquire a writer lease."""
+    from sciplot_core.plot_engine.export_status import current_export
+
     root, out = _destination(request)
     if exists(root / "delivery.json"):
         state = _load_request(root, request)
@@ -222,6 +224,7 @@ def inspect(service: DeliveryService, request: dict[str, Any]) -> dict[str, Any]
         try:
             with project_query(Path(selection["plot"])):
                 head = _selection(service, selection, root, out)
+                row["original_publication"] = current_export(Path(selection["plot"]), head, eligible=True)
                 if item["status"] == "sealed":
                     require_native_seal(head, item["audit"]["native_sha256"])
                     if state["status"] != "complete" and not out.exists():
