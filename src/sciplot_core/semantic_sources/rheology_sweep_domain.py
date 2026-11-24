@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
@@ -40,9 +40,6 @@ _METRIC_ORDER = tuple(
     metric[0]
     for metric in (*_RHEOLOGY_SWEEP_METRICS, _RHEOLOGY_COMPLEX_MODULUS_METRIC)
 )
-
-SourceHasher = Callable[[Path], str | None]
-SweepReader = Callable[[Path], list[RheologySweepSample]]
 
 
 class RheologySweepDomainError(ValueError):
@@ -81,21 +78,6 @@ class ResolvedRheologySweepDomain:
             raise ValueError("Resolved rheology sweep domain has an unknown rule.")
         if self.source != self.source.expanduser().resolve():
             raise ValueError("Resolved rheology sweep source path must be absolute.")
-
-
-def resolve_rheology_temperature_domain(
-    input_path: Path,
-    *,
-    request: dict[str, Any],
-) -> ResolvedRheologySweepDomain:
-    """Resolve one temperature sweep without writes or cached state."""
-
-    return _resolve_rheology_temperature_domain(
-        input_path,
-        request=request,
-        source_hasher=source_tree_sha256,
-        automatic_reader=_read_rheology_temperature_comparison_samples,
-    )
 
 
 def resolve_rheology_frequency_domain(
@@ -154,15 +136,15 @@ def resolve_rheology_frequency_domain(
     )
 
 
-def _resolve_rheology_temperature_domain(
+def resolve_rheology_temperature_domain(
     input_path: Path,
     *,
     request: dict[str, Any],
-    source_hasher: SourceHasher,
-    automatic_reader: SweepReader,
 ) -> ResolvedRheologySweepDomain:
+    """Resolve one temperature sweep without writes or cached state."""
+
     source = input_path.expanduser().resolve()
-    source_sha256_before = source_hasher(source)
+    source_sha256_before = source_tree_sha256(source)
     if source_sha256_before is None:
         _fail(
             "temperature_source_unavailable",
@@ -170,13 +152,13 @@ def _resolve_rheology_temperature_domain(
         )
     try:
         raw_samples = read_rheology_sweep_samples(source, request_column_confirmations(request),
-            automatic_reader, rule_id=TEMPERATURE_RULE_ID, x_label="Temperature", default_x_unit="°C", metrics=_RHEOLOGY_SWEEP_METRICS)
+            _read_rheology_temperature_comparison_samples, rule_id=TEMPERATURE_RULE_ID, x_label="Temperature", default_x_unit="°C", metrics=_RHEOLOGY_SWEEP_METRICS)
     except (OSError, ValueError) as exc:
         raise RheologySweepDomainError(
             "temperature_source_unavailable",
             f"SciPlot could not read the rheology-temperature source: {exc}",
         ) from exc
-    source_sha256_after = source_hasher(source)
+    source_sha256_after = source_tree_sha256(source)
     if source_sha256_after != source_sha256_before:
         _fail(
             "temperature_source_changed_during_resolution",

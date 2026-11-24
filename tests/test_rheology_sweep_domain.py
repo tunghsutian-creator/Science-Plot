@@ -6,18 +6,10 @@ import pytest
 
 from sciplot_core.semantic_sources.rheology_sweep_domain import (
     FREQUENCY_RULE_ID,
-    ResolvedRheologySweepDomain,
-    RheologySweepDomainError,
-    RheologySweepSourceFacts,
     resolve_rheology_frequency_domain,
 )
 from sciplot_core.semantic_sources.rheology_sweep_sources import (
     _read_rheology_frequency_comparison_samples,
-)
-from sciplot_core.semantic_sources.rheology_temperature_domain import (
-    ResolvedRheologyTemperatureDomain,
-    RheologyTemperatureDomainError,
-    TemperatureSourceFacts,
 )
 
 
@@ -107,12 +99,6 @@ def test_frequency_reader_rejects_mixed_or_ambiguous_separators(
 
     with pytest.raises(ValueError, match=message):
         _read_rheology_frequency_comparison_samples(source)
-
-
-def test_temperature_compatibility_names_share_one_sweep_schema() -> None:
-    assert ResolvedRheologyTemperatureDomain is ResolvedRheologySweepDomain
-    assert TemperatureSourceFacts is RheologySweepSourceFacts
-    assert RheologyTemperatureDomainError is RheologySweepDomainError
 
 
 def test_frequency_domain_uses_parser_selected_text_sources_only(

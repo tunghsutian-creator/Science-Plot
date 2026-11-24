@@ -208,14 +208,14 @@ def _resolve_rheology_temperature_scientific_source(
     from sciplot_core.figure_plan.temperature_resolution import (
         resolve_temperature_plan,
     )
-    from sciplot_core.semantic_sources.rheology_temperature_domain import (
-        RheologyTemperatureDomainError,
+    from sciplot_core.semantic_sources.rheology_sweep_domain import (
+        RheologySweepDomainError,
         resolve_rheology_temperature_domain,
     )
 
     try:
         domain = resolve_rheology_temperature_domain(source, request=request)
-    except RheologyTemperatureDomainError as exc:
+    except RheologySweepDomainError as exc:
         raise ScientificSourceResolutionError(exc.reason_code, str(exc)) from exc
     try:
         figure_plan = resolve_temperature_plan(

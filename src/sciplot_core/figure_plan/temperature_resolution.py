@@ -9,12 +9,11 @@ from sciplot_core.figure_plan.errors import FigurePlanResolutionError
 from sciplot_core.figure_plan.metric_binding import CartesianMetricBinding
 from sciplot_core.figure_plan.plan import ResolvedFigurePlan
 from sciplot_core.figure_plan.task import FigureTask
-from sciplot_core.semantic_sources.rheology_temperature_domain import (
+from sciplot_core.semantic_sources.rheology_sweep_domain import (
     TEMPERATURE_RULE_ID,
-    TEMPERATURE_SAMPLE_METRICS,
-    ResolvedRheologyTemperatureDomain,
-    RheologyTemperatureDomainError,
-    TemperatureSourceFacts,
+    ResolvedRheologySweepDomain,
+    RheologySweepDomainError,
+    RheologySweepSourceFacts,
     resolve_rheology_temperature_domain,
 )
 
@@ -23,14 +22,16 @@ def resolve_temperature_plan(
     *,
     input_path: Path,
     request: dict[str, Any],
-    source_resolution: ResolvedRheologyTemperatureDomain | None = None,
+    source_resolution: ResolvedRheologySweepDomain | None = None,
 ) -> ResolvedFigurePlan:
     """Resolve the fixed two-task plan from one typed source domain."""
 
-    resolved_source = source_resolution or _resolve_temperature_domain(
-        input_path=input_path,
-        request=request,
-    )
+    resolved_source = source_resolution
+    if resolved_source is None:
+        try:
+            resolved_source = resolve_rheology_temperature_domain(input_path, request=request)
+        except RheologySweepDomainError as exc:
+            raise FigurePlanResolutionError(exc.reason_code, str(exc)) from exc
     if resolved_source.source != input_path.expanduser().resolve():
         raise FigurePlanResolutionError(
             "temperature_source_mismatch",
@@ -64,30 +65,6 @@ def resolve_temperature_plan(
     )
 
 
-def load_temperature_source_facts(
-    *,
-    input_path: Path,
-    request: dict[str, Any],
-) -> TemperatureSourceFacts:
-    """Resolve one typed source domain and return its FigurePlan facts."""
-
-    return _resolve_temperature_domain(
-        input_path=input_path,
-        request=request,
-    ).facts
-
-
-def _resolve_temperature_domain(
-    *,
-    input_path: Path,
-    request: dict[str, Any],
-) -> ResolvedRheologyTemperatureDomain:
-    try:
-        return resolve_rheology_temperature_domain(input_path, request=request)
-    except RheologyTemperatureDomainError as exc:
-        raise FigurePlanResolutionError(exc.reason_code, str(exc)) from exc
-
-
 def _temperature_task(
     *,
     figure_id: str,
@@ -95,7 +72,7 @@ def _temperature_task(
     title: str,
     y_metric: str,
     artifact_stem: str,
-    facts: TemperatureSourceFacts,
+    facts: RheologySweepSourceFacts,
 ) -> FigureTask:
     return FigureTask.with_metric_binding(
         figure_id=figure_id,
@@ -113,11 +90,4 @@ def _temperature_task(
     )
 
 
-__all__ = [
-    "TEMPERATURE_RULE_ID",
-    "TEMPERATURE_SAMPLE_METRICS",
-    "ResolvedRheologyTemperatureDomain",
-    "TemperatureSourceFacts",
-    "load_temperature_source_facts",
-    "resolve_temperature_plan",
-]
+__all__ = ["resolve_temperature_plan"]

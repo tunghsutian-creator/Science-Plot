@@ -15,8 +15,8 @@ from sciplot_core.figure_plan import CartesianMetricBinding, FigurePlanResolutio
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.readiness.rule_contract import rule_contract_hashes
 from sciplot_core.semantic import prepare_semantic_source
-from sciplot_core.semantic_sources.rheology_temperature_domain import (
-    ResolvedRheologyTemperatureDomain,
+from sciplot_core.semantic_sources.rheology_sweep_domain import (
+    ResolvedRheologySweepDomain,
 )
 from sciplot_core.semantic_sources.scientific_source import (
     ResolvedScientificSource,
@@ -626,7 +626,7 @@ def test_rheology_temperature_snapshot_drives_plan_and_prepare_without_reparse(
     source = resolve_fixture_path(str(rule.fixture_path or ""))
     import sciplot_core.semantic as semantic_module
     import sciplot_core.semantic_sources.prepare_rheology as preparation
-    import sciplot_core.semantic_sources.rheology_temperature_domain as domain_module
+    import sciplot_core.semantic_sources.rheology_sweep_domain as domain_module
 
     original_reader = domain_module._read_rheology_temperature_comparison_samples
     reader_calls: list[Path] = []
@@ -649,7 +649,7 @@ def test_rheology_temperature_snapshot_drives_plan_and_prepare_without_reparse(
     assert resolved is not None
     assert resolved.figure_plan is not None
     assert resolved.transform is None
-    domain = resolved.require_domain(ResolvedRheologyTemperatureDomain)
+    domain = resolved.require_domain(ResolvedRheologySweepDomain)
     assert reader_calls == [source.resolve()]
 
     def no_reparse(*_args: object, **_kwargs: object) -> None:
@@ -697,6 +697,38 @@ def test_rheology_temperature_snapshot_drives_plan_and_prepare_without_reparse(
     attestation = prepared["source_attestation"]
     assert attestation.source_tree_sha256_before == resolved.source_sha256
     assert attestation.source_tree_sha256_after == resolved.source_sha256
+
+
+def test_rheology_temperature_scientific_source_rejects_byte_drift_during_parse(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sciplot_core.semantic_sources.rheology_sweep_domain as domain_module
+
+    source = tmp_path / "temperature.tsv"
+    source.write_text(
+        "Temperature\tStorage Modulus\tTan Delta\nC\tPa\t\n"
+        "40\t1200\t0.25\n30\t1150\t0.27\n",
+        encoding="utf-8",
+    )
+    original_reader = domain_module._read_rheology_temperature_comparison_samples
+
+    def mutate_after_read(source_path: Path):
+        samples = original_reader(source_path)
+        with source_path.open("ab") as raw_file:
+            raw_file.write(b"\n")
+        return samples
+
+    monkeypatch.setattr(
+        domain_module, "_read_rheology_temperature_comparison_samples", mutate_after_read
+    )
+
+    with pytest.raises(ScientificSourceResolutionError) as exc_info:
+        resolve_scientific_source(
+            source, rule_id="rheology_temperature_sweep", request={}, template="point_line"
+        )
+
+    assert exc_info.value.reason_code == "temperature_source_changed_during_resolution"
 
 
 def test_rheology_frequency_snapshot_drives_plan_and_prepare_without_reparse(

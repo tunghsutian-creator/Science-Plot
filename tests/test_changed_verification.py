@@ -1158,6 +1158,17 @@ def test_deleted_owned_source_selects_owner_evidence_but_not_ruff() -> None:
     ]
 
 
+def test_retired_temperature_adapter_diff_still_selects_sweep_evidence() -> None:
+    path = "src/sciplot_core/semantic_sources/rheology_temperature_domain.py"
+    plan = build_changed_verification_plan([path], repo_root=REPO_ROOT)
+
+    assert plan["status"] == "planned"
+    assert [owner["owner_id"] for owner in plan["owners"]] == ["scientific_transform"]
+    checks = {check["check_id"]: check["command"] for check in plan["checks"]}
+    assert "tests/test_resolved_temperature_figure_plan.py" in checks["pytest_changed_owners"]
+    assert "ruff_changed_python" not in checks
+
+
 def test_no_changes_reports_no_tests_without_running_an_empty_focused_tier() -> None:
     calls: list[list[str]] = []
 
