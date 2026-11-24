@@ -5,6 +5,7 @@ from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
+from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.task_errors import TaskControlError
 
 
@@ -37,14 +38,43 @@ def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
     request = state["request"]
     source = Path(request["source"])
     rule_id = plan["rule_id"]
+    fields = sorted(set(request) - {"version", "action", "source", "out", "rule_id", "template"})
+    if fields:
+        return _native_only(state, "raw_request_fields_not_managed",
+                            "The source-only Managed curve contract does not cover: " + ", ".join(fields))
+    if source.suffix.casefold() not in {".csv", ".tsv"} or source.is_dir():
+        return _native_only(state, "raw_source_format_not_managed", "This Managed curve route needs one original CSV or TSV file.")
+    if not source.is_file():
+        raise TaskControlError("source_changed", "The original curve is unavailable after scientific planning.")
+    if rule_id not in {"uvvis_spectrum", "dsc_curve", "tga_curve", "dtg_curve", "saxs_profile", "xrd_pattern", "ftir_spectrum",
+                       "gpc_sec_chromatogram"}:
+        return _native_only(state, "raw_rule_not_managed", f"{rule_id} has no verified ordinary Managed curve route.")
+    if (plan["template"] != ("stacked_curve" if rule_id == "ftir_spectrum" else "curve")
+            or "data_mapping" in plan or "source_options" in plan):
+        return _native_only(state, "raw_plan_not_managed",
+                            "The selected template, mapping or source options are outside the verified Managed curve contract.")
+    try:
+        if _admit_verified_curve(state, plan, source, rule_id):
+            return True
+    except TaskControlError as exc:
+        # These are specific observation-contract refusals. The registered
+        # plan is still usable, provided it describes the same original bytes.
+        if exc.reason_code not in {"semantic_coordinate_mapping_required", "semantic_table_not_found"}:
+            raise
+        if source_tree_sha256(source) != state["source_sha256"]:
+            raise TaskControlError("source_changed", "The original curve changed during Managed admission.") from exc
+    return _native_only(state, "raw_science_not_verified_for_managed",
+                        "The registered plan and Managed binding do not prove identical original rows, samples, quantities and units without conversion or exclusion.")
+
+
+def _native_only(state: dict[str, Any], reason_code: str, message: str) -> bool:
+    state["creation_admission"] = {"route": "native_compatibility", "reason_code": reason_code, "message": message}
+    return False
+
+
+def _admit_verified_curve(state: dict[str, Any], plan: dict[str, Any], source: Path, rule_id: str) -> bool:
     ftir = rule_id == "ftir_spectrum"
     gpc = rule_id == "gpc_sec_chromatogram"
-    if (set(request) - {"version", "action", "source", "out", "rule_id", "template"}
-            or source.suffix.casefold() not in {".csv", ".tsv"} or not source.is_file()
-            or rule_id not in {"uvvis_spectrum", "dsc_curve", "tga_curve", "dtg_curve", "saxs_profile", "xrd_pattern", "ftir_spectrum",
-                               "gpc_sec_chromatogram"}
-            or plan["template"] != ("stacked_curve" if ftir else "curve") or "data_mapping" in plan or "source_options" in plan):
-        return False
     transform = plan.get("scientific_transform") or {}
     output = transform.get("output") or {}
     columns, series = transform.get("source_columns", []), output.get("series", [])
@@ -172,6 +202,7 @@ def _freeze_raw(state: dict[str, Any], plan: dict[str, Any], source: Path, inten
     digest = semantic["sources"][0]["sha256"]
     analysis = raw_curve_analysis(source, rule_id, plan, digest)
     state.update(initial_request=deepcopy(request), analysis_metrics=analysis,
+                 creation_admission={"route": "managed_plot", "reason_code": "verified_raw_curve"},
                  request={"version": 1, "action": "create", "sources": [str(source)], "intent": intent,
                           **({"out": request["out"]} if "out" in request else {})},
                  source_hashes={str(source): digest}, semantic_plan=semantic, semantic_choices={},

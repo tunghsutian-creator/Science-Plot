@@ -52,7 +52,8 @@ def test_profile_does_not_override_conflicting_or_missing_source_evidence(tmp_pa
 
 def test_profile_reuses_headers_but_never_sample_names_or_values(tmp_path, creation_calls):
     source = _table(tmp_path / "UVvis.csv")
-    first = task_control.start_task({"version": 1, "action": "create", "source": str(source)}, task_dir=tmp_path / "first")
+    first = task_control.start_task({"version": 1, "action": "create", "source": str(source),
+                                     "curve_display": "raw_overlay"}, task_dir=tmp_path / "first")
     profile = json.loads(Path(first["profile"]).read_text())
     assert profile["version"] == 2
     assert profile["signature"]["column_names"] == ["Wavelength", "Absorbance"]
@@ -68,7 +69,8 @@ def test_profile_reuses_headers_but_never_sample_names_or_values(tmp_path, creat
 
 def test_changed_declared_units_require_a_new_choice(tmp_path, creation_calls):
     source = _table(tmp_path / "UVvis.csv")
-    first = task_control.start_task({"version": 1, "action": "create", "source": str(source)}, task_dir=tmp_path / "first")
+    first = task_control.start_task({"version": 1, "action": "create", "source": str(source),
+                                     "curve_display": "raw_overlay"}, task_dir=tmp_path / "first")
     current = _table(tmp_path / "next.csv")
     current.write_text(current.read_text().replace("nm,a.u.", "um,a.u."))
     second = task_control.start_task({"version": 1, "action": "create", "source": str(current), "profile": first["profile"]}, task_dir=tmp_path / "second")
@@ -99,7 +101,8 @@ def test_wrong_scientific_choice_remains_answerable(tmp_path, monkeypatch, creat
     source = _table(tmp_path / "UVvis.csv")
     monkeypatch.setattr(task_planning, "inspect_payload", lambda _: {})
     task = tmp_path / "task"
-    initial = task_control.start_task({"version": 1, "action": "create", "source": str(source)}, task_dir=task)
+    initial = task_control.start_task({"version": 1, "action": "create", "source": str(source),
+                                       "curve_display": "raw_overlay"}, task_dir=task)
     assert initial["status"] == "needs_input"
     rejected = task_control.resume_task(task, answer)
     assert rejected["status"] == "needs_input" and not creation_calls

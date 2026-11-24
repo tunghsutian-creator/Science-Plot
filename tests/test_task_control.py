@@ -144,7 +144,10 @@ def test_unknown_scientific_presentation_cannot_be_silently_ignored(field, value
 
 def source(root: Path) -> Path:
     path = root / "UVvis.csv"
-    path.write_text("Wavelength,Absorbance\nnm,a.u.\nE3,E3\n400,1\n450,4\n500,1\n")
+    # Keep these native controls outside the verified single-sample lane, while
+    # retaining a well-formed sample row needed for reusable profiles.
+    path.write_text("Wavelength,Absorbance,Wavelength,Absorbance\nnm,a.u.,nm,a.u.\nE3,E3,E4,E4\n"
+                    "400,1,400,2\n450,4,450,5\n500,1,500,2\n")
     return path
 
 

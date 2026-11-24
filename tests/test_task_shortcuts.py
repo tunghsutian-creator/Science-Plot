@@ -28,8 +28,7 @@ def test_create_retains_original_input_and_existing_question_without_invented_ma
     calls, _ = ready
     question = {"field": "column_mapping", "question_id": "a" * 64, "mapping_candidates": [{"id": "real cells"}]}
     result = {"kind": "sciplot_task", "status": "needs_input", "question": question}
-    def start(request, *, task_dir, entry_intent=None, _prefer_managed=False):
-        assert _prefer_managed
+    def start(request, *, task_dir):
         calls.append((request, task_dir))
         return deepcopy(result)
     monkeypatch.setattr(shortcuts, "start_task", start)
@@ -60,6 +59,13 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
     unmigrated["request"]["profile"] = "/existing/presentation-profile.json"
     assert not admit_raw_curve(unmigrated, plan)
     assert unmigrated["request"]["source"] == str(raw) and "intent" not in unmigrated["request"]
+    wide = tmp_path / "UVvis-shared-x.csv"
+    wide.write_text("Wavelength,Absorbance,Absorbance\nnm,a.u.,a.u.\nA,A,B\n400,2,3\n460,5,4\n500,1,2\n")
+    wide_plan = build_plan_preview(wide, request={"rule_id": "uvvis_spectrum"})
+    wide_state = {"request": {**request, "source": str(wide)}, "source_sha256": wide_plan["preview_identity"]["source_tree_sha256"]}
+    assert not admit_raw_curve(wide_state, wide_plan)  # The Managed binding has no unique matching coordinate.
+    assert wide_state["creation_admission"]["reason_code"] == "raw_science_not_verified_for_managed"
+    assert wide_state["request"]["source"] == str(wide)
     assert admit_raw_curve(candidate, plan)
     assert candidate["initial_request"] == request
     assert candidate["plan_confirmation"]["figure_plan"] == plan["resolved_figure_plan"]["plan_sha256"]

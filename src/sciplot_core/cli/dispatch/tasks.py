@@ -177,7 +177,7 @@ def dispatch_task(args: Any) -> int:
         else:
             result = find_tasks(args.source, tasks_root=args.tasks_root, limit=args.limit)
     elif action == "start":
-        result = start_task(_object(args.request), task_dir=args.task_dir, _public_mutation=True, _prefer_managed=True)
+        result = start_task(_object(args.request), task_dir=args.task_dir, _public_mutation=True)
     elif action == "create":
         from sciplot_core.task_shortcuts import create_task
 

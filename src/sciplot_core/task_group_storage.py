@@ -85,9 +85,9 @@ def original_source_current(state: dict[str, Any] | None) -> bool | None:
     """Use the child task's complete frozen source evidence for group guards and views."""
     if not state or state["request"]["action"] != "create":
         return None
-    if "intent" in state["request"]:
-        from sciplot_core.task_semantic_creation import assert_sources_current
+    from sciplot_core.task_semantic_creation import assert_sources_current, is_semantic
 
+    if is_semantic(state):
         try:
             assert_sources_current(state)
         except TaskControlError as exc:

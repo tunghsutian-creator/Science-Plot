@@ -146,13 +146,14 @@ def test_legacy_open_and_redraw_read_exact_saved_vsz_without_writing_project(tmp
         historic_journal.write_text(json.dumps(original_record))
         admitted = []
 
-        def interrupt_historical(_request, **kwargs):
-            admitted.append(kwargs["_prefer_managed"])
+        def interrupt_historical(_request, *, task_dir, owned_namespace, reason):
+            admitted.append((task_dir, owned_namespace, reason))
             return {"status": "blocked"}
 
-        monkeypatch.setattr(creation, "start_task", interrupt_historical)
+        monkeypatch.setattr(creation, "start_native_compatibility_creation", interrupt_historical)
         assert service.create(historical)["status"] == "blocked"
-        assert admitted == [False] and "raw_admission" not in json.loads(historic_journal.read_bytes())
+        assert admitted == [(historical_root / "task", historical_root, "historical_plot_create_receipt")]
+        assert "raw_admission" not in json.loads(historic_journal.read_bytes())
     finally:
         service.close()
 

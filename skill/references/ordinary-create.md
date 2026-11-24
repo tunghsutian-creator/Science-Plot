@@ -5,11 +5,13 @@ recognition, planning, native creation, QA and export. Separate inspect/rules/pl
 project-create/Studio commands, repository reading and tests are not prerequisites.
 
 Ordinary creation uses the registered plan for scientific recognition, figure
-selection, and supported presentation. The typed `task create`, structured CLI
-`task start`, eligible `project create`, daily MCP `sciplot_task_start`, and source-only `plot.create`
-(including expert MCP `sciplot_plot_create`) create Managed plots directly when
-the source and registered plan agree on samples, original columns, units and
-rows. Supported defaults include:
+selection, and supported presentation. The typed `task create`, structured
+`task start`, plain source-based group items, and MCP task creation use the
+same Managed admission. Eligible `project create` and source-only `plot.create`
+share the scientific proof. Managed creation requires agreement on samples,
+original columns, units and rows. Read `creation_admission` when a task uses
+native compatibility; failed Managed execution is retried on the same task,
+not sent to the native route. Supported defaults include:
 
 - **UV–vis, DSC, TGA, DTG, XRD, SAXS:** verified single-sample CSV/TSV without
   conversion, normalization or excluded points. DTG requires an observed

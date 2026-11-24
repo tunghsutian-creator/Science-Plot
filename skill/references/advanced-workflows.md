@@ -95,8 +95,11 @@ edits do not require new analysis, inventory scripts or development tests.
    For several experiments, use `task group start --request EXPERIMENTS_JSON
    --group-dir NEW_DIRECTORY --json` and its MCP group tools. The explicit list
    contains ordinary task requests; do not scan a mixed folder and silently pick
-   datasets. The optional shared sample preset applies to newly created figures.
-   A create item's optional `presentation` contains existing typed `operations`
+   datasets. Plain verified source-only items use the same Managed admission as
+   single tasks. Their receipts expose `plot_objects`; use `plot describe` then
+   `plot patch` for supported edits. The optional shared sample preset and item
+   presentation still use the explicit native compatibility workflow, not
+   Managed edits. A create item's optional `presentation` contains existing typed `operations`
    and an optional `figure_id` (required when preparation yields several figures).
    It saves a source-bound native preparation checkpoint before first export,
    combines the preset and explicit changes into one reviewed batch per figure,

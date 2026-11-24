@@ -300,7 +300,8 @@ def test_creation_timeout_cannot_trigger_automatic_retry(editing, monkeypatch):
         attempts.append(args)
         raise subprocess.TimeoutExpired(["worker"], 120)
     monkeypatch.setattr(execution, "create_project", timeout)
-    result = control.start_task({"version": 1, "action": "create", "source": str(source)}, task_dir=editing.task)
+    result = control.start_task({"version": 1, "action": "create", "source": str(source),
+                                 "curve_display": "raw_overlay"}, task_dir=editing.task)
     assert result["status"] == "blocked" and result["phase"] == "creating"
     assert len(attempts) == 1 and "automatic_repairs" not in result
     assert result["next_step"]["action"] == "inspect_blocker_and_saved_state"

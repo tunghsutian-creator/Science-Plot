@@ -37,7 +37,9 @@ def _projects(tmp_path):
         source = tmp_path / f"{name}.csv"
         source.write_text(text)
         sources.append(source)
-        created = start_task({"version": 1, "action": "create", "source": str(source)},
+        # These paper v1 controls require saved native authority.
+        display = "raw_overlay" if name == "UVvis" else "stacked_offset"
+        created = start_task({"version": 1, "action": "create", "source": str(source), "curve_display": display},
                              task_dir=tmp_path / f"create-{name}", defer_creation_export=False)
         assert created["status"] == "complete", created
         projects.append(Path(created["project"]))
@@ -179,7 +181,8 @@ def test_public_completed_group_freezes_once_and_reuses_current_native_publicati
     root.mkdir()
     entries = []
     for source, name in zip(sources, ('UVvis', 'FTIR'), strict=True):
-        request = {'version': 1, 'action': 'create', 'source': str(source)}
+        request = {'version': 1, 'action': 'create', 'source': str(source),
+                   'curve_display': 'raw_overlay' if name == 'UVvis' else 'stacked_offset'}
         entries.append({'id': name, 'label': {'UVvis': 'P0.3/0.7 log', 'FTIR': 'P0.5/0.5 linear'}[name], 'request': request})
     group = {'kind': 'sciplot_task_group', 'version': 1, 'group_dir': str(root),
              'request': {'version': 1, 'title': 'Two current original publications', 'items': entries},

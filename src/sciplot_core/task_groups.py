@@ -9,7 +9,7 @@ from typing import Any
 from sciplot_core.studio_core.project_query import inspect_project
 from sciplot_core.studio_core.project_session import external_project_session
 from sciplot_core.task_contract import TaskControlError
-from sciplot_core.task_control import resume_task, start_task
+from sciplot_core.task_control import resume_task, start_native_compatibility_creation, start_task
 from sciplot_core.task_group_contract import group_responses_schema, normalize_group_request, validate_shape
 from sciplot_core.task_group_storage import active_step, original_source_current, group_path, load_group, save_group, step_state, validate_group_location
 from sciplot_core.task_group_review import group_overview
@@ -34,6 +34,11 @@ def _presentation_steps(root: Path, state: dict[str, Any], item: dict[str, Any])
         return []
     first = step_state(item["steps"][0])
     assert first is not None
+    from sciplot_core.task_semantic_creation import is_semantic
+
+    if is_semantic(first):
+        raise TaskControlError("group_presentation_scope",
+                               "Native group styles cannot edit a Managed plot. Use plot describe to find its edit contract, then plot patch.")
     if presentation:
         from sciplot_core.task_prepared_creation import require_prepared_current
 
@@ -75,6 +80,11 @@ def _advance(root: Path, state: dict[str, Any], item: dict[str, Any]) -> None:
                 if step.get("defer_creation_export") is True:
                     start_task(step["request"], task_dir=Path(step["task_dir"]), defer_creation_export=True,
                                _owned_namespace=root)
+                elif step["name"] == "initial" and state["request"].get("sample_style_preset"):
+                    # Preset-only groups already publish the initial native
+                    # baseline before reviewing its styles. Keep that contract.
+                    start_native_compatibility_creation(step["request"], task_dir=Path(step["task_dir"]),
+                                                        owned_namespace=root, reason="native_group_sample_style_preset")
                 else:
                     start_task(step["request"], task_dir=Path(step["task_dir"]), _owned_namespace=root)
                 child = step_state(step)

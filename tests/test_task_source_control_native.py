@@ -57,7 +57,7 @@ def test_killed_native_source_install_resumes_through_public_task(tmp_path, monk
     _source(new_source, changed=True)
     raw_before = old_source.read_bytes(), new_source.read_bytes()
     created = task_control.start_task({"version": 1, "action": "create", "source": str(old_source),
-                                      "rule_id": "uvvis_spectrum"}, task_dir=tmp_path / "create")
+                                      "rule_id": "uvvis_spectrum", "curve_display": "raw_overlay"}, task_dir=tmp_path / "create")
     assert created["status"] == "complete", created
     project = Path(created["project"])
     task = tmp_path / "update"

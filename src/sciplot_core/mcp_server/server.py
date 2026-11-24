@@ -155,10 +155,7 @@ class Adapter:
         # Native workers capture their own protocol output. Incidental prints
         # from domain owners must never corrupt the outer MCP stdio stream.
         with redirect_stdout(sys.stderr):
-            if self.profile == "daily" and name == "sciplot_task_start":
-                payload = invoke_owner(name, arguments, prefer_managed=True)
-            else:
-                payload = invoke_owner(name, arguments)
+            payload = invoke_owner(name, arguments)
         compact = payload if arguments.get("full") else compact_result(payload)
         links: list[ResourceSnapshot] = []
         warnings: list[str] = []

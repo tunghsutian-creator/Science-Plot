@@ -10,7 +10,7 @@ from typing import Any
 
 from sciplot_core.project_lifecycle.paths import canonical_path
 from sciplot_core.project_lifecycle.context import external_project_session
-from sciplot_core.task_control import inspect_task, resume_task, start_task
+from sciplot_core.task_control import inspect_task, resume_task, start_native_compatibility_creation, start_task
 
 from sciplot_core.project_lifecycle.errors import EngineError
 from sciplot_core.plot_engine.backend import PlotCreator
@@ -52,9 +52,14 @@ def create(service: PlotCreator, request: dict[str, Any], *, targets: ProjectTar
             write(path, state)
         task_root = root / "task"
         # start_task already has crash-safe task allocation; its owner handles pending stages.
-        task = (inspect_task(task_root) if (task_root / "task.json").exists()
-                else start_task(task_request, task_dir=task_root, _owned_namespace=root,
-                                _prefer_managed=state.get("raw_admission") == "verified_managed_v1"))
+        if (task_root / "task.json").exists():
+            task = inspect_task(task_root)
+        elif state.get("raw_admission") != "verified_managed_v1":
+            # Only a pre-upgrade outer receipt with no child may start here.
+            task = start_native_compatibility_creation(task_request, task_dir=task_root, owned_namespace=root,
+                                                       reason="historical_plot_create_receipt")
+        else:
+            task = start_task(task_request, task_dir=task_root, _owned_namespace=root)
         return _result(service, root, state, task)
 
 

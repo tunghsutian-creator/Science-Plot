@@ -152,7 +152,7 @@ def test_copied_source_discovery_returns_native_editable_original_and_explicit_s
     source = tmp_path / "UVvis.csv"
     source.write_text("Wavelength,Absorbance\nnm,a.u.\nE3,E3\n400,1\n425,2\n450,4\n475,2\n500,1\n")
     raw_before = source.read_bytes()
-    created = start_task({"version": 1, "action": "create", "source": str(source)}, task_dir=tmp_path / "creation")
+    created = start_task({"version": 1, "action": "create", "source": str(source), "curve_display": "raw_overlay"}, task_dir=tmp_path / "creation")
     assert created["status"] == "complete", created
     project = Path(created["project"])
     copied_source = tmp_path / "renamed-source.csv"
@@ -234,7 +234,7 @@ def test_legacy_search_source_race_after_final_project_owner_read_fails_closed(t
         source.mkdir()
         raw.rename(source / raw.name)
     creation = tmp_path / "creation"
-    created = start_task({"version": 1, "action": "create", "source": str(source)}, task_dir=creation)
+    created = start_task({"version": 1, "action": "create", "source": str(source), "curve_display": "raw_overlay"}, task_dir=creation)
     assert created["status"] == "complete", created
     project = Path(created["project"])
     copied = tmp_path / ("renamed.csv" if source_kind == "file" else "renamed-data")

@@ -7,9 +7,9 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 10408,
-    "nodeids_sha256": "ddf6eeb460fa03d10861b01066c1e1b924acfb40a8a114512c220ce1cdfab409",
-    "test_sources_sha256": "234c2df11f8941f0c360ec0a236b361b4fe680c061df380e05587f79e7372cc8",
+    "nodeid_count": 10410,
+    "nodeids_sha256": "27cb792820d2d7344ee84b1136f6b7a00659983102ea29bfb1593fbe2afff074",
+    "test_sources_sha256": "5f480eae086d805ed9fe355d9ceeb52fad947f0b74cbb84c0479058db584d4d3",
     "test_source_count": 661,
     "candidate_nodeids": [
       "tests/test_plot_template_native.py::test_legacy_paired_template_reauthored_as_managed_preserves_data_and_styles",
@@ -5835,6 +5835,8 @@
       "tests/test_managed_frequency_creation.py::test_project_create_managed_frequency_keeps_external_delivery_and_reopens",
       "tests/test_managed_frequency_creation.py::test_task_create_managed_frequency_cold_resume_uses_exact_owner",
       "tests/test_managed_curve_project_creation.py::test_verified_curve_project_creates_managed_and_recovers_existing_delivery",
+      "tests/test_managed_curve_project_creation.py::test_source_only_uvvis_single_and_group_keep_managed_authority_through_retry_and_cold_edit",
+      "tests/test_managed_curve_project_creation.py::test_source_only_uvvis_without_a_verified_sample_uses_native_and_reports_why",
       "tests/test_ordinary_plotting_owners.py::test_each_domain_has_exact_existing_paths_and_generated_native_controls[managed_curve_project]"
     ],
     "synthetic_candidates": [
@@ -28469,6 +28471,14 @@
       {
         "nodeid": "tests/test_managed_curve_project_creation.py::test_verified_curve_project_creates_managed_and_recovers_existing_delivery",
         "reason": "Generated curve and local native project and delivery; no private dataset."
+      },
+      {
+        "nodeid": "tests/test_managed_curve_project_creation.py::test_source_only_uvvis_single_and_group_keep_managed_authority_through_retry_and_cold_edit",
+        "reason": "Generated labeled UV–vis CSV; real task/group native delivery, dropped reply, and cold presentation-only edit. No private data."
+      },
+      {
+        "nodeid": "tests/test_managed_curve_project_creation.py::test_source_only_uvvis_without_a_verified_sample_uses_native_and_reports_why",
+        "reason": "Generated unlabeled UV–vis CSV; real native compatibility creation and exact science-admission explanation. No private data."
       },
       {
         "nodeid": "tests/test_ordinary_plotting_owners.py::test_each_domain_has_exact_existing_paths_and_generated_native_controls[managed_curve_project]",

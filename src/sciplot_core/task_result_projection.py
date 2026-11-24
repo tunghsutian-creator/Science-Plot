@@ -1,10 +1,13 @@
-"""Small transport receipts; durable state and scientific questions stay complete."""
+"""Project task results and evidence without owning execution or durable state."""
 
+from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
+from subprocess import TimeoutExpired
 from typing import Any
 
 from sciplot_core.task_error_feedback import short_error_message
+from sciplot_core.task_storage import task_summary
 
 
 def compact_task_result(payload: dict[str, Any]) -> dict[str, Any]:
@@ -65,3 +68,46 @@ def compact_task_result(payload: dict[str, Any]) -> dict[str, Any]:
         if isinstance(run, dict):
             run.pop("manifest", None)
     return result
+
+
+def current_task_result(state: dict[str, Any], *, inspect_project: Callable[[Path], dict[str, Any]]) -> dict[str, Any]:
+    if "intent" in state["request"]:
+        from sciplot_core.task_semantic_creation import current_result
+
+        return current_result(state)
+    summary = task_summary(state)
+    if state.get("defer_creation_export") is True and "prepared_creation" in state:
+        from sciplot_core.task_prepared_creation import require_prepared_current
+
+        try:
+            require_prepared_current(state)
+        except (ValueError, OSError) as exc:
+            summary.update(status="blocked", blocker={"reason_code": getattr(exc, "reason_code", "prepared_project_changed"),
+                           "message": str(exc)}, next_step={"action": "resolve_prepared_conflict"})
+        return summary
+    if state.get("project"):
+        try:
+            current = inspect_project(Path(state["project"]))
+            summary["current_project"] = {key: current[key] for key in (
+                "project", "primary_figure_id", "figures", "source", "qa", "delivery",
+                "ready_to_use", "readiness_evaluated", "document_authority", "live_gui_state_evaluated",
+            ) if key in current}
+            if (state["status"] == "complete" and (state.get("result", {}).get("studio_run") or {}).get("ready_to_use") is True
+                    and all((current.get(key) or {}).get("current") is True for key in ("source", "qa", "delivery"))):
+                summary["next_step"] = {
+                    "action": "review_exports_and_deliver", "task": state["task_dir"],
+                    "images": [item["path"] for figure in state["result"].get("figures", [])
+                               for item in figure.get("exports", []) if item.get("format") == "tiff"],
+                    "message": "Current source/QA/delivery were queried in this call. Review the exported images, then deliver; requery after later changes. No additional native preview or inspect is required for this unchanged result.",
+                }
+            elif (state["status"] == "complete"
+                  and (state.get("result", {}).get("studio_run") or {}).get("ready_to_use") is True):
+                summary["next_step"] = {
+                    "action": "resolve_current_evidence", "task": state["task_dir"],
+                    "evidence_gaps": [key for key in ("source", "qa", "delivery")
+                                      if (current.get(key) or {}).get("current") is not True],
+                    "message": "This call already inspected the current project. Resolve the missing or stale evidence in current_project; repeating inspect with unchanged files cannot repair it. Existing export paths remain in result.figures for visual review, not proof of current readiness. Do not regenerate data or re-export merely to replace an unknown source fingerprint with a claim of success.",
+                }
+        except (ValueError, OSError, RuntimeError, TimeoutExpired) as exc:
+            summary["current_project"] = {"status": "unknown", "message": str(exc)}
+    return summary

@@ -21,7 +21,7 @@ def _preview_output(arguments: dict[str, Any]) -> Path:
     return parent / uuid4().hex
 
 
-def invoke_owner(name: str, arguments: dict[str, Any], *, prefer_managed: bool = False) -> dict[str, Any]:
+def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     if name in {"sciplot_intake_prepare", "sciplot_intake_create", "sciplot_intake_table"}:
         from sciplot_core.intake.session_adapter import create_session, prepare_session, preview_session_table
 
@@ -134,8 +134,7 @@ def invoke_owner(name: str, arguments: dict[str, Any], *, prefer_managed: bool =
 
         if name == "sciplot_task_start":
             task_dir = arguments.get("task_dir")
-            options: dict[str, Any] = {"_prefer_managed": True} if prefer_managed else {}
-            return start_task(arguments["request"], task_dir=Path(task_dir) if task_dir else None, _public_mutation=True, **options)
+            return start_task(arguments["request"], task_dir=Path(task_dir) if task_dir else None, _public_mutation=True)
         task = Path(arguments["task"])
         return inspect_task(task) if name == "sciplot_task_inspect" else resume_task(task, arguments["response"], _public_mutation=True)
     project = Path(arguments["project"])

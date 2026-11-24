@@ -63,6 +63,15 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
     if not require_available_output(state):
         save_task(root, state)
         return
+    # A historical child already in native creation keeps that route, even
+    # if a worker stopped before materializing its first output.
+    admit_ordinary = (state.get("prefer_managed_raw") is True
+                      and not state.get("defer_creation_export")
+                      and "creation_admission" not in state)
+    if admit_ordinary and state["phase"] == "creating":
+        state["creation_admission"] = {"route": "native_compatibility", "reason_code": "historical_native_creation",
+                                       "message": "Continue the original native creation checkpoint."}
+        admit_ordinary = False
     _phase(root, state, "planning")
     request = state["request"]
     if "categorical" in request:
@@ -76,16 +85,19 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
     if plan is None:
         save_task(root, state)
         return
-    if state.get("prefer_managed_raw") is True and not state.get("defer_creation_export"):
+    if plan.get("rule_id") == "rheology_frequency_sweep":
+        # Frequency retains its own Managed attachment and continuation owner.
+        if not state.get("defer_creation_export") and not any(key in plan for key in ("data_mapping", "source_options")):
+            state["frequency_creation_plan"] = plan
+    elif admit_ordinary:
         from sciplot_core.task_semantic_creation import admit_raw_curve, run_creation as run_managed
 
         if admit_raw_curve(state, plan):
             save_task(root, state)
             run_managed(root, state)
             return
-    if (plan.get("rule_id") == "rheology_frequency_sweep" and not state.get("defer_creation_export")
-            and not any(key in plan for key in ("data_mapping", "source_options"))):
-        state["frequency_creation_plan"] = plan
+        # Native ineligibility (not an execution error) is saved by the next
+        # creating checkpoint before calling the native creator.
     _execute_creation(root, state, plan)
 
 

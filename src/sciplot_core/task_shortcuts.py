@@ -105,7 +105,7 @@ def create_task(
         return {"kind": "sciplot_task_shortcut", "version": 1, "status": "blocked",
                 "reason_code": "runtime_not_ready", "doctor": doctor,
                 "next_step": {"action": "repair_runtime", "next_actions": runtime.get("next_actions", [])}}
-    return {**start_task(request, task_dir=task_dir, _prefer_managed=intent is None), "doctor": doctor}
+    return {**start_task(request, task_dir=task_dir), "doctor": doctor}
 
 
 def style_task(

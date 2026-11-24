@@ -59,12 +59,19 @@ def _edit_request(item: dict[str, Any], figure: dict[str, Any], identifier: str)
     )
 
 
+def _attention(item: dict[str, Any]) -> bool:
+    if item.get("document_authority") == "managed_plot":
+        return item["status"] != "complete" or item.get("ready_to_use") is not True
+    return needs_attention(item)
+
+
 def _card(root: Path, item: dict[str, Any], figure: dict[str, Any], index: int) -> str:
     identity = {"item": item["id"], "figure": figure.get("figure_id", index)}
     identifier = 'group-' + canonical_json_sha256(identity)[:20]
     task = item.get("task") or {}
     problem = item.get("blocker") or task.get("blocker") or task.get("question") or {}
-    title = figure.get("title", "等待生成图形")
+    managed = item.get("document_authority") == "managed_plot"
+    title = figure.get("title", "Managed 图形" if item.get("plot_objects") else "等待生成图形")
     samples = [str(sample["sample"]) for sample in figure.get("samples", []) if sample.get("sample")]
     search = ' '.join([item["label"], title, *samples, str(item.get("sources", item.get("source", "")))])
     candidate = figure.get("scope") == "candidate"
@@ -79,7 +86,11 @@ def _card(root: Path, item: dict[str, Any], figure: dict[str, Any], index: int) 
         body.append(f'<p class="problem">{text(message)}</p>')
     if figure.get("preview_error"):
         body.append(f'<p class="problem">{text(figure["preview_error"])}</p>')
-    body.append(evidence_panel(item.get("current_evidence") or {}, source_changed=item.get("source_current") is False))
+    if managed:
+        body.append(copy_field(f"{identifier}-plot", "Managed 图形句柄", item.get("project")))
+        body.append(copy_field(f"{identifier}-tiff", "当前交付 TIFF", "\n".join(item.get("export_images") or [])))
+    else:
+        body.append(evidence_panel(item.get("current_evidence") or {}, source_changed=item.get("source_current") is False))
     evidence = item.get("current_evidence") or {}
     source = item.get("source") or ((evidence.get("source") or {}).get("input") or {}).get("path")
     source_label = "原始数据路径" if item.get("source") else "项目数据路径"
@@ -92,14 +103,14 @@ def _card(root: Path, item: dict[str, Any], figure: dict[str, Any], index: int) 
     body.append(_edit_request(item, figure, identifier))
     return (f'<article class="review-card" id="{text(identifier)}" data-review-card data-search="{text(search)}" '
             f'data-title="{text(title)}" data-subtitle="{text(item["label"])}" data-kind="{text(kind)}" '
-            f'data-attention="{str(needs_attention(item)).lower()}"><header><div><p class="eyebrow">{text(item["label"])}</p>'
+            f'data-attention="{str(_attention(item)).lower()}"><header><div><p class="eyebrow">{text(item["label"])}</p>'
             f'<h2>{text(title)}</h2></div>{badge(state_label, "attention" if item["status"] != "complete" else "neutral")}</header>'
             f'<div class="tags">{tags}</div>{"".join(body)}</article>')
 
 
 def write_group_gallery(root: Path, result: dict[str, Any]) -> str:
     items = result["items"]
-    attention = sum(needs_attention(item) for item in items)
+    attention = sum(_attention(item) for item in items)
     stats = (f'<div class="stats"><div><strong>{len(items)}</strong><span>个实验</span></div>'
              f'<div><strong>{len(result["previews"])}</strong><span>张预览</span></div>'
              f'<div><strong>{attention}</strong><span>个实验需关注</span></div></div>')

@@ -36,7 +36,8 @@ def test_native_peak_revision_missing_and_multiple_candidates(tmp_path, ys, stat
     old, new = tmp_path / "old.csv", tmp_path / "new.csv"
     for path, values in ((old, [1, 3, 2, 1, 1]), (new, ys)):
         path.write_text("Wavelength,Absorbance\nnm,a.u.\nA,A\n" + "".join(f"{x},{y}\n" for x, y in zip([400, 425, 450, 475, 500], values, strict=True)))
-    first = start_task({"version": 1, "action": "create", "source": str(old), "rule_id": "uvvis_spectrum"}, task_dir=tmp_path / "create")
+    first = start_task({"version": 1, "action": "create", "source": str(old), "rule_id": "uvvis_spectrum",
+                        "curve_display": "raw_overlay"}, task_dir=tmp_path / "create")
     assert first["status"] == "complete", first
     project = Path(first["project"])
     figure = resolve_project_figure(project, None)

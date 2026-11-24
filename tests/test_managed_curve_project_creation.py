@@ -83,3 +83,162 @@ def test_verified_curve_project_creates_managed_and_recovers_existing_delivery(t
         assert raw.read_bytes() == original
     finally:
         service.close()
+
+
+@pytest.mark.comprehensive
+def test_source_only_uvvis_single_and_group_keep_managed_authority_through_retry_and_cold_edit(
+    tmp_path, capsys, monkeypatch,
+):
+    import subprocess
+
+    from sciplot_core import task_execution, task_group_review, task_semantic_creation
+    from sciplot_core._paths import REPO_ROOT
+    from sciplot_core.task_storage import load_task
+
+    raw = tmp_path / "UVvis.csv"
+    original = b"Wavelength,Absorbance\nnm,a.u.\nA,A\n460,5\n400,2\n500,1\n"
+    raw.write_bytes(original)
+    group_root = tmp_path / "group"
+    group_request = tmp_path / "group.json"
+    group_out = tmp_path / "group-figures"
+    group_request.write_text(json.dumps({"version": 1, "title": "UV–vis", "items": [{
+        "id": "spectrum", "label": "Original absorbance", "request": {
+            "version": 1, "action": "create", "source": str(raw), "out": str(group_out)}}]}))
+    single_root = tmp_path / "single"
+    service = make_service()
+    real_admit, real_deliver = task_semantic_creation.admit_raw_curve, service.deliver
+    attempts, admits = [], []
+
+    def native_ordinary_forbidden(*_args, **_kwargs):
+        pytest.fail("A verified Managed UV–vis creation cannot dispatch the native compatibility route.")
+
+    def admit(state, plan):
+        admits.append(state["task_dir"])
+        return real_admit(state, plan)
+
+    def lose_delivery(wire):
+        # Drop a response after the actual delivery owner completed its write.
+        result = real_deliver(wire)
+        attempts.append(wire)
+        if Path(wire["out"]) == group_out and len([item for item in attempts if Path(item["out"]) == group_out]) == 1:
+            raise RuntimeError("lost delivery reply after publication")
+        return result
+
+    def cli(arguments):
+        code = main([*arguments, "--json"])
+        payload = json.loads(capsys.readouterr().out)
+        assert code == 0, payload
+        return payload
+
+    monkeypatch.setattr(task_semantic_creation, "admit_raw_curve", admit)
+    monkeypatch.setattr(task_execution, "create_project", native_ordinary_forbidden)
+    monkeypatch.setattr(task_group_review, "inspect_project", native_ordinary_forbidden)
+    try:
+        with local_managed_actions(service.create, service.describe, lose_delivery):
+            single = cli(["task", "create", str(raw), "--out", str(tmp_path / "single-figures"),
+                          "--task-dir", str(single_root)])
+            blocked = cli(["task", "group", "start", "--request", str(group_request),
+                           "--group-dir", str(group_root)])
+        child = Path(blocked["items"][0]["task_dir"])
+        frozen = load_task(child)
+        assert blocked["items"][0]["status"] == "blocked"
+        assert blocked["items"][0]["task"]["blocker"]["message"] == "lost delivery reply after publication"
+        assert frozen["creation_admission"] == {"route": "managed_plot", "reason_code": "verified_raw_curve"}
+        assert frozen["phase"] == "delivering" and (group_out / "index.json").is_file()
+        before_delivery = {p.relative_to(group_out): p.read_bytes() for p in group_out.rglob("*") if p.is_file()}
+        response_file = tmp_path / "responses.json"
+        response_file.write_text(json.dumps([{"item_id": "spectrum", "task_dir": str(child),
+                                             "response": {"retry": True}}]))
+    finally:
+        service.close()
+
+    # Only retry the persisted delivery intent with a fresh real owner. Neither
+    # new source admission nor Managed creation may execute after the lost reply.
+    service = make_service()
+    try:
+        with local_managed_actions(native_ordinary_forbidden, service.describe, service.deliver):
+            group = cli(["task", "group", "resume", str(group_root), "--responses", str(response_file)])
+            item, = group["items"]
+            assert group["counts"] == {"complete": 1} and item["ready_to_use"] is True
+            assert item["source"] == str(raw) and item["source_current"] is True
+            assert item["plot_objects"] == item["task"]["plot_objects"]
+            assert item["document_authority"] == "managed_plot"
+            gallery = Path(group["overview"]).read_text()
+            assert 'data-attention="false"' in gallery and item["project"] in gallery
+            old_item = cli(["task", "group", "inspect", str(group_root)])["items"][0]
+            assert old_item["plot_objects"] == item["plot_objects"]
+    finally:
+        service.close()
+    assert admits == [str(single_root), str(child)]
+    resumed = load_task(child)
+    assert resumed["managed_request"] == frozen["managed_request"]
+    assert resumed["creation_attempts"] == frozen["creation_attempts"]
+    assert resumed["delivery_request"] == frozen["delivery_request"]
+    assert {p.relative_to(group_out): p.read_bytes() for p in group_out.rglob("*") if p.is_file()} == before_delivery
+
+    def cold_plot(action, plot, *args):
+        result = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "plot", action, plot, "--direct", "--json", *args],
+                                cwd=REPO_ROOT, capture_output=True, text=True, timeout=90, check=False)
+        assert result.returncode == 0, result.stdout + result.stderr
+        return json.loads(result.stdout)
+
+    single_handle, = single["plot_objects"]
+    group_handle, = item["plot_objects"]
+    assert single_handle["plot_id"] != group_handle["plot_id"]
+    for handle in (single_handle, group_handle):
+        assert handle["plot_type"] == "ManagedPlot" and handle["revision"] == 0
+        head = load_head(Path(handle["plot"]))
+        ir = json.loads(Path(head["binding"]["ir_path"]).read_bytes())
+        layer, = ir["views"][0]["layers"]
+        xy = coordinates(ir, layer)
+        assert (xy["x"], xy["y"]) == ([460.0, 400.0, 500.0], [5.0, 2.0, 1.0])
+        assert [scale["unit"] for scale in ir["scales"]] == ["nm", "a.u."]
+        wire = load_task(single_root if handle == single_handle else child)["managed_request"]
+        slot, = wire["data_binding"]["slots"].values()
+        assert (slot["sample"], slot["x_unit"], slot["y_unit"]) == ("A", "nm", "a.u.")
+        before = cold_plot("describe", handle["plot"], "--scope", "summary")
+        assert (before["plot_id"], before["revision"]) == (handle["plot_id"], 0)
+        before_edit = cold_plot("describe", handle["plot"], "--scope", "edit", "--target-id", layer["marks"][0]["id"],
+                                "--property", "style")
+        next_step = before_edit["next_step"]
+        assert next_step["action"] == "plot.patch"
+        patch_file = tmp_path / "patch.json"
+        patch_file.write_text(json.dumps({**{key: next_step[key] for key in ("plot_id", "base_revision", "intent_class")},
+            "idempotency_key": "a1-color-control",
+            "changes": [{"op": "set", "target": [next_step["target"]], "property": next_step["property"],
+                         "value": {"line_color": "#2277aa"}}]}))
+        changed = cold_plot("patch", handle["plot"], "--request", str(patch_file))
+        assert changed["plot_id"] == before["plot_id"] and changed["revision"] == 1
+        reopened = cold_plot("describe", handle["plot"], "--scope", "summary")
+        assert (reopened["plot_id"], reopened["revision"]) == (before["plot_id"], 1)
+        assert reopened["scientific_hash"] == before["scientific_hash"]
+        assert reopened["presentation_hash"] != before["presentation_hash"]
+        after_head = load_head(Path(handle["plot"]))
+        after_ir = json.loads(Path(after_head["binding"]["ir_path"]).read_bytes())
+        after_layer, = after_ir["views"][0]["layers"]
+        assert after_layer["marks"][0]["style"]["line_color"] == "#2277aa"
+        assert coordinates(after_ir, after_layer) == xy
+        assert raw.read_bytes() == original
+        if handle == single_handle:
+            single_edit = before_edit
+        else:
+            assert before_edit["figure_edit_contract"] == single_edit["figure_edit_contract"]
+            assert before_edit["current_value"] == single_edit["current_value"]
+    assert {p.relative_to(group_out): p.read_bytes() for p in group_out.rglob("*") if p.is_file()} == before_delivery
+
+
+@pytest.mark.comprehensive
+def test_source_only_uvvis_without_a_verified_sample_uses_native_and_reports_why(tmp_path, capsys):
+    raw = tmp_path / "UVvis.csv"
+    original = b"Wavelength,Absorbance\nnm,a.u.\n400,2\n460,5\n500,1\n"
+    raw.write_bytes(original)
+    task = tmp_path / "task"
+    code = main(["task", "create", str(raw), "--out", str(tmp_path / "figures"), "--task-dir", str(task), "--json"])
+    result = json.loads(capsys.readouterr().out)
+    assert code == 0, result
+    assert result["creation_admission"]["route"] == "native_compatibility"
+    assert result["creation_admission"]["reason_code"] == "raw_science_not_verified_for_managed"
+    assert result.get("source_plan") is None and result.get("plot_objects") is None
+    assert result["status"] == "complete"
+    assert Path(result["current_project"]["figures"][0]["document"]).is_file()
+    assert raw.read_bytes() == original

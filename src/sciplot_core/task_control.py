@@ -6,7 +6,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from subprocess import TimeoutExpired
-from typing import Any
+from typing import Any, Literal
 
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.output_contract import resolve_user_output_layout
@@ -28,6 +28,7 @@ from sciplot_core.task_planning import accept_worksheet_response, assert_source_
 from sciplot_core.task_source_execution import accept_annotation_response, run_source_apply_export, run_source_preview, validate_source_response
 from sciplot_core.task_editing import begin_preview_revision, validate_preview_response
 from sciplot_core.task_repair import normalize_task_location, request_repair, response_repair
+from sciplot_core.task_result_projection import current_task_result
 from sciplot_core.task_output_choice import accept_output_response, creation_output
 from sciplot_core.task_storage import (
     load_task, save_task, task_location, task_path, task_summary,
@@ -49,57 +50,38 @@ def _finished_call(root: Path, state: dict[str, Any]) -> dict[str, Any]:
 
 
 def _current_result(state: dict[str, Any]) -> dict[str, Any]:
-    if "intent" in state["request"]:
-        from sciplot_core.task_semantic_creation import current_result
-
-        return current_result(state)
-    summary = task_summary(state)
-    if state.get("defer_creation_export") is True and "prepared_creation" in state:
-        from sciplot_core.task_prepared_creation import require_prepared_current
-
-        try:
-            require_prepared_current(state)
-        except (ValueError, OSError) as exc:
-            summary.update(status="blocked", blocker={"reason_code": getattr(exc, "reason_code", "prepared_project_changed"),
-                           "message": str(exc)}, next_step={"action": "resolve_prepared_conflict"})
-        return summary
-    if state.get("project"):
-        try:
-            current = inspect_project(Path(state["project"]))
-            summary["current_project"] = {key: current[key] for key in (
-                "project", "primary_figure_id", "figures", "source", "qa", "delivery",
-                "ready_to_use", "readiness_evaluated", "document_authority", "live_gui_state_evaluated",
-            ) if key in current}
-            if (state["status"] == "complete" and (state.get("result", {}).get("studio_run") or {}).get("ready_to_use") is True
-                    and all((current.get(key) or {}).get("current") is True for key in ("source", "qa", "delivery"))):
-                summary["next_step"] = {
-                    "action": "review_exports_and_deliver", "task": state["task_dir"],
-                    "images": [item["path"] for figure in state["result"].get("figures", [])
-                               for item in figure.get("exports", []) if item.get("format") == "tiff"],
-                    "message": "Current source/QA/delivery were queried in this call. Review the exported images, then deliver; requery after later changes. No additional native preview or inspect is required for this unchanged result.",
-                }
-            elif (state["status"] == "complete"
-                  and (state.get("result", {}).get("studio_run") or {}).get("ready_to_use") is True):
-                summary["next_step"] = {
-                    "action": "resolve_current_evidence", "task": state["task_dir"],
-                    "evidence_gaps": [key for key in ("source", "qa", "delivery")
-                                      if (current.get(key) or {}).get("current") is not True],
-                    "message": "This call already inspected the current project. Resolve the missing or stale evidence in current_project; repeating inspect with unchanged files cannot repair it. Existing export paths remain in result.figures for visual review, not proof of current readiness. Do not regenerate data or re-export merely to replace an unknown source fingerprint with a claim of success.",
-                }
-        except (ValueError, OSError, RuntimeError, TimeoutExpired) as exc:
-            summary["current_project"] = {"status": "unknown", "message": str(exc)}
-    return summary
+    return current_task_result(state, inspect_project=inspect_project)
 
 
-@with_table_reads
-@timed_task_call
 def start_task(
     request: dict[str, Any], *, task_dir: Path | None = None,
     entry_intent: dict[str, Any] | None = None,
     defer_creation_export: bool = False,
     _owned_namespace: Path | None = None,
-    _prefer_managed: bool = False,
     _public_mutation: bool = False,
+) -> dict[str, Any]:
+    return _start_task(request, task_dir=task_dir, entry_intent=entry_intent,
+                       defer_creation_export=defer_creation_export, _owned_namespace=_owned_namespace,
+                       _public_mutation=_public_mutation)
+
+
+def start_native_compatibility_creation(
+    request: dict[str, Any], *, task_dir: Path, owned_namespace: Path,
+    reason: Literal["historical_plot_create_receipt", "native_group_sample_style_preset"],
+) -> dict[str, Any]:
+    """Continue explicit native work with no change to its original publication timing."""
+    return _start_task(request, task_dir=task_dir, _owned_namespace=owned_namespace, native_compatibility=reason)
+
+
+@with_table_reads
+@timed_task_call
+def _start_task(
+    request: dict[str, Any], *, task_dir: Path | None = None,
+    entry_intent: dict[str, Any] | None = None,
+    defer_creation_export: bool = False,
+    _owned_namespace: Path | None = None,
+    _public_mutation: bool = False,
+    native_compatibility: str | None = None,
 ) -> dict[str, Any]:
     original_request = request
     try:
@@ -107,6 +89,8 @@ def start_task(
         request = validate_task_request(request)
         if type(defer_creation_export) is not bool or (defer_creation_export and request["action"] != "create"):
             raise TaskControlError("invalid_creation_mode", "Deferred native preparation is an internal create-only mode.")
+        if native_compatibility and (request["action"] != "create" or "source" not in request):
+            raise TaskControlError("invalid_creation_mode", "Native compatibility requires an original source create request.")
         if request["action"] == "edit":
             validate_operation_batch(request["operations"])
     except (TaskControlError, AnnotationOperationError) as exc:
@@ -167,7 +151,16 @@ def start_task(
             "status": "running", "phase": "starting",
             **({"entry_intent": deepcopy(entry_intent)} if entry_intent is not None else {}),
             **({"defer_creation_export": True} if defer_creation_export else {}),
-            **({"prefer_managed_raw": True} if _prefer_managed and request["action"] == "create" and "source" in request else {}),
+            **({"prefer_managed_raw": True} if (request["action"] == "create" and "source" in request
+                                                and not native_compatibility and not defer_creation_export) else {}),
+            **({"creation_admission": {"route": "native_compatibility", "reason_code": "native_deferred_presentation",
+                                       "message": "This native presentation workflow prepares the exact VSZ for review before first export."}}
+               if defer_creation_export else {}),
+            **({"creation_admission": {"route": "native_compatibility", "reason_code": native_compatibility,
+                                       "message": ("Resume the frozen pre-Managed creation receipt on its original route."
+                                                   if native_compatibility == "historical_plot_create_receipt" else
+                                                   "The explicit shared preset uses saved native sample styles and native review.")}}
+               if native_compatibility else {}),
             **({"automatic_corrections": corrections} if corrections else {}),
         }
         save_task(root, state)

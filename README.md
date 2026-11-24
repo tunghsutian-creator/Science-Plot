@@ -344,9 +344,11 @@ See [research compatibility profiles and evidence](docs/RESEARCH_COMPATIBILITY_P
 for exact coverage, the bounded mechanical antialias difference, and unsupported cases.
 
 Ordinary raw creation starts with the registered scientific plan. For verified
-CSV/TSV inputs, `task create`, structured `task start`, eligible `project create`, daily MCP
-`sciplot_task_start`, and source-only `plot.create` (including expert MCP
-`sciplot_plot_create`) can create Managed plots directly:
+CSV/TSV inputs, `task create`, structured `task start`, plain source-based
+`task group start` items, and MCP task creation use the same Managed admission.
+Eligible `project create` and source-only `plot.create` share the scientific
+proof. A task reports why it used native compatibility; a Managed execution
+failure never changes its authority. Verified default coverage:
 
 - Single-sample UV–vis, DSC, TGA, DTG, XRD and SAXS keep their original
   coordinates, units and registered analysis. SAXS retains its logarithmic

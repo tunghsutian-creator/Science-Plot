@@ -57,6 +57,7 @@ def test_experiment_group_native_creation_style_review_and_resume(tmp_path, tran
         assert result['counts'] == {'needs_review': 2} and len(result['previews']) == 2
         assert all(image['scope'] == 'candidate' for image in result['previews'])
         for item in result['items']:
+            assert item['creation_admission']['reason_code'] == 'native_group_sample_style_preset'
             assert item['task']['scientific_audit_status'] == 'passed'
             assert item['task']['changes']
         return [{'item_id': item['id'], 'task_dir': item['task_dir'], 'response': {
@@ -135,6 +136,7 @@ def test_declared_group_presentation_reviews_prepared_native_before_first_public
     state = load_group(group)
     initial = step_state(state['items'][0]['steps'][0])
     assert initial['phase'] == 'prepared' and initial['result']['export_performed'] is False
+    assert initial['creation_admission']['reason_code'] == 'native_deferred_presentation'
     project = Path(initial['project'])
     assert not list(project.glob('runs/studio_*'))
     native = project / 'studio/document.vsz'

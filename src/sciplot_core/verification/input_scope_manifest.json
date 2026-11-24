@@ -10247,7 +10247,9 @@
       "tests/test_rheology_mean_suite_publication.py::test_frequency_cli_does_not_fall_back_after_managed_science_replay_mismatch",
       "tests/test_managed_frequency_creation.py::test_project_create_managed_frequency_keeps_external_delivery_and_reopens",
       "tests/test_managed_frequency_creation.py::test_task_create_managed_frequency_cold_resume_uses_exact_owner",
-      "tests/test_managed_curve_project_creation.py::test_verified_curve_project_creates_managed_and_recovers_existing_delivery"
+      "tests/test_managed_curve_project_creation.py::test_verified_curve_project_creates_managed_and_recovers_existing_delivery",
+      "tests/test_managed_curve_project_creation.py::test_source_only_uvvis_single_and_group_keep_managed_authority_through_retry_and_cold_edit",
+      "tests/test_managed_curve_project_creation.py::test_source_only_uvvis_without_a_verified_sample_uses_native_and_reports_why"
     ],
     "private": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
@@ -20828,7 +20830,9 @@
       "tests/test_rheology_mean_suite_publication.py::test_default_frequency_cli_publishes_and_retries_same_managed_editable_group",
       "tests/test_managed_frequency_creation.py::test_project_create_managed_frequency_keeps_external_delivery_and_reopens",
       "tests/test_managed_frequency_creation.py::test_task_create_managed_frequency_cold_resume_uses_exact_owner",
-      "tests/test_managed_curve_project_creation.py::test_verified_curve_project_creates_managed_and_recovers_existing_delivery"
+      "tests/test_managed_curve_project_creation.py::test_verified_curve_project_creates_managed_and_recovers_existing_delivery",
+      "tests/test_managed_curve_project_creation.py::test_source_only_uvvis_single_and_group_keep_managed_authority_through_retry_and_cold_edit",
+      "tests/test_managed_curve_project_creation.py::test_source_only_uvvis_without_a_verified_sample_uses_native_and_reports_why"
     ]
   },
   "private_failure_responsibilities": [

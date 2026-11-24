@@ -256,7 +256,12 @@ def case(tmp_path, monkeypatch):
                 'document': {'path': figure['document'], 'sha256': figure['document_sha256']},
                 'preview': {'path': str(image), 'sha256': file_sha256(image)}}
 
+    def start_preset_compatibility(task, *, task_dir, owned_namespace, reason):
+        assert reason == 'native_group_sample_style_preset'
+        return start(task, task_dir=task_dir, _owned_namespace=owned_namespace)
+
     monkeypatch.setattr(groups, 'start_task', start)
+    monkeypatch.setattr(groups, 'start_native_compatibility_creation', start_preset_compatibility)
     monkeypatch.setattr(groups, 'resume_task', resume)
     monkeypatch.setattr(groups, 'inspect_project', inspect)
     monkeypatch.setattr(review, 'inspect_project', inspect)
