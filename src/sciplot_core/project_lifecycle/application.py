@@ -9,12 +9,9 @@ from .ports import ProjectRepository, ProjectTargets
 from .targets import StoredTarget, ManagedDeliveryTarget, DecisionKind
 from .contracts import RevisionToken
 from .command_dispatch import CommandDispatch
-from .context import validate_saved_command
 from typing import Any
 
 from sciplot_core.plot_document import (
-    apply_patch,
-    seal_document,
     validate_document,
 )
 from sciplot_core.plot_document.requests import RequestInput, admit_patch
@@ -36,11 +33,9 @@ from sciplot_core.project_lifecycle.recovery import pending_edit_error as _pendi
 from sciplot_core.project_lifecycle.context import (
     active,
     commit,
-    digest,
     load_head,
     persist,
     read,
-    transaction_path,
 )
 
 
@@ -218,48 +213,9 @@ class ProjectApplication(CommandDispatch):
             return self._patch(root, admit_patch(command.business_request))
 
     def _patch(self, root: Path, request: RequestInput, *, rollback_request: dict[str, Any] | None = None) -> dict[str, Any]:
-        patch = admit_patch(request)
-        request = patch.to_payload()
-        saved = transaction_path(root, request["idempotency_key"])
-        if exists(saved):
-            from sciplot_core.project_lifecycle.publication_repair import prepare_saved
+        from .patch_execution import execute_patch
 
-            transaction = read(saved)
-            validate_saved_command(transaction)
-            return replay(root, prepare_saved(root, transaction, request, self.backend), self.backend)
-        head = load_head(root)
-        binding = head["binding"]
-        scientific_update = False
-        if head["document"].get("plot_type") == "ManagedPlot":
-            from sciplot_core.plot_engine.managed_state import scientific_binding
-            from sciplot_core.plot_engine.current_unit_admission import prepare_current_update
-
-            document, diff, risk, scientific_update = prepare_current_update(root, head["document"], patch)
-            if scientific_update and diff:
-                binding = scientific_binding(binding, document)
-        else:
-            document, diff, risk = apply_patch(head["document"], patch)
-        require_current(self.backend, binding, input_document=document)
-        from sciplot_core.project_lifecycle.publication_repair import authorize_pending, reserve_repair
-
-        repair = authorize_pending(root, head, request, document, diff, risk, scientific_update, self.backend)
-        if diff:
-            document["revision"] += 1
-            document = seal_document(document)
-        tx = {"id": digest(request["idempotency_key"]), "request": request, "request_hash": patch.digest,
-              "before": head["document"], "document": document, "binding": binding,
-              "diff": diff, "risk": "review" if repair else risk, "phase": "resolving" if scientific_update and diff else "planned"}
-        if rollback_request is not None:
-            tx["rollback_request"] = rollback_request
-        reserve_repair(root, tx, repair, self.backend)
-        if not diff:
-            cached = self._cached_export(root, head)
-            if cached:
-                tx.update({"phase": "complete", "export": cached["export"], "artifact_files": cached["artifact_files"],
-                           "evidence_inventories": cached.get("evidence_inventories", {}),
-                           "artifact_build_key": cached["build_key"]})
-                persist(root, tx)
-        return advance(root, tx, self.backend)
+        return execute_patch(root, request, self.backend, self._cached_export, rollback_request=rollback_request)
 
     @usecase
     def decide(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
@@ -356,7 +312,8 @@ class ProjectApplication(CommandDispatch):
         if head is None:
             head = load_head(root)
         require_current(self.backend, head["binding"])
-        if tx and tx["phase"] == "complete" and tx["document"]["revision"] == head["document"]["revision"]:
+        if (tx and tx["phase"] == "complete" and not tx.get("export_deferred")
+                and tx["document"]["revision"] == head["document"]["revision"]):
             return replay(root, tx, self.backend)
         from sciplot_core.project_lifecycle.exports import export_head
 

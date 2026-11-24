@@ -58,7 +58,8 @@ def _changes(root: Path, entry: dict[str, Any]) -> str:
         return ""
     rows = []
     for change in entry["changes"]:
-        setting = change.get("setting_path", change.get("op", "") + " " + change.get("id", ""))
+        target = " ".join(part for part in (str(change.get("target", "")), str(change.get("property", ""))) if part)
+        setting = change.get("setting_path", target or change.get("op", "") + " " + change.get("id", ""))
         rows.append(f'<tr><th scope="row">{text(setting)}</th><td>{_value(change.get("old_value", change.get("before")))}</td>'
                     f'<td>{_value(change.get("new_value", change.get("after")))}</td></tr>')
     audit = "数值审计通过" if entry.get("scientific_audit_status") == "passed" else "数值审计未确认"
@@ -140,9 +141,13 @@ def _current_state(result: dict[str, Any]) -> str:
              f'<p class="{"muted" if baseline is True else "problem"}">{text(baseline_message)}</p>'
              '<p class="muted">候选中的数值审计描述比较时的快照，不代表当前保存图、数据或交付仍与它一致。</p>')
     state += ''.join(f'<p class="problem">{text(message)}</p>' for message in problems)
-    state += evidence_panel(evidence)
-    paths = [("project", "当前项目路径", result.get("project")),
-             ("figure", "当前图形 ID", current.get("figure_id")),
+    if result.get("document_authority") == "managed_plot":
+        state += '<p class="muted">Managed 比较预览不是已发布图。当前修订与是否请求导出分别记录。</p>'
+    else:
+        state += evidence_panel(evidence)
+    paths = [("project", "当前图形路径", result.get("project")),
+             ("figure", "当前图形 ID", current.get("plot_id", current.get("figure_id"))),
+             ("managed-revision", "当前 Managed 修订", str(current["revision"]) if "revision" in current else None),
              ("document", "当前保存图路径", current.get("document")),
              ("revision", "当前保存图 SHA-256", current.get("document_sha256")),
              ("delivery", "交付目录", (evidence.get("delivery") or {}).get("path"))]

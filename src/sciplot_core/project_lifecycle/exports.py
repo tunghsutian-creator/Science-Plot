@@ -31,6 +31,10 @@ def render_head(root: Path, head: dict[str, Any], backend: PlotBackend) -> dict[
     return result
 
 
+def export_key(head: dict[str, Any]) -> str:
+    return "export:" + digest([head["document"]["revision"], head["binding"]["fingerprint"]])
+
+
 def export_head(root: Path, head: dict[str, Any], backend: PlotBackend) -> dict[str, Any]:
     pending = active(root)
     if pending and pending["phase"] not in {"complete", "rejected"}:
@@ -40,7 +44,7 @@ def export_head(root: Path, head: dict[str, Any], backend: PlotBackend) -> dict[
             return replay(root, pending, backend)
         raise EngineError("document_transaction_pending", "Finish or reject the existing transaction before exporting this managed plot.")
     document = head["document"]
-    key = "export:" + digest([document["revision"], head["binding"]["fingerprint"]])
+    key = export_key(head)
     from sciplot_core.project_lifecycle.context import transaction_path
 
     path = transaction_path(root, key)

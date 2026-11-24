@@ -46,6 +46,9 @@ def receipt(root: Path, transaction: dict[str, Any], *, replay: bool = False) ->
         if "before_preview" in transaction["review"]:
             result["before_preview"] = transaction["review"]["before_preview"]
             result["source_append_evidence"] = {"path": result["evidence"], "json_pointer": "/review/source_append"}
+    elif phase == "complete" and transaction.get("export_deferred"):
+        result.update({"export_status": "not_requested", "exports": [],
+                       "next_step": {"action": "plot.export", "plot": str(root)}})
     elif phase == "complete":
         result.update({"ready_to_use": transaction["export"].get("ready_to_use", False),
                        "artifact_build_key": transaction.get("artifact_build_key"),

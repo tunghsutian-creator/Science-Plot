@@ -116,16 +116,18 @@ edits do not require new analysis, inventory scripts or development tests.
    group's paper command template delegates ordered selection and version capture
    to the existing paper owner; it does not ask AI to copy version hashes.
 
-   For alternatives of the same saved figure, use `task compare start` with
-   2–8 labelled operation batches, one explicit figure ID and the saved SHA.
-   Inspect the returned original/candidate PNGs and differences, then select one
-   candidate with the current `comparison_id`, or select `baseline` to keep the
-   original. Existing user intent authorizes that choice; no extra user approval
-   is implied. All candidates share one project baseline and remain separate
-   pending edit tasks. `compare resume` recovers generation or a previously
-   chosen apply; it never chooses. Default export is false. Use `export:true`
-   only when the chosen result should also be published. A changed baseline
-   requires a new comparison. Do not treat experiment grouping as this workflow.
+   To compare alternatives for the same Managed figure, use `task compare start`
+   with its exact plot handle, ID and revision, and 2–8 labelled presentation patch
+   batches (`version:2`). The saved figure and its live edit transaction are not
+   changed during detached preview generation. Review the audited PNGs and
+   differences, then select one candidate with the current `comparison_id`,
+   or select `baseline` to keep the original. `compare resume` recovers generation
+   or finishes the recorded choice; it never chooses. Default export is false.
+   Request `export:true` only to publish the selection. A changed baseline
+   requires a new comparison. Version 1 retains native comparisons for already
+   admitted prepared-native figures and saved comparison recovery. A plain
+   saved legacy VSZ needs a separate Managed conversion before starting a new
+   comparison. Groups are a different workflow.
 
    Refine a pending preview with `revise_operations` and its current
    `expected_operation_id`; the replacement is the complete batch against the

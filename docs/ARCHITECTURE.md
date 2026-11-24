@@ -982,17 +982,20 @@ It contains no plotting implementation, browser editor, model provider or
 aggregate publication certification. Candidate previews retain their distinct
 scope and revision bindings; MCP exposes owner-returned PNG snapshots on demand.
 
-`task_comparison_contract` validates explicit alternative operation batches for
-one saved figure. `task_comparison_storage` binds their receipts and native
-review identities to one full project/delivery baseline. `task_comparisons`
-creates independent ordinary edit tasks with export disabled, freezes exactly
-one caller selection before any write, and delegates application and optional
-export to the existing task/transaction owners. Retries recover that same
-selection; they cannot apply a second candidate. `task_comparison_review`
-validates stored native images and presents the original, alternatives and
-bounded factual differences without rendering during inspection. These are
-historical comparison snapshots after selection, with current evidence reported
-separately. There is no internal model, alternate renderer or browser editor.
+`task_comparison_contract` validates 2–8 alternatives against one exact saved
+Managed plot handle and revision. The detached lifecycle compiler uses the
+existing pure presentation patch admission and sealed datasets; it writes
+audited native/IR/PNG evidence only to the private comparison directory.
+It neither reserves a live transaction nor changes a revision during
+generation. One explicitly recorded choice enters the existing patch owner
+under its writer lease. The owner checks the reviewed canonical presentation,
+compiler and native state before committing. Publication is optional and
+resumes that same revision, not a fresh patch. Existing version 1 comparisons
+keep their original native baseline and child-operation recovery. The current
+prepared-native admission remains available; a plain saved legacy VSZ is not
+a new comparison target until explicitly converted. The query and gallery display immutable
+historical alternatives separately from the current saved revision. No renderer
+runs during inspection, and the gallery cannot apply a choice.
 
 `task_group_gallery`, `task_comparison_gallery` and `task_review_html` own only
 the read-only HTML presentation of those query results. Packaged local CSS/JS

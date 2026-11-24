@@ -16,18 +16,32 @@ from sciplot_core.task_group_contract import validate_shape
 
 
 def comparison_request_schema() -> dict[str, Any]:
+    from sciplot_core.plot_document.schema import patch_schema
+
+    patch = patch_schema()["properties"]
     text = {"type": "string", "minLength": 1, "maxLength": 200}
-    return object_schema({
+    identifier = {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$", "not": {"const": "baseline"}}
+    def alternatives(field: str, schema: dict[str, Any]) -> dict[str, Any]:
+        return {"type": "array", "minItems": 2, "maxItems": 8, "items": object_schema({
+            "id": identifier, "label": text, "rationale": {"type": "string", "maxLength": 500},
+            field: schema,
+        }, ["id", "label", field])}
+
+    publication = {"type": "boolean", "default": False}
+    managed = object_schema({
+        "version": {"type": "integer", "const": 2}, "title": text,
+        "plot": {"type": "string", "minLength": 1}, "plot_id": patch["plot_id"], "base_revision": patch["base_revision"],
+        "export": publication, "candidates": alternatives("changes", patch["changes"]),
+    }, ["version", "title", "plot", "plot_id", "base_revision", "candidates"])
+    native = object_schema({
         "version": {"type": "integer", "const": 1}, "title": text,
         "project": {"type": "string", "minLength": 1}, "figure_id": text,
         "expected_document_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-        "export": {"type": "boolean", "default": False},
-        "candidates": {"type": "array", "minItems": 2, "maxItems": 8, "items": object_schema({
-            "id": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$", "not": {"const": "baseline"}},
-            "label": text, "rationale": {"type": "string", "maxLength": 500},
-            "operations": annotation_operation_capabilities()["operations_schema"],
-        }, ["id", "label", "operations"])},
+        "export": publication,
+        "candidates": alternatives("operations", annotation_operation_capabilities()["operations_schema"]),
     }, ["version", "title", "project", "figure_id", "expected_document_sha256", "candidates"])
+    native["description"] = "Native comparison for already admitted native products or existing frozen comparisons. Use version 2 for Managed plots."
+    return {"type": "object", "oneOf": [managed, native]}
 
 
 def comparison_selection_schema() -> dict[str, Any]:
@@ -49,13 +63,20 @@ def normalize_comparison_request(value: dict[str, Any], *, base_dir: Path | None
     ids = [item["id"] for item in request["candidates"]]
     if len(ids) != len(set(ids)):
         raise TaskControlError("duplicate_comparison_candidate", "比较中的候选 id 必须唯一。")
+    if type(request["version"]) is not int:
+        raise TaskControlError("invalid_comparison_version", "The comparison version must be an integer.")
+    request.setdefault("export", False)
+    if request["version"] == 2:
+        if type(request["base_revision"]) is not int:
+            raise TaskControlError("invalid_comparison_revision", "The base revision must be an integer.")
+        request["plot"] = str(absolute(request["plot"]))
+        return dict(request)
     for candidate in request["candidates"]:
         validate_operation_batch(candidate["operations"])
         for operation in candidate["operations"]:
             if operation["op"] == "apply_sample_style_preset":
                 operation["preset"] = str(absolute(operation["preset"]))
     request["project"] = str(resolve_project_path(absolute(request["project"])))
-    request.setdefault("export", False)
     return dict(request)
 
 
