@@ -68,3 +68,9 @@ def resolve_provenance_value(root: Path, document: dict[str, Any], key: str) -> 
 
 def resolve_document_content(root: Path, document: dict[str, Any]) -> dict[str, Any]:
     return _format.resolve_document_content(root, document, read_snapshot=content_snapshot)
+
+
+def capture_document_content(root: Path, document: dict[str, Any]) -> dict[str, bytes]:
+    """Copy only the selected document's exact CAS payloads, not its history."""
+    return {_reference_path(root, reference).name: _verified_bytes(root, reference)
+            for _key, reference in _format._references(document)}

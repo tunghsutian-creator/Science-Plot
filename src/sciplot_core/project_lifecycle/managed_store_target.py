@@ -21,12 +21,19 @@ MANAGED_STORE_CLAIM = "managed-store-claim.json"
 
 def open_managed_store(root: Path, request: dict[str, Any]) -> FileProjectStore:
     """Recover one exact root claim, then use the normal selected Store writer."""
-    require_data_destination(root)
     for source in request["data_binding"]["data_sources"]:
         path = canonical_path(Path(source["path"]))
         if path == root or path.is_relative_to(root) or root.is_relative_to(path):
             raise EngineError("managed_output_conflict", "The Managed store cannot overlap an original source.")
     claim = {"kind": "sciplot_managed_store_claim", "version": 1, "request_sha256": digest(request)}
+    return open_claimed_store(root, claim)
+
+
+def open_claimed_store(root: Path, claim: dict[str, Any]) -> FileProjectStore:
+    """Create or resume this exact first-Store claim, never adopt an unrelated root."""
+    require_data_destination(root)
+    if root.exists() and (not root.is_dir() or read_json_object(canonical_path(root / MANAGED_STORE_CLAIM)) != claim):
+        raise EngineError("document_idempotency_conflict", "This Store creation key belongs to a different or unowned request.")
     root.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     with external_project_session(root):
         canonical_path(root)

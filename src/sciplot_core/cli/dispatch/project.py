@@ -43,6 +43,10 @@ def dispatch_project_control(args: Any) -> int:
         return 0
     if action == "capabilities":
         payload = project_control_capabilities()
+    elif action == "save-as":
+        from sciplot_core.project_lifecycle.save_as import save_managed_as
+
+        payload = save_managed_as(args.target, args.out, plot_id=args.plot_id, revision=args.revision)
     elif action == "style-capture":
         from sciplot_core.studio_core.sample_style_presets import capture_sample_style_preset
 

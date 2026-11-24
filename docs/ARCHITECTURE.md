@@ -982,6 +982,16 @@ It contains no plotting implementation, browser editor, model provider or
 aggregate publication certification. Candidate previews retain their distinct
 scope and revision bindings; MCP exposes owner-returned PNG snapshots on demand.
 
+Independent Managed Save As observes one exact current member, then starts
+a new Store with a new project, attachment and plot identity. It preserves
+canonical scientific and presentation domain bytes and checks the unchanged
+PlotIR identity. The new generation seals only that member's referenced CAS
+and exact source versions. Local locator binding points at the new Store's
+own source copies; no external executor permissions, origin commands, previous
+revisions or publication cache are transferred. A staged Store command can
+complete without rereading the original, and an occupied foreign destination
+cannot be adopted. Native rendering/export remains a separate normal operation.
+
 `task_comparison_contract` validates explicit alternative operation batches for
 one saved figure. `task_comparison_storage` binds their receipts and native
 review identities to one full project/delivery baseline. `task_comparisons`
