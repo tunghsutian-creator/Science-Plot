@@ -212,7 +212,10 @@ If a source or project moved, `task continue SOURCE --search-root KNOWN_FOLDER
 remain separate choices; select the returned exact `--target`. It checks the
 current editing authority without rebinding sources or modifying old receipts.
 Export snapshots remain explicitly distinct from their original project.
-See [find and continue](skill/references/saved-work-continuation.md).
+To move an already versioned Store, use `project bundle-export` and
+`project bundle-import`. The new location keeps the same project ID and
+history; this is neither a paper snapshot nor an independent project.
+See [find, continue, or relocate](skill/references/saved-work-continuation.md).
 
 For a manuscript, [selected paper figures](skill/references/paper-figures.md)
 packages one explicitly selected figure per item across saved projects, in the

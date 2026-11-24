@@ -97,3 +97,27 @@ find/project-query coverage. The one native continuation acceptance is
 discovery, actual editing with returned arguments, scientific audit, original
 byte preservation, explicit duplicate selection, copied-project output
 protection, a real source-update review and missing-raw rejection.
+
+## Relocate an existing Store
+
+Use the exact root of an already versioned Store, not a figure handle, raw
+VSZ, task directory or paper package. Choose new paths under existing research
+directories:
+
+```bash
+sciplot project bundle-export STORE_ROOT --out NEW_BUNDLE --json
+sciplot project bundle-import BUNDLE_ROOT --out NEW_PROJECT_PATH --json
+```
+
+The expert MCP tools are `sciplot_project_bundle_export` and
+`sciplot_project_bundle_import`. They use the same Store owner as the CLI.
+Compare returned `project_id` and `generation` before continuing at the new
+location. Import preserves the project and admitted history, without granting
+executor permissions from another host. An installed paper snapshot still
+cannot be used to recover the original Store.
+
+Keep using one active location for the project. This operation does not give
+two independently writable identities and does not remove the previous
+location. Export rejects unadmitted project changes. Neither command replaces
+an existing destination; inspect any directory left by an interrupted
+operation before choosing a new destination.

@@ -1256,6 +1256,13 @@ the Studio replaceable-output transaction. It still applies its established
 receipt validator. Managed delivery retains its separate PlotIR/archives; legacy
 papers retain scientific sources and plotting tables. Neither publisher creates
 a missing export or a portable copy of the original research project.
+Explicit Store bundle export/import is a different operation: the host
+relocation use case accepts the exact existing Store root or bundle, delegates
+to the Store's existing byte-sealed format, and returns the same project ID and
+generation at the new path. Resource roots are confined and rebound by the
+importer; host executor grants are not read or transferred. A future independent
+Save As requires a new project and its own command identity, not rewriting the
+sealed history of a relocation.
 
 Radar interpretation is presentation of existing scientific values and declared
 normalization. A reserved panel expands new page width without changing the

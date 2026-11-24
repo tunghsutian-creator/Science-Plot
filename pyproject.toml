@@ -361,6 +361,7 @@ files = [
   "src/sciplot_core/task_paper_contract.py",
   "src/sciplot_core/task_paper_delivery.py",
   "src/sciplot_core/task_paper_native.py",
+  "src/sciplot_core/project_lifecycle/relocation.py",
   "src/sciplot_core/task_paper_sources.py",
   "src/sciplot_core/cli/task_paper.py",
   "src/sciplot_core/delivery/install.py",

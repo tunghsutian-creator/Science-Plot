@@ -136,6 +136,10 @@ def tool_definitions(profile: ToolProfile = "expert") -> list[Tool]:
         {"request": managed_delivery_schema()}, ["request"], idempotent=True)
     add("project_open", "Open one existing saved figure. A known ManagedPlot or supported bound native suite object advertises summary/edit scopes and legal deltas in object_operations. A multi-figure suite requires figure_id or its exact returned VSZ. Archived plots open read-only and require conversion for new editing features. Unknown authority uses full open. Does not overwrite or promote native coverage.",
         {"target": semantic_path, "figure_id": string, "description": description}, ["target"], idempotent=True)
+    add("project_bundle_export", "Export a complete local Store bundle from an exact existing Store root to a new path. Keeps project identity and committed history; no host permissions are included. Not a paper package or an independent project copy.",
+        {"project": semantic_path, "output_dir": semantic_path}, ["project", "output_dir"])
+    add("project_bundle_import", "Relocate an exact saved Store bundle into a new local directory. The same project ID and generation remain authoritative. Does not grant host executor permissions or create an independent project identity.",
+        {"bundle": semantic_path, "output_dir": semantic_path}, ["bundle", "output_dir"])
     add("plot_describe", "Read current object capabilities and values without rebuilding science. When advertised, use scope edit for one target/property and its exact schema. Supported native suite values come from the current selected VSZ. Omit description for full state; stale inputs and pending work remain explicit.",
         {**semantic_plot, "description": description}, ["plot"], read_only=True)
     add("plot_create", "Expert Template/Binding creation through the existing semantic lifecycle; ordinary attachment plotting uses task_start sources+intent. Source-only compatibility remains. Keep idempotency_key unchanged on retry; unresolved scientific choices return a decision.",

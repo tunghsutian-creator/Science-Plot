@@ -34,6 +34,14 @@ def register_project_commands(subparsers: Any) -> None:
     conversion.add_argument("--x-unit", help="Original X unit if absent from the saved axis label.")
     conversion.add_argument("--y-unit", help="Original Y unit if absent from the saved axis label.")
     conversion.add_argument("--json", action="store_true")
+    for name, noun, help_text in (
+        ("bundle-export", "Exact existing Store root.", "Export a complete Store bundle for same-project relocation."),
+        ("bundle-import", "Exact exported Store bundle root.", "Relocate a saved Store bundle to a new directory, keeping its identity."),
+    ):
+        bundle = actions.add_parser(name, help=help_text)
+        bundle.add_argument("target", type=Path, help=noun)
+        bundle.add_argument("--out", type=Path, required=True, help="New path under an existing research directory.")
+        bundle.add_argument("--json", action="store_true")
     redraw = actions.add_parser("legacy-redraw", help="Redraw an exact saved old plot into a new directory.")
     redraw.add_argument("target", type=Path, help="Saved project directory or exact VSZ.")
     redraw.add_argument("--figure", help="Exact saved figure ID in the project.")

@@ -119,18 +119,42 @@ def test_explicit_absence_deletion_and_trusted_delivery_root(tmp_path):
         store.logical_path(tmp_path / "untrusted/file")
 
 
-def test_complete_portable_bundle_preserves_ids_native_history_and_source_versions(tmp_path):
+def test_complete_portable_bundle_preserves_ids_native_history_and_source_versions(tmp_path, capsys):
+    import json
+
+    from sciplot_core.cli import main
+    from sciplot_core.mcp_server.services import invoke_owner
+
+    raw = tmp_path / "unregistered.vsz"
+    raw.write_bytes(b"unregistered legacy VSZ")
+    refused = tmp_path / "must-not-exist"
+    assert main(["project", "bundle-export", str(raw), "--out", str(refused), "--json"]) == 1
+    assert json.loads(capsys.readouterr().out)["reason_code"] == "project_bundle_store_required"
+    assert not refused.exists() and not (tmp_path / ".sciplot_store").exists()
+
     store, before = fixture_store(tmp_path)
     reserve(store, before)
     store.publish("edit", "edit-digest", writes={"studio/document.vsz": b"new native",
         "studio/spec.json": b'{"science":1}'}, result={"path_literal": str(store.root / "raw/same.csv")})
-    bundle = store.export_bundle(tmp_path / "bundle")
+    bundle = tmp_path / "bundle"
+    assert main(["project", "bundle-export", str(store.root), "--out", str(bundle), "--json"]) == 0
+    exported = json.loads(capsys.readouterr().out)
+    assert (exported["project_id"], exported["generation"]) == (before["project_id"], store.snapshot()["generation"])
+    assert exported["mode"] == "same_project_relocation" and exported["independent_project"] is False
+    assert exported["host_grants_included"] is False
     original_source_id = next(iter(before["sources"]))
     version = next(iter(before["sources"][original_source_id]))
     locator = before["sources"][original_source_id][version]["locator"]
     moved_original = tmp_path / "original-offline"
     store.root.rename(moved_original)
-    relocated = FileProjectStore.import_bundle(bundle, tmp_path / "cold relocated")
+    destination = tmp_path / "cold relocated"
+    imported = invoke_owner("sciplot_project_bundle_import", {"bundle": str(bundle), "output_dir": str(destination)})
+    assert (imported["project_id"], imported["generation"]) == (exported["project_id"], exported["generation"])
+    assert imported["project"] == str(destination) and imported["host_grants_included"] is False
+    relocated = FileProjectStore(destination)
+    with pytest.raises(ValueError) as occupied:
+        invoke_owner("sciplot_project_bundle_import", {"bundle": str(bundle), "output_dir": str(destination)})
+    assert occupied.value.reason_code == "project_bundle_destination_exists"
     snapshot = relocated.snapshot()
     assert snapshot["project_id"] == before["project_id"]
     assert snapshot["sequence"] == 1 and snapshot["projection_status"] == "current"

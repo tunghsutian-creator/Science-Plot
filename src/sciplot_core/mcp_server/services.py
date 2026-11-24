@@ -137,6 +137,13 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             return start_task(arguments["request"], task_dir=Path(task_dir) if task_dir else None, _public_mutation=True)
         task = Path(arguments["task"])
         return inspect_task(task) if name == "sciplot_task_inspect" else resume_task(task, arguments["response"], _public_mutation=True)
+    if name in {"sciplot_project_bundle_export", "sciplot_project_bundle_import"}:
+        from sciplot_core.project_lifecycle.relocation import export_project_bundle, import_project_bundle
+
+        destination = Path(arguments["output_dir"])
+        if name == "sciplot_project_bundle_export":
+            return export_project_bundle(Path(arguments["project"]), destination)
+        return import_project_bundle(Path(arguments["bundle"]), destination)
     project = Path(arguments["project"])
     figure_id = arguments.get("figure_id")
     if name in {"sciplot_pdf_review_create", "sciplot_pdf_review_read"}:
