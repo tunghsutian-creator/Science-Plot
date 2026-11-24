@@ -15,9 +15,12 @@ import subprocess
 import sys
 from typing import Any, cast, overload
 
+from sciplot_core.verification.public_stage_selection import (
+    TARGETED_SCOPES, selected_public_nodes as _selected_public_nodes, target_modules,
+)
+
 PRIVATE_NAMES = ("real_world", "polymer_corpus", "archived_output_raw_data", "rendering_profiles")
 RECEIPT = ".tmp_verify/public-source-stage.json"
-_TARGETED_SCOPES = {"public-affected": "public-focused", "public-affected-native": "public-comprehensive"}
 HELPERS = ("_nc_cntr", "qtmml", "qtloops", "recordpaint", "threed")
 BINDING_CHECKS = ("private_namespace_absent", "stage_source_equal", "origin_source_equal",
                   "stage_head_equal", "origin_head_equal", "runtime_equal", "stage_runtime_equal")
@@ -251,26 +254,9 @@ def create_stage(root: Path, output: Path, environment: dict[str, str]) -> tuple
     return stage, child_environment, receipt
 
 
-def _selected_public_nodes(manifest: dict[str, Any], source: dict[str, str], profile: str, targets: list[str] | None) -> set[str]:
-    scope = _TARGETED_SCOPES.get(profile, profile)
-    expected = set(manifest["scopes"]["public"])
-    if scope != "public-all":
-        expected.intersection_update(manifest["tiers"][scope.removeprefix("public-")])
-    if targets is None:
-        return expected
-    selected: set[str] = set()
-    for target in targets:
-        filename = target.split("::", 1)[0]
-        matches = {node for node in expected if node == target or node.startswith((target + "::", target + "["))}
-        if not filename.startswith("tests/") or filename not in source or not matches:
-            raise ValueError("Affected selector must bind a current tracked test in its public tier.")
-        selected.update(matches)
-    return selected
-
-
 def run_public_stage(root: Path, output: Path, profile: str, *, targets: list[str] | None = None) -> dict[str, Any]:
-    affected = profile in _TARGETED_SCOPES
-    if profile not in {"public-focused", "public-comprehensive", "public-all", *_TARGETED_SCOPES}:
+    affected = profile in TARGETED_SCOPES
+    if profile not in {"public-focused", "public-comprehensive", "public-all", *TARGETED_SCOPES}:
         raise ValueError("Only exact public profiles may execute in a source stage.")
     if affected != bool(targets) or (targets is not None and not affected):
         raise ValueError("Only an affected public profile requires explicit nonempty test selectors.")
@@ -283,12 +269,17 @@ def run_public_stage(root: Path, output: Path, profile: str, *, targets: list[st
     stage, child_environment, before = create_stage(root, output, environment)
     from sciplot_core.verification.input_scope import load_manifest
     manifest = load_manifest(stage / "src/sciplot_core/verification/input_scope_manifest.json")
-    scope = _TARGETED_SCOPES.get(profile, profile)
+    scope = TARGETED_SCOPES.get(profile, profile)
     expected = _selected_public_nodes(manifest, before["source_bytes"], profile, targets)
     finish = output / "finish.json"
     command = [sys.executable, "-m", "pytest", "-vv", "-p", "sciplot_core.verification.pytest_finish",
                "-p", "sciplot_core.verification.public_stage", "-p", "sciplot_core.verification.public_stage_selection",
-               "--input-scope", scope, *[value for target in targets or [] for value in ("--sciplot-public-target", target)]]
+               "--input-scope", scope]
+    if targets:
+        # Collect complete modules, not leaf node IDs: the manifest still
+        # catches added, removed and reclassified siblings before any body.
+        command.extend(value for target in targets for value in ("--sciplot-public-target", target))
+        command.extend(sorted(target_modules(targets)))
     child_environment["SCIPLOT_VERIFY_FINISH"] = str(finish)
     child_environment["SCIPLOT_PUBLIC_STAGE_REPORT"] = str(output / "reports.json")
     with (output / "command.log").open("xb") as log:
@@ -315,11 +306,11 @@ def run_public_stage(root: Path, output: Path, profile: str, *, targets: list[st
     issues.extend(review_stage_reports(marker, reports, platform=sys.platform))
     if set(marker.get("selected_tests", [])) != expected:
         issues.append("Actual execution omitted or added an exact selected public node.")
-    complete = not issues
     result = {"kind": "sciplot_public_source_stage_execution", "profile": profile,
               "claim": "limited_affected_public_behavior_not_canonical_profile" if affected else CLAIM,
               "selection_targets": targets, "canonical_profile_executed": not affected,
-              "status": "PASS" if process.returncode == 0 and complete and not issues else "BLOCKED",
+              "collection_scope": "affected_modules" if affected else "complete_suite",
+              "status": "PASS" if process.returncode == 0 and not issues else "BLOCKED",
               "actual_exit_code": process.returncode, "execution_argv": command, "stage_root": str(stage),
               "origin_head": before["origin_head"], "stage_head": before["stage_head"], "issues": issues,
               "finish": marker, "binding_checks": checks,
@@ -333,18 +324,28 @@ def review_stage_reports(marker: dict[str, Any], reports: dict[str, Any], *, pla
     """Every selected node needs actual successful reports or an exact OS skip."""
     selected = marker.get("selected_tests")
     if (marker.get("complete") is not True or marker.get("exit_code") != 0 or not isinstance(selected, list)
-            or not selected or len(selected) != len(set(selected)) or reports.get("selected_tests") != selected
+            or not selected or not all(isinstance(node, str) for node in selected)
+            or len(selected) != len(set(selected)) or reports.get("selected_tests") != selected
             or reports.get("exit_code") != 0):
         return ["Actual public stage session finish is absent, incomplete or mismatched."]
     rows = reports.get("reports")
-    if not isinstance(rows, list) or any(not isinstance(row, dict) or row.get("nodeid") not in selected
-                                         or row.get("when") not in {"setup", "call", "teardown"} for row in rows):
+    if not isinstance(rows, list):
         return ["Unknown public stage report scope."]
-    passed = [row["nodeid"] for row in rows if row.get("when") == "call" and row.get("outcome") == "passed"]
-    if passed != marker.get("executed_tests") or len(passed) != len(set(passed)):
+    by_node: dict[str, list[dict[str, Any]]] = {node: [] for node in selected}
+    passed: list[str] = []
+    for row in rows:
+        if not isinstance(row, dict) or row.get("when") not in ("setup", "call", "teardown"):
+            return ["Unknown public stage report scope."]
+        node = row.get("nodeid")
+        if not isinstance(node, str) or node not in by_node:
+            return ["Unknown public stage report scope."]
+        by_node[node].append(row)
+        if row["when"] == "call" and row.get("outcome") == "passed":
+            passed.append(node)
+    passed_nodes = set(passed)
+    if passed != marker.get("executed_tests") or len(passed) != len(passed_nodes):
         return ["Actual public call reports differ from successful body finish."]
-    for node in selected:
-        actual = [row for row in rows if row["nodeid"] == node]
+    for node, actual in by_node.items():
         setup = [row for row in actual if row.get("when") == "setup"]
         call = [row for row in actual if row.get("when") == "call"]
         teardown = [row for row in actual if row.get("when") == "teardown"]
@@ -357,7 +358,7 @@ def review_stage_reports(marker: dict[str, Any], reports: dict[str, Any], *, pla
             if (len(skips) != 1 or expected != (skips[0].get("when"), skips[0].get("skip_reason"))
                     or len(call) != (1 if skips[0].get("when") == "call" else 0)):
                 return ["Unexpected public stage skip or omitted body."]
-        elif len(call) != 1 or node not in passed or setup[0].get("outcome") != "passed":
+        elif len(call) != 1 or node not in passed_nodes or setup[0].get("outcome") != "passed":
             return ["A selected public body did not execute successfully."]
     return []
 
@@ -383,7 +384,7 @@ def pytest_sessionfinish(session: Any, exitstatus: Any) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", required=True, type=Path)
-    parser.add_argument("--profile", choices=("public-focused", "public-comprehensive", "public-all", *_TARGETED_SCOPES), default="public-comprehensive")
+    parser.add_argument("--profile", choices=("public-focused", "public-comprehensive", "public-all", *TARGETED_SCOPES), default="public-comprehensive")
     parser.add_argument("--target", action="append", dest="targets")
     arguments = parser.parse_args()
     root = Path(__file__).resolve().parents[3]
