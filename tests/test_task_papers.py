@@ -48,7 +48,7 @@ def case(tmp_path, monkeypatch):
                     scientific_sha256="a" * 64, prepared_source_sha256="b" * 64, portable_native={})
         paper._save(root, state)
 
-    def publish(root, state, *, checkpoint):
+    def publish(state, *, checkpoint):
         out = Path(state["request"]["out"])
         out.mkdir()
         (out / "selected").write_text("paper")

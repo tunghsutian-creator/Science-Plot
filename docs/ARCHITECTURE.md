@@ -1243,12 +1243,19 @@ freezes a separate receipt containing only the group origin and exact ordered
 membership comes from its generation-owned figure plan and attachment index;
 the selected member's own export evidence determines readiness, not the
 historical whole-suite publication. Mixed authority fails before packaging.
-The Managed delivery owner alone owns staging, portable native Save, source
-audit, publication inventory, resume and atomic installation; paper inspection
-only projects its current receipt and seals. Legacy `task_paper_publication`
-copies PDF/TIFF under its existing original-completion and canonical QA gates;
-`task_paper_status` retains its separate historical/native/source readiness
-projection. Neither publisher creates a missing export.
+The Managed delivery and legacy paper owners retain their ordered layouts,
+scientific acceptance and receipt versions. Both use `delivery/native_snapshot`
+to copy exact sealed exports, capture a selected VSZ and its allowed imports
+through native Save, assemble a private candidate, and reopen its exact relocated
+native document and imports. The same primitive freezes the complete candidate
+before exclusive non-replacing installation and checks the installed inventory.
+An interrupted receipt can recover only when the candidate was consumed and the
+visible bytes match; equal bytes at an unrelated occupied destination do not
+identify a committed rename. Legacy paper no longer routes a new package through
+the Studio replaceable-output transaction. It still applies its established
+receipt validator. Managed delivery retains its separate PlotIR/archives; legacy
+papers retain scientific sources and plotting tables. Neither publisher creates
+a missing export or a portable copy of the original research project.
 
 Radar interpretation is presentation of existing scientific values and declared
 normalization. A reserved panel expands new page width without changing the

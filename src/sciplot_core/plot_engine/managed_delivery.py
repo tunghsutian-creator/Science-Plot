@@ -3,15 +3,15 @@
 from pathlib import Path
 import json
 import re
-import shutil
 import subprocess
 from typing import Any, Protocol
 from uuid import uuid4
 
+from sciplot_core.delivery import native_snapshot
 from sciplot_core.plot_engine.managed_delivery_contract import normalize_request
 from sciplot_core.plot_engine.managed_delivery_data import project_data
 from sciplot_core.plot_engine.managed_delivery_continuation import delivery_inventory, require_native_seal
-from sciplot_core.plot_engine.managed_delivery_publication import inspect_managed_native, portable_native, publish
+from sciplot_core.plot_engine.managed_delivery_publication import inspect_managed_native, publish
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_engine.current import require_current
 from sciplot_core.plot_engine.errors import EngineError
@@ -168,17 +168,22 @@ def _seal(service: DeliveryService, root: Path, state: dict[str, Any], selection
         if len(matches) != 1:
             raise EngineError("managed_delivery_export_incomplete", "Expected exactly one audited PDF and one TIFF for each selected plot.")
         record = matches[0]
-        original = canonical_path(Path(record["path"]))
-        if file_sha256(original) != record["sha256"]:
-            raise EngineError("managed_delivery_export_changed", "An audited export changed before capture.")
+        if files.get(record["path"]) != record["sha256"]:
+            raise EngineError("managed_delivery_export_changed", "An audited export does not belong to this revision's sealed artifacts.")
         destination = attempt / directory / (item["stem"] + suffix)
-        shutil.copy2(original, destination)
-        if file_sha256(destination) != record["sha256"]:
-            raise EngineError("managed_delivery_export_changed", "The delivery copy differs from its audited export.")
+        try:
+            native_snapshot.copy_sealed_file(Path(record["path"]), destination, record["sha256"])
+        except native_snapshot.SnapshotSealChanged as exc:
+            raise EngineError("managed_delivery_export_changed", str(exc)) from exc
     native = canonical_path(Path(head["binding"]["document"]))
-    portable = portable_native(native, attempt / "project" / (item["stem"] + ".vsz"), attempt / "data/imports" / item["stem"])
-    if portable.get("original_sha256") != native_sha256 or file_sha256(native) != native_sha256:
-        raise EngineError("managed_delivery_native_changed", "Native Save did not consume the exact freshly audited original bytes.")
+    try:
+        portable = native_snapshot.capture_native(
+            native, attempt / "project" / (item["stem"] + ".vsz"), attempt / "data/imports" / item["stem"],
+            original_sha256=native_sha256, selected_imports={})
+    except native_snapshot.SnapshotSealChanged as exc:
+        raise EngineError("managed_delivery_native_changed", str(exc)) from exc
+    except native_snapshot.NativeSnapshotError as exc:
+        raise EngineError("managed_delivery_native_failed", str(exc)) from exc
     _selection(service, selection, root, out)
     item.update(status="sealed", sources=sources, plotted_data=plotted_data, portable=portable, files=file_inventory(attempt),
                 scientific_hash=head["document"]["scientific_hash"], presentation_hash=head["document"]["presentation_hash"],
@@ -241,15 +246,21 @@ def inspect(service: DeliveryService, request: dict[str, Any]) -> dict[str, Any]
 
 
 def _require_sealed_attempt(item: dict[str, Any]) -> None:
-    if file_inventory(Path(item["attempt"])) != item["files"]:
-        raise EngineError("managed_delivery_staging_changed", "A sealed item was externally edited.")
+    try:
+        native_snapshot.require_inventory(Path(item["attempt"]), item["files"])
+    except native_snapshot.SnapshotSealChanged as exc:
+        raise EngineError("managed_delivery_staging_changed", str(exc)) from exc
 
 
 def _require_delivery_files(out: Path, state: dict[str, Any]) -> dict[str, str]:
-    expected = state.get("delivery_files") or state.get("publication_candidate", {}).get("files")
+    recorded = state.get("delivery_files")
+    candidate = state.get("publication_candidate") or {}
+    expected = recorded or candidate.get("files", {})
     if not out.exists() and state["status"] == "complete":
         raise EngineError("managed_delivery_missing_output", "A completed delivery was removed; choose a new destination, never recreate over uncertain work.")
-    if not expected or delivery_inventory(out) != expected:
+    if not native_snapshot.installed_snapshot_matches(
+            out, expected, pending_candidate=None if recorded or not candidate else Path(candidate["path"]),
+            inventory=delivery_inventory):
         raise EngineError("managed_delivery_external_edit", "The destination contains changed or unowned files; all were preserved.")
     return dict(expected)
 

@@ -39,9 +39,10 @@ def _state(document: Any) -> str:
                                  "compatlevel": document.compatlevel}, allow_nan=False)
 
 
-def save_portable_copy(source: Path, target: Path, *, imports: Path) -> dict[str, Any]:
+def save_portable_copy(source: Path, target: Path, *, imports: Path,
+                       expected_sha256: str | None = None) -> dict[str, Any]:
     source, target, imports = canonical_path(source), canonical_path(target), canonical_path(imports)
-    original = stable_file_snapshot(source, label="paper selected VSZ")
+    original = stable_file_snapshot(source, label="paper selected VSZ", expected_sha256=expected_sha256)
     if target.exists() or imports.exists():
         raise ValueError("Portable native staging targets must be new.")
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -78,10 +79,10 @@ def save_portable_copy(source: Path, target: Path, *, imports: Path) -> dict[str
             "native_state_sha256": before, "reopened_native_state_sha256": after, "imports": imported}
 
 
-def inspect_linked_sources(source: Path) -> list[dict[str, Any]]:
+def inspect_linked_sources(source: Path, *, expected_sha256: str | None = None) -> list[dict[str, Any]]:
     """Read actual native imports, including those absent from generated specs."""
     source = canonical_path(source)
-    original = stable_file_snapshot(source, label="paper selected VSZ")
+    original = stable_file_snapshot(source, label="paper selected VSZ", expected_sha256=expected_sha256)
     records = {}
     with loaded_native_document(source) as document:
         for dataset in document.data.values():
@@ -104,9 +105,11 @@ def main() -> int:
     save.add_argument("--imports", type=Path, required=True)
     inspect = actions.add_parser("inspect")
     inspect.add_argument("source", type=Path)
+    for action in (save, inspect):
+        action.add_argument("--expected-sha256")
     args = parser.parse_args()
-    result = (save_portable_copy(args.source, args.target, imports=args.imports) if args.action == "save"
-              else inspect_linked_sources(args.source))
+    result = (save_portable_copy(args.source, args.target, imports=args.imports, expected_sha256=args.expected_sha256)
+              if args.action == "save" else inspect_linked_sources(args.source, expected_sha256=args.expected_sha256))
     print(json.dumps(result, ensure_ascii=False))
     return 0
 

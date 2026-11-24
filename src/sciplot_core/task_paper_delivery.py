@@ -4,30 +4,30 @@ from __future__ import annotations
 
 import csv
 import json
-import shutil
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from sciplot_core.delivery import native_snapshot
 from sciplot_core.delivery.contracts import DELIVERY_BINDING_POLICY_LEGACY, DELIVERY_PACKAGE_CONTRACT_VERSION
-from sciplot_core.delivery.package_transaction import publish_delivery_transaction, _relocate_record
+from sciplot_core.delivery.package_transaction import _relocate_record
 from sciplot_core.delivery.package_validation import verify_delivery_package
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.delivery_identity import write_delivery_identity, inspect_delivery_identity, make_delivery_binding
 from sciplot_core.plot_data.exports import build_plot_data_exports
 from sciplot_core.policy import DELIVERY_DATA_DIR, DELIVERY_PDF_DIR, DELIVERY_TIFF_DIR, DELIVERY_PROJECT_DIR
-from sciplot_core.studio_core.source_update_commit import file_inventory
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_paper_sources import assert_selection_current
 from sciplot_core.task_paper_publication import assert_publication_current
 
 
 def assert_sealed_item(item: dict[str, Any]) -> None:
-    root = Path(item["attempt"])
-    if file_inventory(root) != item["files"]:
-        raise TaskControlError("paper_stage_changed", "A sealed selected-figure staging directory changed; preserve it and inspect.")
+    try:
+        native_snapshot.require_inventory(Path(item["attempt"]), item["files"])
+    except native_snapshot.SnapshotSealChanged as exc:
+        raise TaskControlError("paper_stage_changed", str(exc)) from exc
 
 
 def paper_manifest(state: dict[str, Any]) -> dict[str, Any]:
@@ -47,11 +47,13 @@ def paper_manifest(state: dict[str, Any]) -> dict[str, Any]:
             "publication_readiness_evaluated": False, "journal_acceptance_evaluated": False}
 
 
-def publish_paper(root: Path, state: dict[str, Any], *, checkpoint: Callable[[], None]) -> dict[str, Any]:
+def publish_paper(state: dict[str, Any], *, checkpoint: Callable[[], None]) -> dict[str, Any]:
     destination = Path(state["request"]["out"])
     if destination.exists():
         raise TaskControlError("paper_output_exists", "The requested paper output already exists; no files were replaced.")
     manifest = paper_manifest(state)
+
+    assembled: dict[str, str] = {}
 
     def build(stage: Path) -> dict[str, Any]:
         for folder in {DELIVERY_PDF_DIR, DELIVERY_TIFF_DIR, DELIVERY_PROJECT_DIR, DELIVERY_DATA_DIR}:
@@ -62,28 +64,41 @@ def publish_paper(root: Path, state: dict[str, Any], *, checkpoint: Callable[[],
         for source, item in zip(state["selections"], state["items"], strict=True):
             assert_selection_current(source)
             assert_publication_current(source["publication"], source)
-            assert_sealed_item(item)
             attempt = Path(item["attempt"])
             stem = item["stem"]
-            for folder, suffix, export_format in ((DELIVERY_PDF_DIR, ".pdf", "pdf"), (DELIVERY_TIFF_DIR, "_300dpi.tiff", "tiff_300")):
-                original = Path(next(export["path"] for export in item["exports"]["exports"] if export["format"] == export_format))
-                target = stage / folder / f"{stem}{suffix}"
-                shutil.copy2(original, target)
-                figures.append({"path": str(target), "relative_path": f"{folder}/{target.name}",
+            editable = f"project/{stem}.vsz"
+            spec = f"project/{stem}.spec.json"
+            layout = {editable: editable, spec: spec, **{name: name for name in item["files"]
+                                                        if name.startswith(f"data/imports/{stem}/")}}
+            exports = []
+            for folder, suffix, export_format in (
+                (DELIVERY_PDF_DIR, ".pdf", "pdf"), (DELIVERY_TIFF_DIR, "_300dpi.tiff", "tiff_300"),
+            ):
+                export = next(export for export in item["exports"]["exports"] if export["format"] == export_format)
+                original = Path(export["path"])
+                relative = f"{folder}/{stem}{suffix}"
+                name = str(original.relative_to(attempt))
+                layout[name] = relative
+                exports.append((name, relative, export_format))
+            try:
+                native_snapshot.stage_native(attempt, stage, item["files"], layout=layout,
+                                             assembled=assembled, stem=stem, portable=item["portable_native"])
+            except native_snapshot.SnapshotSealChanged as exc:
+                raise TaskControlError("paper_stage_changed", str(exc)) from exc
+            except native_snapshot.NativeSnapshotError as exc:
+                raise TaskControlError("paper_native_copy_failed", str(exc)) from exc
+            for name, relative, export_format in exports:
+                digest = assembled[relative]
+                figures.append({"path": str(stage / relative), "relative_path": relative,
                                 "figure_id": stem, "export_format": export_format,
-                                "format": "pdf" if export_format == "pdf" else "tiff", "source": str(original), "source_sha256": file_sha256(original),
-                                "delivery_sha256": file_sha256(target), "copy_hash_matches": True, "exists": True})
-            original = attempt / "project" / f"{stem}.vsz"
-            target = stage / "project" / original.name
-            shutil.copy2(original, target)
-            shutil.copy2(attempt / "project" / f"{stem}.spec.json", target.with_suffix(".spec.json"))
-            imports = attempt / "data" / "imports" / stem
-            if imports.is_dir():
-                shutil.copytree(imports, stage / "data" / "imports" / stem)
-            documents.append({"path": str(target), "relative_path": f"project/{target.name}",
-                              "figure_id": stem, "source": str(original), "format": "vsz",
-                              "source_sha256": file_sha256(original), "delivery_sha256": file_sha256(target),
-                              "expected_sha256": file_sha256(original), "hash_matches_export": True, "exists": True})
+                                "format": "pdf" if export_format == "pdf" else "tiff", "source": str(attempt / name),
+                                "source_sha256": digest, "delivery_sha256": digest, "copy_hash_matches": True, "exists": True})
+            target = stage / editable
+            digest = assembled[editable]
+            documents.append({"path": str(target), "relative_path": editable,
+                              "figure_id": stem, "source": str(attempt / editable), "format": "vsz",
+                              "source_sha256": digest, "delivery_sha256": digest,
+                              "expected_sha256": digest, "hash_matches_export": True, "exists": True})
             data_records.extend(build_plot_data_exports(
                 {"project": stem, "veusz_documents": [str(target)]}, destination=stage / "data"))
         manifest_file = stage / "data" / "figure_sources.json"
@@ -114,26 +129,28 @@ def publish_paper(root: Path, state: dict[str, Any], *, checkpoint: Callable[[],
         verification = verify_delivery_package(record, expected_root=stage, expected_manifest={})
         if verification["passed"] is not True:
             raise TaskControlError("paper_delivery_failed", f"Selected package validation failed: {verification['failed_checks']}")
+        record["verification"] = verification
         return record
 
-    # Reuse delivery staging/validation, then the existing exclusive creation
-    # installer. The replacement transaction never sees the caller's output.
+    # One exact paper candidate already sits beside its destination. There is
+    # no prior visible package to stage through the replaceable Studio owner.
     private = destination.with_name(f".{destination.name}.paper-publication-{uuid4().hex}")
-    delivery = publish_delivery_transaction(root=private, output_dir=root, manifest={}, build=build)
-    if delivery.get("verification", {}).get("passed") is not True:
-        raise TaskControlError("paper_delivery_failed", "The selected paper package failed delivery verification.")
-    final = _relocate_record(delivery, private, destination)
-    state["publication_candidate"] = {"path": str(private), "files": file_inventory(private), "delivery": final}
-    checkpoint()  # Freeze full candidate closure before exclusive atomic publish.
-    for selection in state["selections"]:
-        assert_selection_current(selection)
-        assert_publication_current(selection["publication"], selection)
-    from sciplot_core.delivery.install import install_new_delivery
+    private.mkdir(mode=0o700, parents=True)
+    final = _relocate_record(build(private), private, destination)
 
-    install_new_delivery(private, destination)
-    for selection in state["selections"]:
-        assert_selection_current(selection)
-        assert_publication_current(selection["publication"], selection)
+    def freeze(files: dict[str, str]) -> None:
+        state["publication_candidate"] = {"path": str(private), "files": files, "delivery": final}
+        checkpoint()
+
+    def validate() -> None:
+        for selection in state["selections"]:
+            assert_selection_current(selection)
+            assert_publication_current(selection["publication"], selection)
+
+    try:
+        native_snapshot.publish_snapshot(private, destination, assembled=assembled, freeze=freeze, validate=validate)
+    except native_snapshot.SnapshotSealChanged as exc:
+        raise TaskControlError("paper_delivery_failed", str(exc)) from exc
     final["verification"] = verify_delivery_package(final, expected_root=destination, expected_manifest={})
     if final["verification"]["passed"] is not True:
         raise TaskControlError("paper_delivery_failed", "Installed selected paper package failed verification; preserve and inspect.")

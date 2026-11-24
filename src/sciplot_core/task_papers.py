@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import json
 import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from sciplot_core.delivery import native_snapshot
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.plot_engine.managed_delivery_contract import normalize_request as normalize_managed_delivery
@@ -25,7 +25,6 @@ from sciplot_core.task_paper_sources import capture_selection, assert_selection_
 from sciplot_core.task_paper_publication import capture_publication, assert_publication_current
 from sciplot_core.task_paper_status import _verify_delivery, _summary, _current_summary
 from sciplot_core.task_storage import task_location
-from sciplot_core.veusz_runtime import veusz_worker_environment
 
 
 _MANAGED_SELECTION = "sciplot_task_paper_managed_selection"
@@ -97,18 +96,6 @@ def paper_capabilities(*, project: Path | None = None, figure_id: str | None = N
     return result
 
 
-def _portable(source: Path, target: Path, imports: Path) -> dict[str, Any]:
-    completed = subprocess.run([sys.executable, "-m", "sciplot_core.task_paper_native", "save", str(source), str(target),
-                                "--imports", str(imports)], env=veusz_worker_environment(), capture_output=True,
-                               text=True, timeout=120, check=False)
-    if completed.returncode:
-        raise TaskControlError("paper_native_copy_failed", completed.stderr[-2000:])
-    payload = json.loads(completed.stdout)
-    if payload.get("status") != "passed":
-        raise TaskControlError("paper_native_copy_failed", "Native portable Save did not pass.")
-    return dict(payload)
-
-
 def _seal(root: Path, state: dict[str, Any], selection: dict[str, Any], item: dict[str, Any]) -> None:
     assert_selection_current(selection)
     if not selection.get("publication"):
@@ -127,21 +114,25 @@ def _seal(root: Path, state: dict[str, Any], selection: dict[str, Any], item: di
         native_audits={str(original): audit})
     target = attempt / "project" / f"{item['stem']}.vsz"
     target_spec = target.with_suffix(".spec.json")
-    target_spec.write_bytes(original_spec.read_bytes())
-    portable = _portable(original, target, attempt / "data/imports" / item["stem"])
-    # Reuse the exact current publication. Native Save/audit remain necessary,
-    # but packaging must not render/export a new visual interpretation.
-    import shutil
-    from sciplot_core.foundation.file_hashing import file_sha256
-
+    try:
+        native_snapshot.copy_sealed_file(original_spec, target_spec, selection["version"]["spec_sha256"])
+        portable = native_snapshot.capture_native(
+            original, target, attempt / "data/imports" / item["stem"],
+            original_sha256=selection["version"]["document_sha256"], selected_imports=selection["source_files"])
+    except native_snapshot.SnapshotSealChanged as exc:
+        raise TaskControlError("paper_selection_changed", str(exc)) from exc
+    except native_snapshot.NativeSnapshotError as exc:
+        raise TaskControlError("paper_native_copy_failed", str(exc)) from exc
+    # Packaging consumes the existing sealed exports; it never renders.
     exports = []
     for record in selection["publication"]["exports"]:
         original_export = Path(record["path"])
         target_export = attempt / "exports" / original_export.name
         target_export.parent.mkdir(exist_ok=True)
-        shutil.copy2(original_export, target_export)
-        if file_sha256(target_export) != record["sha256"]:
-            raise TaskControlError("paper_publication_changed", "A publication copy differs from its original byte seal.")
+        try:
+            native_snapshot.copy_sealed_file(original_export, target_export, record["sha256"])
+        except native_snapshot.SnapshotSealChanged as exc:
+            raise TaskControlError("paper_publication_changed", str(exc)) from exc
         exports.append({**record, "path": str(target_export)})
     exported = {"exports": exports, "mode": "copied_current_sealed_publication"}
     copied_audit = run_document_worker("audit-spec-data", target, target_spec, "--allow-presentation-edits")
@@ -171,9 +162,8 @@ def _run(root: Path, state: dict[str, Any]) -> None:
         if Path(state["request"]["out"]).exists():
             # A reply may be lost after atomic publication but before final receipt save.
             candidate = state.get("publication_candidate")
-            if candidate and file_inventory(Path(state["request"]["out"])) == candidate["files"]:
-                if Path(candidate["path"]).exists():
-                    raise TaskControlError("paper_output_exists", "Both a private candidate and visible output exist; no files were replaced.")
+            if candidate and native_snapshot.installed_snapshot_matches(
+                    Path(state["request"]["out"]), candidate["files"], pending_candidate=Path(candidate["path"])):
                 state.update(status="complete", delivery=candidate["delivery"], delivery_files=candidate["files"])
                 state.pop("blocker", None)
                 _save(root, state)
@@ -186,7 +176,7 @@ def _run(root: Path, state: dict[str, Any]) -> None:
                 _seal(root, state, selection, item)
         state["status"] = "publishing"
         _save(root, state)
-        delivery = publish_paper(root, state, checkpoint=lambda: _save(root, state))
+        delivery = publish_paper(state, checkpoint=lambda: _save(root, state))
         state.update(status="complete", delivery=delivery,
                      delivery_files=file_inventory(Path(state["request"]["out"])))
         state.pop("blocker", None)

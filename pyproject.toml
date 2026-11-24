@@ -227,6 +227,7 @@ files = [
   "src/sciplot_core/delivery/plan_binding.py",
   "src/sciplot_core/delivery/package_builder.py",
   "src/sciplot_core/delivery/package_transaction.py",
+  "src/sciplot_core/delivery/native_snapshot.py",
   "src/sciplot_core/delivery/package_validation.py",
   "src/sciplot_core/study_model/package_contract.py",
   "src/sciplot_core/publish_state.py",
