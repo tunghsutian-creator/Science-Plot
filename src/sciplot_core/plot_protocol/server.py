@@ -28,11 +28,9 @@ if TYPE_CHECKING:
 
 
 def make_service() -> PlotService:
-    from sciplot_core.plot_engine.service import PlotService
+    from sciplot_core.plot_engine.service import public_plot_service
 
-    # Public open observes old saved figures; internal adoption/recovery keeps
-    # the explicitly used historical composition path until conversion lands.
-    return PlotService(read_only_legacy=True)
+    return public_plot_service()
 
 
 def read_frame(connection: socket.socket, limit: int, *, timeout: float | None = None) -> bytes:

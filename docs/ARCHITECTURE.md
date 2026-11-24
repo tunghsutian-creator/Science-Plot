@@ -371,6 +371,13 @@ cache or new authority.
 
 ## External control and native document boundary
 
+A task, group, or paper invocation uses one lazily opened local Managed
+application (or the application already supplied by its host). It calls create,
+describe and delivery use cases directly on that application and closes an
+owner it opened. Normal task orchestration does not start or call a second
+transport. Explicit Plot RPC retains direct and socket transports; a lost
+external response still resumes only via the original durable request.
+
 ### Semantic document engine
 
 Actual new ordinary `stacked_curve` creation records

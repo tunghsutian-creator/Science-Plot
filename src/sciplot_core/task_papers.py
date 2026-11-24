@@ -24,6 +24,7 @@ from sciplot_core.task_paper_delivery import assert_sealed_item, publish_paper
 from sciplot_core.task_paper_sources import capture_selection, assert_selection_current
 from sciplot_core.task_paper_publication import capture_publication, assert_publication_current
 from sciplot_core.task_paper_status import _verify_delivery, _summary, _current_summary
+from sciplot_core.task_semantic_owner import managed_task_call
 from sciplot_core.task_storage import task_location
 from sciplot_core.veusz_runtime import veusz_worker_environment
 
@@ -256,13 +257,9 @@ def _managed_summary(state: dict[str, Any], result: dict[str, Any]) -> dict[str,
 
 
 def _read_managed(state: dict[str, Any], *, paper_dir: Path | None = None) -> dict[str, Any]:
-    from sciplot_core.plot_protocol.server import make_service
+    from sciplot_core.task_semantic_owner import inspect_managed_delivery
 
-    service = make_service()
-    try:
-        return service.inspect_delivery(state["request"], paper_dir=paper_dir)
-    finally:
-        service.close()
+    return inspect_managed_delivery(state["request"], paper_dir=paper_dir)
 
 
 def _inspect(root: Path, state: dict[str, Any]) -> dict[str, Any]:
@@ -303,12 +300,14 @@ def start_managed_group_paper(root: Path, *, out: Path, title: str, items: list[
         return _deliver_managed(state)
 
 
+@managed_task_call
 def inspect_paper(paper: Path) -> dict[str, Any]:
     root = _path(paper)
     with external_project_session(root):
         return _inspect(root, _load(root))
 
 
+@managed_task_call
 def resume_paper(paper: Path) -> dict[str, Any]:
     root = _path(paper)
     with external_project_session(root):

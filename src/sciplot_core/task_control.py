@@ -12,6 +12,7 @@ from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.output_contract import resolve_user_output_layout
 from sciplot_core.project_lifecycle.legacy_public_policy import require_public_editable
 from sciplot_core.source_tables.read_session import with_table_reads
+from sciplot_core.task_semantic_owner import managed_task_call
 from sciplot_core.task_timing import timed_task_call, finish_timing, observe_phase
 from sciplot_core.studio_core.annotation_schema import AnnotationOperationError, validate_operation_batch
 from sciplot_core.studio_core.project_query import inspect_project, resolve_project_path
@@ -75,6 +76,7 @@ def start_native_compatibility_creation(
 
 @with_table_reads
 @timed_task_call
+@managed_task_call
 def _start_task(
     request: dict[str, Any], *, task_dir: Path | None = None,
     entry_intent: dict[str, Any] | None = None,
@@ -183,6 +185,7 @@ def _start_task(
 
 
 @with_table_reads
+@managed_task_call
 def inspect_task(task: Path) -> dict[str, Any]:
     state = load_task(task_path(task))
     return _current_result(state)
@@ -361,6 +364,7 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any], *, _pub
 
 @with_table_reads
 @timed_task_call
+@managed_task_call
 def resume_task(task: Path, response: dict[str, Any], *, _public_mutation: bool = False) -> dict[str, Any]:
     if not isinstance(response, dict):
         raise TaskControlError("invalid_task_response", "任务答复必须是 JSON 对象。")

@@ -9,7 +9,7 @@ from sciplot_core.studio_core.project_session import external_project_session
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_group_storage import group_path, load_group, step_state
 from sciplot_core.task_papers import _path, _load, _inspect, start_paper, inspect_paper, start_managed_group_paper
-from sciplot_core.task_semantic_owner import describe_managed
+from sciplot_core.task_semantic_owner import describe_managed, managed_task_call
 from sciplot_core.task_storage import task_location
 from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot, _assert_snapshot_current
 
@@ -30,6 +30,7 @@ def _label(item: dict[str, Any], figure: dict[str, Any], figures: list[dict[str,
     return label[:64]
 
 
+@managed_task_call
 def start_group_paper(group: Path, *, paper_dir: Path, out: Path, title: str | None = None,
                       item_ids: list[str] | None = None) -> dict[str, Any]:
     """Capture once, then use frozen versions on every retry; never render a gallery."""

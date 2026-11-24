@@ -9,6 +9,7 @@ from typing import Any
 
 from sciplot_core.data_mapping.plan_binding import resolve_mapping_plan_request
 from sciplot_core.foundation.json_io import atomic_write_json
+from sciplot_core.task_semantic_owner import managed_task_call
 from sciplot_core.source_tables.read_session import with_table_reads
 from sciplot_core.output_contract import (
     REQUEST_DELIVERY_ROOT_KEY,
@@ -51,6 +52,7 @@ def _publish(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 @with_table_reads
+@managed_task_call
 def create_project(
     source: Path,
     *,

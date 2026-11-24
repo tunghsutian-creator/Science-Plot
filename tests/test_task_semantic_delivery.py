@@ -12,7 +12,11 @@ def _timed_semantic_backend(tmp_path, monkeypatch, *, decisions, fail_delivery=F
     """Account for known owner work without native runtime or wall-clock sleeps."""
     from sciplot_core import task_timing
     from sciplot_core import task_semantic_plan
+    from types import SimpleNamespace
+
+    from sciplot_core.plot_engine import service
     from sciplot_core.plot_protocol import socket_client
+    from sciplot_core.task_semantic_owner import create_managed
 
     now, calls = [0.0], {"create": 0, "delivery": 0, "describe": 0}
     monkeypatch.setattr(task_timing, "perf_counter", lambda: now[0])
@@ -30,7 +34,7 @@ def _timed_semantic_backend(tmp_path, monkeypatch, *, decisions, fail_delivery=F
         work(3)
         return {"idempotency_key": "timed-attempt", "out": str(tmp_path / ".sciplot" / "artifacts")}
     identity = {"revision": 0, "scientific_hash": "science", "presentation_hash": "presentation"}
-    def create(state, wire):
+    def create(wire):
         calls["create"] += 1
         work(5)
         return {"status": "complete", "ready_to_use": True, "plot": str(tmp_path / "managed"),
@@ -43,8 +47,8 @@ def _timed_semantic_backend(tmp_path, monkeypatch, *, decisions, fail_delivery=F
                     "next_step": {"action": "retry_same_request"}}
         return {"status": "complete", "ready_to_use": True,
                 "delivery": {"index": "/delivery/index.json"}}
-    def describe(method, params):
-        assert method == "plot.describe"
+    def describe(plot, *, description):
+        assert plot == tmp_path / "managed" and description == {"scope": "summary"}
         calls["describe"] += 1
         work(11)
         return {"status": "current", "pending": None, **identity,
@@ -52,11 +56,29 @@ def _timed_semantic_backend(tmp_path, monkeypatch, *, decisions, fail_delivery=F
     monkeypatch.setattr(semantic, "prepare_plan", plan)
     monkeypatch.setattr(task_semantic_plan, "selected_table_plan", select)
     monkeypatch.setattr(semantic, "build_managed_request", build)
-    monkeypatch.setattr(semantic, "execute_managed", create)
-    monkeypatch.setattr(delivery, "execute_delivery", package)
+    monkeypatch.setattr(semantic, "execute_managed", lambda _state, wire: create_managed(wire))
     monkeypatch.setattr(delivery, "delivery_current", lambda state: True)
     monkeypatch.setattr(delivery, "handoff_paths", lambda state: {"images": ["/delivery/figure.tiff"]})
-    monkeypatch.setattr(socket_client, "call", describe)
+    def no_nested_transport(*_args, **_kwargs):
+        pytest.fail("Task operations belong to the already-local application, not a nested transport.")
+
+    def new_owner():
+        opened, closed = [], []
+
+        def invoke(operation, *args, **kwargs):
+            assert not closed
+            opened.append(operation)
+            return operation(*args, **kwargs)
+
+        return SimpleNamespace(
+            create=lambda wire: invoke(create, wire),
+            deliver=lambda wire: invoke(package, wire),
+            describe=lambda plot, **options: invoke(describe, plot, **options),
+            close=lambda: closed.append(tuple(opened)),
+        )
+
+    monkeypatch.setattr(service, "public_plot_service", new_owner)
+    monkeypatch.setattr(socket_client, "call", no_nested_transport)
     source = tmp_path / "original.csv"
     source.write_text("Time,Mass\ns,%\n0,100\n1,99\n")
     request = {"version": 1, "action": "create", "sources": [str(source)],
