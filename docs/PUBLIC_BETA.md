@@ -7,31 +7,17 @@
 ## 安装与第一次使用
 
 1. 从维护者取得 ZIP、`SHA256SUMS` 和对应的 `release.json`。公开分发包应标明
-   `channel: public`、`status: passed`、`public_distribution_ready: true`；`candidate`
-   只表示本地候选包。校验 ZIP：在这两个文件所在目录运行 `shasum -a 256 -c SHA256SUMS`。
-2. 解压，将完整的 `SciPlot.app` 放到固定目录（例如“应用程序”），然后双击。Python、Qt、
-   Veusz 随应用提供。若系统阻止打开，向维护者反馈原始提示；不要关闭 Gatekeeper 或删除隔离标记。
-3. 欢迎页显示环境检查，并提供包内命令路径和 MCP 配置片段。在支持本地 STDIO MCP 的外部
-   AI 客户端添加 `sciplot` 服务，依次使用参数 `mcp --profile daily`。需要完整工具目录时可改用 `--profile expert`。已有配置不会被应用自动改写。客户端需要有权
-   读取原始数据目录；数据是否发送给模型取决于该客户端的配置。
-4. 让 AI 使用 SciPlot 绘制自己的数据，例如：“用 SciPlot 绘制这个 FTIR 文件，保持样品名称
-   和单位，先给我看图，再交付可编辑项目、PDF 和 300 dpi TIFF。”缺少单位或样品对应关系时，
-   按真实实验信息回答，不能凭数值大小猜测。
-5. 在原数据旁找到 `文件名_SciPlot/`。检查图形、样品、单位和范围，并保留同级隐藏的 `.sciplot/`
-   工作区；它用于继续原项目。CSV、VSZ、PDF、TIFF 均在可见交付目录中。
+   `channel: public`、`status: passed`、`public_distribution_ready: true`；
+   `candidate` 只表示本地候选包。在 ZIP 所在目录运行 `shasum -a 256 -c SHA256SUMS`。
+2. 解压，将完整的 `SciPlot.app` 放到固定目录（例如“应用程序”），然后双击。
+   Python、Qt 和 Veusz 随应用提供。若系统阻止打开，向维护者反馈原始提示；
+   不要关闭 Gatekeeper 或删除隔离标记。
+3. 按应用生成的 **开始使用** 页连接你的 AI、绘制第一张图，并保留页面说明的原项目路径，
+   以便在新会话继续编辑。该页按本次安装位置生成 MCP 配置，也提供无 AI 时的命令行入口。
+   移动应用后，重新双击并更新客户端连接路径。应用不会自动安装连接。
 
-## 调整、保存与恢复
-
-- 双击 `Open_in_SciPlot.command`，选中曲线后调整外观；支持原生撤销/重做。
-  **Save** 保存可编辑 VSZ；**Save and update delivery** 同时更新 PDF/TIFF。
-- `Open_in_Veusz.command` 用于高级原生编辑。某些扩展设置（如圆角线连接）需要 SciPlot
-  自带的运行时；不要用未经扩展的独立 Veusz 作为兼容性承诺。
-- 下次让 AI“继续这个项目”，提供原始数据或交付目录。数据变更应走已有项目的源更新流程，
-  先检查候选预览再接受。不要通过删除工作区或重建项目解决保存/导出问题。
-- 已保存但导出失败时，让 AI 查询当前状态并重试导出，避免重复应用编辑。另一个同项目编辑
-  窗口占用时，先保存并关闭它。交付副本单独改过时先处理差异，不能覆盖掉改动。
-- 移动应用后重新生成 MCP 配置路径；旧交付的启动命令可能保留原应用路径，需继续受管项目并
-  重新导出。只复制交付目录得到的是独立快照，不能据此认定原受管项目仍然可恢复。
+安装指南到这里结束：后续以当前应用生成的欢迎页为准，不运行交付中的历史启动文件。
+PDF、TIFF 和 VSZ 快照用于查看与交付；只复制交付目录不等于迁移可续编的工程。
 
 ## 反馈问题
 
@@ -72,8 +58,10 @@ AI 配置或密钥，也不会自动上传。原始实验文件仅在你明确�
 .venv/bin/python -m distribution.macos.release --app .tmp_verify/beta/build/SciPlot.app --out .tmp_verify/beta/candidate
 ```
 
-候选命令在搬移后的独立副本执行环境检查、原生窗口、欢迎页、官方 SDK 的 MCP 发现/任务能力调用
-及完整 runtime smoke。随后创建 ZIP、解压并逐文件校验，生成 `SHA256SUMS` 和 `release.json`。
+候选命令在搬移后的独立副本生成欢迎页，执行环境检查与完整的无界面原生 runtime smoke，
+并由官方 MCP SDK 使用欢迎页生成的 daily 配置发现工具、读取任务能力。它不调用模型，
+也不替代真实 AI 客户端完成首图、找回和编辑。随后创建 ZIP、解压并逐文件校验，
+生成 `SHA256SUMS` 和 `release.json`。
 所有输出目录必须是新目录；失败时保留报告及日志。`public_distribution_ready` 只报告技术发行
 检查，不代替独立安装、真人试用或实际客户端验收。
 

@@ -30,8 +30,10 @@ def validate_command_result(name: str, result: subprocess.CompletedProcess) -> d
         valid = payload.get("status") == "ready"
     elif name == "welcome":
         valid = payload.get("doctor_status") == "ready" and payload.get("mcp_available") is True
+    elif name == "runtime_smoke":
+        valid = payload.get("kind") == "sciplot_runtime_smoke" and payload.get("status") == "passed"
     else:
-        valid = payload.get("status") == "passed"
+        raise ValueError(f"Unknown packaged verification check: {name}")
     if not valid:
         raise RuntimeError(f"{name} did not report successful checks")
     return payload
@@ -42,11 +44,13 @@ def verify_app(app: Path, evidence: Path, *, smoke: bool = False) -> dict:
     if evidence.is_relative_to(app):
         raise ValueError("Verification evidence must be outside the application")
     evidence.mkdir(parents=True, exist_ok=False)
+    smoke_profile = "full" if smoke else "quick"
+    connection_directory = evidence / "connection"
     report = {
         "kind": "sciplot_macos_verification", "version": 1, "status": "running",
         "app": str(app), "platform": {"system": platform.system(), "macos": platform.mac_ver()[0], "architecture": platform.machine()}, "checks": [],
         "launch_environment": "inherited Python/Qt/SciPlot paths removed; PATH contains system tools only",
-        "runtime_smoke_requested": smoke,
+        "runtime_smoke_requested": smoke, "runtime_smoke_profile": smoke_profile,
         "clean_machine_test": "not_performed", "novice_user_test": "not_performed",
         "signing_assessed": False, "developer_id_signed": None, "notarized": None,
     }
@@ -75,11 +79,11 @@ def verify_app(app: Path, evidence: Path, *, smoke: bool = False) -> dict:
         report["native_dependencies"] = audit_runtime(app / "Contents/Resources")
         commands = [
             ("doctor", ["doctor", "--json"]),
-            ("native_window", ["studio", "--qt-smoke"]),
-            ("welcome", ["--welcome", "--out", str(evidence / "connection"), "--no-open"]),
+            ("welcome", ["--welcome", "--out", str(connection_directory), "--no-open"]),
+            # The quick profile actually exports with headless Qt. A requested
+            # full smoke also covers that runtime; do not run both.
+            ("runtime_smoke", ["smoke", "--profile", smoke_profile, "--out", str(evidence / "smoke"), "--json"]),
         ]
-        if smoke:
-            commands.append(("runtime_smoke", ["smoke", "--out", str(evidence / "smoke"), "--json"]))
         command = app / "Contents/MacOS/sciplot"
         for name, arguments in commands:
             print(f"Verifying {name}…", flush=True)
@@ -94,7 +98,9 @@ def verify_app(app: Path, evidence: Path, *, smoke: bool = False) -> dict:
                 (evidence / f"{name}.stdout.json").write_text(result.stdout)
                 (evidence / f"{name}.stderr.log").write_text(result.stderr)
                 record["returncode"] = result.returncode
-                validate_command_result(name, result)
+                payload = validate_command_result(name, result)
+                if name == "runtime_smoke" and payload.get("profile", "full") != smoke_profile:
+                    raise RuntimeError("The bundle ran a different native smoke profile")
                 record["status"] = "passed"
             except Exception as error:
                 if isinstance(error, subprocess.TimeoutExpired):
@@ -109,7 +115,7 @@ def verify_app(app: Path, evidence: Path, *, smoke: bool = False) -> dict:
             finally:
                 save()
         print("Verifying MCP stdio discovery and task capabilities…", flush=True)
-        report["mcp"] = verify_mcp(command, isolated_environment())
+        report["mcp"] = verify_mcp(command, isolated_environment(), connection_directory)
         if report["mcp"].get("status") != "passed":
             raise RuntimeError("Bundled MCP verification failed")
         if bundle_snapshot(app) != before:

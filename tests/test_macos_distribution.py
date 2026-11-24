@@ -106,8 +106,10 @@ def test_welcome_reports_actual_failure_and_does_not_claim_novice_acceptance(tmp
     assert "本地环境需要处理" in page
     assert "&lt;missing Qt&gt;" in page
     assert "尚未提供 MCP" in page
-    assert "真实小白测试仍需独立验收" in page
-    assert "不会改写任何 AI 工具的设置" in page
+    assert "不能替代干净 Mac 安装" in page
+    assert 'download="mcp-server.json"' not in page
+    assert 'download="codex-mcp.toml"' not in page
+    assert "task create" in page and "plot open" in page
 
 
 def test_native_audit_rejects_external_missing_and_escaping_dependencies(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
