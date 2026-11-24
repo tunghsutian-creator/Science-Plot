@@ -1,41 +1,39 @@
 # Selected figures across projects
 
-`task paper` packages an explicit ordered list of saved figures into a new paper
-output directory. Each item selects exactly one canonical project and registered
-`figure_id`, a unique safe label, and its current version. Select secondary
-figures by their actual ID; export snapshots are not original projects.
-
-For an already completed experiment group, select the complete current set in one
-public command. The product captures every exact project/registered figure and
-its four version hashes locally, in group item order and registered figure order:
+`task paper start --group` packages saved figures in group item order and
+registered figure order. It selects the originals, not exported copies.
 
 ```bash
 skill/scripts/sciplot task paper start --group GROUP_DIRECTORY --out NEW_OUTPUT --paper-dir NEW_PAPER_TASK --json
 ```
 
-Use repeated `--item-id ID` to select a subset in that explicit order, and
-`--title TITLE` to override the group title. A single-figure item's filename
-uses its explicit group display label, normalized to safe ASCII characters
-(e.g. `P0.3/0.7 log` becomes `001_P0_3_0_7_log.pdf`). The ordinal is added once.
-Only a multi-figure project appends its figure title, or a stable figure ID when
-titles cannot distinguish figures. The existing strict explicit-request label
-contract and duplicate-label guard remain unchanged. Every selected item must be finished
-and every creation/presentation/export child complete. This entry does not
-advance tasks, render a gallery or accept previews. It validates current source,
-native, semantic and publication bytes; group completion alone is not readiness.
-A successful first group call also runs the existing read-only paper inspection
-before returning `ready_to_use`, `source_versions_current`, `delivery_current`
-and `readiness_evaluated`. These check the frozen source/publication and final
-package byte inventories; their scope explicitly excludes a fresh native audit,
-human review and journal acceptance. A change during handoff returns the owner's
-blocked result, never an unconditional readiness value. The old explicit
-`--request` start still has its original completion/inspect boundary.
-The checkpoint freezes the resolved list once. Repeating the same command reads
-that frozen selection, even if the group later changes; `resume` continues it.
-Different group/order/output/title options need a new checkpoint. Existing
-explicit `--request` remains unchanged and cannot be mixed with group options.
+Use repeated `--item-id ID` to select items in that explicit order and
+`--title TITLE` to override the group title. A single figure uses its group
+label, normalized to a safe filename; a multi-figure item adds its figure
+title or a stable ID.
 
-For an explicit cross-project selection, retain the existing strict wire:
+- A Managed selection binds each figure's canonical `plot`, `plot_id` and
+  current `revision`, including each registered frequency figure in order. It
+  uses the [Managed delivery](managed-delivery.md) publisher. To deliver only
+  a non-primary member alongside other selected Managed plots, use that route
+  with an ordered explicit `plot deliver` request.
+- A Legacy selection retains the saved native version and existing paper
+  publisher. Its creation, presentation and export child tasks must finish.
+- Mixed Managed and Legacy figures require separate packages. Neither route
+  advances group tasks, accepts a pending review, or redraws a missing export.
+  Follow the failed figure's recovery advice and retry when its exact saved
+  export is current.
+
+The paper checkpoint freezes the selection once. Repeat the same start command
+or use `task paper inspect` for a read-only status check; `task paper resume`
+retries that frozen request. A different selection, order or revision needs
+both a new checkpoint and a new output. A completed package is a frozen
+snapshot; its original figures may subsequently advance. Inspection checks
+current originals and the published byte inventory without a fresh native audit.
+The Legacy `--request` format and its original start/inspect boundary are
+unchanged.
+
+For an explicit **Legacy** cross-project selection, use the existing v1 wire:
 
 1. Query existing projects with `project inspect` for their registered figure IDs.
    Read the selected version with

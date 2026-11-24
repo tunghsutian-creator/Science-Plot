@@ -78,7 +78,7 @@ def test_existing_checkpoint_reads_frozen_selection_without_group_recapture(grou
     out = tmp_path / "out"
     origin = {"kind": "current_group_selection", "group": str(root), "item_ids": None, "title": None, "out": str(out)}
     monkeypatch.setattr(selection, "_load", lambda _: {"selection_origin": {"request": origin}})
-    monkeypatch.setattr(selection, "_current_summary", lambda *_: {"status": "blocked", "recorded_status": "complete"})
+    monkeypatch.setattr(selection, "_inspect", lambda *_: {"status": "blocked", "recorded_status": "complete"})
     monkeypatch.setattr(selection, "load_group", lambda *_: pytest.fail("Retry must not recapture changed group"))
     assert selection.start_group_paper(root, out=out, paper_dir=paper)["recorded_status"] == "complete"
     assert not saved and not captures
@@ -162,3 +162,39 @@ def test_first_group_completion_returns_fresh_owner_result_and_never_promotes_bl
     monkeypatch.setattr(selection, "start_paper", lambda *_, **__: {"status": "blocked", "blocker": {"reason_code": "paper_publication_changed"}})
     monkeypatch.setattr(selection, "inspect_paper", lambda *_: pytest.fail("An incomplete publication cannot acquire current delivery readiness"))
     assert selection.start_group_paper(root, out=tmp_path / "out2", paper_dir=tmp_path / "paper2")["status"] == "blocked"
+
+
+def _saved_handle(child):
+    handle = {"plot": child["project"], "plot_id": "plot:sealed", "plot_type": "ManagedPlot", "revision": 0}
+    child["result"] = {"plot_objects": [handle]}
+    return handle
+
+
+def test_mixed_authority_lists_exact_members_before_any_publisher(group, tmp_path, monkeypatch):
+    root, _, children, captures, saved = group
+    first = next(iter(children.values()))
+    handle = _saved_handle(first)
+    monkeypatch.setattr(selection, "start_managed_group_paper", lambda *a, **k: pytest.fail("Mixed selection cannot package"))
+    monkeypatch.setattr(selection, "describe_managed", lambda *_: pytest.fail("Mixed selection cannot dispatch Managed reads"))
+    paper, out = tmp_path / "paper", tmp_path / "out"
+    with pytest.raises(TaskControlError) as broken:
+        selection.start_group_paper(root, out=out, paper_dir=paper)
+    assert broken.value.reason_code == "paper_group_mixed_authority"
+    assert [item["authority"] for item in broken.value.repair["items"]] == ["ManagedPlot", "LegacyPlot"]
+    assert broken.value.repair["items"][0]["plot"] == handle["plot"]
+    assert not saved and not captures and not paper.exists() and not out.exists()
+
+
+def test_managed_path_alias_cannot_duplicate_saved_figure(group, tmp_path, monkeypatch):
+    from sciplot_core.plot_engine.errors import EngineError
+
+    root, _, children, captures, saved = group
+    first, second = children.values()
+    handle = _saved_handle(first)
+    _saved_handle(second)["plot"] = str(Path(handle["plot"]).parent / "alias" / ".." / Path(handle["plot"]).name)
+    monkeypatch.setattr(selection, "describe_managed", lambda _: {**handle, "revision": 2})
+    paper, out = tmp_path / "paper", tmp_path / "out"
+    with pytest.raises(EngineError) as broken:
+        selection.start_group_paper(root, out=out, paper_dir=paper)
+    assert broken.value.reason_code == "managed_delivery_duplicate_plot"
+    assert not saved and not captures and not paper.exists() and not out.exists()

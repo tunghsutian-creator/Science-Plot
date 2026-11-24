@@ -1235,17 +1235,20 @@ it never patches VSZ text. Sealed staging supports exact partial retries and the
 generic exclusive directory installer rejects all existing targets. Completed
 start replay, inspect and resume share a read-only currentness projection;
 historical frozen delivery stays distinct from present source/package validity.
-`task_paper_selection` is a read-only group adapter: it freezes complete selected
-children and registered figures through the strict paper request owner, without
-rendering a gallery. `task_paper_publication` validates the existing publication
-receipt and exact file inventory and copies its PDF/TIFF bytes; it cannot render
-to repair a missing or changed publication. Native portable Save and scientific
-audits remain required. The original publication must be finished and ready with
-its canonical rule, QA and delivery gates satisfied; QA alone cannot establish
-completion. Missing completion evidence fails closed without repairing the run.
-`task_paper_status` projects current source/package
-evidence; the new group start calls it after completion before offering delivery.
-Explicit-request start retains its original completion/inspection boundary.
+`task_paper_selection` reads the actual child handles in group and registered
+figure order without rendering a gallery. An all-Legacy selection follows the
+existing paper v1 version and publication contracts. An all-Managed selection
+freezes a separate receipt containing only the group origin and exact ordered
+`plot.deliver` request, with current revisions from `plot.describe`. Frequency
+membership comes from its generation-owned figure plan and attachment index;
+the selected member's own export evidence determines readiness, not the
+historical whole-suite publication. Mixed authority fails before packaging.
+The Managed delivery owner alone owns staging, portable native Save, source
+audit, publication inventory, resume and atomic installation; paper inspection
+only projects its current receipt and seals. Legacy `task_paper_publication`
+copies PDF/TIFF under its existing original-completion and canonical QA gates;
+`task_paper_status` retains its separate historical/native/source readiness
+projection. Neither publisher creates a missing export.
 
 Radar interpretation is presentation of existing scientific values and declared
 normalization. A reserved panel expands new page width without changing the

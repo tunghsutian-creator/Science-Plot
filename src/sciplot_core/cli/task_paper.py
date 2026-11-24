@@ -52,7 +52,7 @@ def dispatch_paper(args: Any) -> int:
     else:
         result = resume_paper(args.target)
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 1 if result.get("status") == "blocked" else 0
+    return 1 if result.get("status") in {"blocked", "partial", "pending", "running"} else 0
 
 
 def main() -> int:

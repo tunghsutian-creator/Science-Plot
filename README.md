@@ -100,14 +100,14 @@ each `task group start` create item. One group response returns all bound
 candidates and the acceptance template; review them together and continue with
 `task group resume`. Later changes remain separate intents and previews. The
 group checks original source bytes before applying a saved continuation.
-After the selected items finish, `task paper start --group GROUP --out NEW_OUTPUT
---paper-dir NEW_CHECKPOINT --json` captures their current versions in order and
-copies sealed PDF/TIFF publications into one portable editable package. Its first
-successful response reports checked package/source currentness. Missing or
-changed publication evidence blocks delivery and points back to the original
-export; packaging does not redraw the figures. See the
-[create route](skill/references/ordinary-create.md) and
-[paper route](skill/references/paper-figures.md).
+After the selected figures have current saved exports, `task paper start
+--group GROUP --out NEW_OUTPUT --paper-dir NEW_CHECKPOINT --json` packages them
+in order. Managed groups use each figure's exact current revision; legacy groups
+retain their saved native versions. Use separate packages for mixed authority.
+An explicit `plot deliver` list can select a single non-primary Managed
+frequency figure alongside other Managed plots. Packaging never redraws missing
+or changed exports. See the [create route](skill/references/ordinary-create.md)
+and [paper route](skill/references/paper-figures.md).
 
 Saved ordinary figures also support a persistent semantic editing engine. For a
 previously identified ManagedPlot, start with `sciplot plot open TARGET --scope

@@ -107,9 +107,9 @@ For a complete Managed project migration, retain its original sources and
 registry and use an explicitly supported migration owner when available;
 this native snapshot route does not invent one.
 
-For an ordinary completed Legacy project group, use `task paper start --group
-GROUP_DIRECTORY --out NEW_OUTPUT --paper-dir NEW_PAPER_TASK --json` as described
-in [Paper figures](paper-figures.md). It freezes the ordered current selection
-locally and consumes existing sealed PDF/TIFF bytes. A Managed artifact cache
-is not an ordinary registered project; keep this Managed route for its native
-snapshot/continuation authority. Neither route edits across plots atomically.
+For a saved experiment group, `task paper start --group GROUP_DIRECTORY
+--out NEW_OUTPUT --paper-dir NEW_PAPER_TASK --json` freezes the exact ordered
+selection. An all-Managed group uses this publisher; all-Legacy selections retain
+the existing [paper publisher](paper-figures.md). Keep Managed and Legacy figures
+in separate packages. To select just one member of a Managed frequency suite,
+use its exact handle in an explicit `plot deliver` list.

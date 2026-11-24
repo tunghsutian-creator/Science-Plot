@@ -18,7 +18,7 @@ from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.storage import digest, load_head, read, write
 from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot, _assert_snapshot_current
 from sciplot_core.studio_core.project_query_paths import canonical_path
-from sciplot_core.project_lifecycle.context import external_project_session, exists, prepare_namespace, create_namespace
+from sciplot_core.project_lifecycle.context import active, external_project_session, exists, prepare_namespace, create_namespace, project_query
 from sciplot_core.studio_core.source_update_commit import file_inventory
 
 class DeliveryService(Protocol):
@@ -30,22 +30,70 @@ def _save(root: Path, state: dict[str, Any]) -> None:
     write(root / "delivery.json", state)
 
 
-def _selection(service: DeliveryService, item: dict[str, Any], root: Path, out: Path) -> dict[str, Any]:
-    plot = canonical_path(Path(item["plot"]))
+def _selected_head(item: dict[str, Any], *targets: Path) -> dict[str, Any]:
+    plot = Path(item["plot"])  # The closed delivery request already canonicalized this exact handle.
     head = load_head(plot)
     document = head["document"]
     if document.get("plot_type") != "ManagedPlot":
         raise EngineError("managed_delivery_authority_required", "This delivery entry accepts current ManagedPlots only.")
     if (document["plot_id"], document["revision"]) != (item["plot_id"], item["revision"]):
-        raise EngineError("managed_delivery_revision_conflict", "Read each selected plot's current identity and revision.")
+        raise EngineError("managed_delivery_revision_conflict", "This exact selection has advanced. Read its current revision and use a new destination.",
+                          action="plot.describe", plot=str(plot), new_destination_required=True)
     paths = [plot, Path(head["binding"]["output"]),
              *[Path(source["path"]) for source in document["scientific"]["data_sources"]]]
     for selected_path in paths:
         path = canonical_path(selected_path)
-        if any(target == path or target.is_relative_to(path) or path.is_relative_to(target) for target in (root, out)):
+        if any(target == path or target.is_relative_to(path) or path.is_relative_to(target) for target in targets):
             raise EngineError("managed_delivery_path_overlap", "Delivery/checkpoint must not overlap selected plots, sources or artifacts.")
-    require_current(service.backend, head["binding"])
     return head
+
+
+def _selection(service: DeliveryService, item: dict[str, Any], *targets: Path) -> dict[str, Any]:
+    head = _selected_head(item, *targets)
+    require_current(service.backend, head["binding"])
+    pending = active(Path(item["plot"]))
+    if pending and pending["phase"] not in {"complete", "rejected"}:
+        raise EngineError("managed_delivery_review_pending", "Resolve the current plot transaction before packaging its saved export.",
+                          action="resolve_pending_plot_transaction", plot=item["plot"], phase=pending["phase"])
+    return head
+
+
+def _failure(exc: Exception, code: str, selection: dict[str, Any] | None = None) -> dict[str, Any]:
+    result: dict[str, Any] = {"reason_code": getattr(exc, "reason_code", code), "message": str(exc)}
+    if repair := getattr(exc, "repair", None):
+        result["repair"] = repair
+    if selection is not None:
+        result["selection"] = selection
+        if result["reason_code"] in {"document_inputs_changed", "document_state_missing", "managed_delivery_cache_missing",
+                "managed_delivery_cache_stale", "managed_delivery_native_unsealed", "managed_delivery_export_changed",
+                "managed_delivery_export_pending", "managed_delivery_qa_unverified", "managed_delivery_export_incomplete",
+                "managed_delivery_original_native_changed", "managed_delivery_native_changed"}:
+            result["export_command"] = ["sciplot", "plot", "export", selection["plot"], "--json"]
+    return result
+
+
+def _destination(request: dict[str, Any]) -> tuple[Path, Path]:
+    out = Path(request["out"])
+    return canonical_path(out.parent / ".sciplot_deliveries" / digest(str(out))), out
+
+
+def _load_request(root: Path, request: dict[str, Any]) -> dict[str, Any]:
+    state = read(root / "delivery.json")
+    if (state.get("request") != request or state.get("state_sha256") != digest(
+            {key: value for key, value in state.items() if key != "state_sha256"})):
+        raise EngineError("managed_delivery_request_conflict", "Destination already belongs to a different or changed delivery request.")
+    return state
+
+
+def require_paper_location(request: dict[str, Any], paper_dir: Path) -> None:
+    """Protect actual selected inputs from the paper wrapper's separate receipt."""
+    root, out = _destination(request)
+    if any(paper_dir == path or paper_dir.is_relative_to(path) or path.is_relative_to(paper_dir)
+           for path in (root, out)):
+        raise EngineError("managed_delivery_path_overlap", "Keep the paper checkpoint outside the delivery and its checkpoint.")
+    for selection in request["items"]:
+        with project_query(Path(selection["plot"])):
+            _selected_head(selection, paper_dir)
 
 
 def _seal(service: DeliveryService, root: Path, state: dict[str, Any], selection: dict[str, Any], item: dict[str, Any]) -> None:
@@ -160,10 +208,55 @@ def _summary(root: Path, state: dict[str, Any]) -> dict[str, Any]:
             **({"blocker": state["blocker"]} if "blocker" in state else {})}
 
 
+def inspect(service: DeliveryService, request: dict[str, Any]) -> dict[str, Any]:
+    """Observe the existing owner receipt and seals; never acquire a writer lease."""
+    root, out = _destination(request)
+    if exists(root / "delivery.json"):
+        state = _load_request(root, request)
+    else:
+        state = {"status": "pending", "request": request,
+                 "items": [{"status": "pending"} for _ in request["items"]]}
+    summary = _summary(root, state)
+    summary.update(recorded_status=state["status"] if state["status"] != "pending" else None, readiness_evaluated=True)
+    for selection, item, row in zip(request["items"], state["items"], summary["items"], strict=True):
+        try:
+            with project_query(Path(selection["plot"])):
+                head = _selection(service, selection, root, out)
+                if item["status"] == "sealed":
+                    require_native_seal(head, item["audit"]["native_sha256"])
+                    if state["status"] != "complete" and not out.exists():
+                        _require_sealed_attempt(item)
+        except (OSError, ValueError, RuntimeError) as exc:
+            row.update(status="blocked", error=_failure(exc, "managed_delivery_currentness_failed", selection))
+            summary.update(status="blocked", ready_to_use=False)
+    if state["status"] == "complete" or out.exists():
+        try:
+            _require_delivery_files(out, state)
+        except (OSError, ValueError, RuntimeError) as exc:
+            summary.update(status="blocked", ready_to_use=False, blocker=_failure(exc, "managed_delivery_currentness_failed"))
+    if summary["status"] != "complete":
+        summary["delivery"] = None
+        summary["next_step"] = {"action": "retry_same_request", "method": "plot.deliver"}
+    return summary
+
+
+def _require_sealed_attempt(item: dict[str, Any]) -> None:
+    if file_inventory(Path(item["attempt"])) != item["files"]:
+        raise EngineError("managed_delivery_staging_changed", "A sealed item was externally edited.")
+
+
+def _require_delivery_files(out: Path, state: dict[str, Any]) -> dict[str, str]:
+    expected = state.get("delivery_files") or state.get("publication_candidate", {}).get("files")
+    if not out.exists() and state["status"] == "complete":
+        raise EngineError("managed_delivery_missing_output", "A completed delivery was removed; choose a new destination, never recreate over uncertain work.")
+    if not expected or delivery_inventory(out) != expected:
+        raise EngineError("managed_delivery_external_edit", "The destination contains changed or unowned files; all were preserved.")
+    return dict(expected)
+
+
 def deliver(service: DeliveryService, value: Any) -> dict[str, Any]:
     request = normalize_request(value)
-    out = Path(request["out"])
-    root = canonical_path(out.parent / ".sciplot_deliveries" / digest(str(out)))
+    root, out = _destination(request)
     if not exists(root / "delivery.json"):
         from sciplot_core.foundation.research_destination import require_data_destination
         require_data_destination(root)
@@ -172,60 +265,61 @@ def deliver(service: DeliveryService, value: Any) -> dict[str, Any]:
     prepare_namespace(root)
     with external_project_session(root):
         if exists(root / "delivery.json"):
-            state = read(root / "delivery.json")
-            if (state.get("request") != request or state.get("state_sha256") != digest(
-                    {key: value for key, value in state.items() if key != "state_sha256"})):
-                raise EngineError("managed_delivery_request_conflict", "Destination already belongs to a different or changed delivery request.")
+            state = _load_request(root, request)
         else:
             if out.exists() or exists(root):
                 raise EngineError("managed_delivery_output_exists", "Delivery and checkpoint targets must be new; existing files were preserved.")
             # Validate the closed selection/locations before reserving output.
             for selection in request["items"]:
-                _selection(service, selection, root, out)
+                try:
+                    _selection(service, selection, root, out)
+                except EngineError as exc:
+                    exc.repair["selection"] = selection
+                    raise
             create_namespace(root)
             state = {"kind": "sciplot_managed_delivery_state", "version": 1, "request": request, "status": "running",
                      "items": [{"status": "pending", "stem": f"{index:03d}_" + (re.sub(r"[^A-Za-z0-9_-]+", "_", item["label"]).strip("_")[:64] or "Figure")}
                                for index, item in enumerate(request["items"], 1)]}
             _save(root, state)
+        selected_failure: dict[str, Any] | None = None
         try:
             for selection, item in zip(request["items"], state["items"], strict=True):
-                head = _selection(service, selection, root, out)
                 if item["status"] == "sealed":
+                    selected_failure = selection
+                    head = _selection(service, selection, root, out)
                     require_native_seal(head, item["audit"]["native_sha256"])
-            if out.exists():
-                expected = state.get("delivery_files") or state.get("publication_candidate", {}).get("files")
-                if not expected or delivery_inventory(out) != expected:
-                    raise EngineError("managed_delivery_external_edit", "The destination contains changed or unowned files; all were preserved.")
-                state.update(status="complete", delivery_files=expected)
+            selected_failure = None
+            if out.exists() or "delivery_files" in state:
+                state.update(status="complete", delivery_files=_require_delivery_files(out, state))
             else:
-                if state["status"] == "complete":
-                    raise EngineError("managed_delivery_missing_output", "A completed delivery was removed; choose a new destination, never recreate over uncertain work.")
                 for selection, item in zip(request["items"], state["items"], strict=True):
                     try:
                         if item["status"] == "conflict":
                             raise EngineError("managed_delivery_staging_changed", "Previously edited staging remains preserved; select a new delivery destination.")
                         if item["status"] == "sealed":
-                            if file_inventory(Path(item["attempt"])) != item["files"]:
-                                raise EngineError("managed_delivery_staging_changed", "A sealed item was externally edited.")
+                            _require_sealed_attempt(item)
                         else:
                             _seal(service, root, state, selection, item)
                     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
                         reason = getattr(exc, "reason_code", "managed_delivery_item_failed")
                         item.update(status="conflict" if reason == "managed_delivery_staging_changed" else "failed",
-                                    error={"reason_code": reason, "message": str(exc)})
+                                    error=_failure(exc, "managed_delivery_item_failed", selection))
                         _save(root, state)
                 if any(item["status"] != "sealed" for item in state["items"]):
                     state["status"] = "partial"
                 else:
                     def validate() -> None:
+                        nonlocal selected_failure
                         for selection, item in zip(request["items"], state["items"], strict=True):
+                            selected_failure = selection
                             head = _selection(service, selection, root, out)
                             require_native_seal(head, item["audit"]["native_sha256"])
+                        selected_failure = None
 
                     state["delivery_files"] = publish(root, state, checkpoint=lambda: _save(root, state), validate=validate)
                     state["status"] = "complete"
             state.pop("blocker", None)
         except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
-            state.update(status="blocked", blocker={"reason_code": getattr(exc, "reason_code", "managed_delivery_failed"), "message": str(exc)})
+            state.update(status="blocked", blocker=_failure(exc, "managed_delivery_failed", selected_failure))
         _save(root, state)
         return _summary(root, state)

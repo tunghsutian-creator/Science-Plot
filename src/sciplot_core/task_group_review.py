@@ -137,6 +137,13 @@ def _item_overview(root: Path, item: dict[str, Any]) -> dict[str, Any]:
     current = inspect_project(Path(project))
     result.update(project=current["project"], ready_to_use=current["ready_to_use"],
                   current_evidence={key: current.get(key) for key in ("source", "qa", "delivery")})
+    if current.get("document_authority") == "managed_figure_group":
+        # Frequency attachments have registered Managed handles, not Studio specs.
+        # Keep their existing TIFFs as review exports; do not render a gallery copy.
+        result.update(document_authority="managed_figure_group",
+                      figures=[{**{key: figure[key] for key in ("figure_id", "title", "plot", "document", "document_sha256")},
+                                "scope": "saved"} for figure in current["figures"]])
+        return result
     for figure in current["figures"]:
         preview = {"figure_id": figure["figure_id"], "title": figure.get("title", figure["figure_id"]), "document_sha256": figure["document_sha256"],
                    "document": figure["document"], "scope": "saved", "samples": figure.get("sample_styles", [])}

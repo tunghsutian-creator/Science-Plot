@@ -7,9 +7,9 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 10410,
-    "nodeids_sha256": "27cb792820d2d7344ee84b1136f6b7a00659983102ea29bfb1593fbe2afff074",
-    "test_sources_sha256": "5f480eae086d805ed9fe355d9ceeb52fad947f0b74cbb84c0479058db584d4d3",
+    "nodeid_count": 10414,
+    "nodeids_sha256": "c1e8d2c745ba599e006d51a177b55bbc8115a5ef12689b3a22685a4c348a534e",
+    "test_sources_sha256": "b99f85073787ad1ecdca4dd4c57a9beaee68087f0f0c18aa8c3eb922c2061046",
     "test_source_count": 661,
     "candidate_nodeids": [
       "tests/test_plot_template_native.py::test_legacy_paired_template_reauthored_as_managed_preserves_data_and_styles",
@@ -1596,6 +1596,7 @@
       "tests/test_managed_delivery.py::test_original_native_exact_seal_blocks_resume_and_complete_replay[replace-sealed_partial]",
       "tests/test_managed_delivery.py::test_partial_retry_only_audits_unsealed_plot_and_completed_replay_is_read_only",
       "tests/test_managed_delivery.py::test_product_generates_index_originals_and_archive_without_manual_launcher",
+      "tests/test_managed_delivery.py::test_undecided_managed_revision_blocks_before_packaging",
       "tests/test_managed_delivery.py::test_publication_checks_original_again_after_exclusive_install",
       "tests/test_managed_delivery.py::test_publication_validates_original_seal_after_candidate_relocation",
       "tests/test_managed_delivery.py::test_reconnect_requires_exact_members_and_original_native_seal",
@@ -4935,6 +4936,8 @@
       "tests/test_task_paper_selection.py::test_existing_checkpoint_reads_frozen_selection_without_group_recapture",
       "tests/test_task_paper_selection.py::test_first_group_completion_returns_fresh_owner_result_and_never_promotes_blocked",
       "tests/test_task_paper_selection.py::test_group_change_during_capture_blocks_before_start",
+      "tests/test_task_paper_selection.py::test_managed_path_alias_cannot_duplicate_saved_figure",
+      "tests/test_task_paper_selection.py::test_mixed_authority_lists_exact_members_before_any_publisher",
       "tests/test_task_paper_selection.py::test_group_read_is_stable_and_creates_no_original_metadata",
       "tests/test_task_paper_selection.py::test_incomplete_or_ambiguous_selection_never_reaches_paper[duplicate]",
       "tests/test_task_paper_selection.py::test_incomplete_or_ambiguous_selection_never_reaches_paper[not_finished]",
@@ -4944,6 +4947,7 @@
       "tests/test_task_paper_selection.py::test_shared_public_cli_routes_group_and_rejects_mixed_request_options",
       "tests/test_task_papers_native.py::test_native_second_capture_failure_and_exact_retry_only_captures_unsealed_figure",
       "tests/test_task_papers_native.py::test_public_completed_group_freezes_once_and_reuses_current_native_publications",
+      "tests/test_task_papers_native.py::test_public_paper_group_and_explicit_secondary_use_current_saved_figures",
       "tests/test_task_preview_revision.py::test_current_sealed_native_producer_keeps_unchanged_and_changed_task_style_intents_distinct[changed]",
       "tests/test_task_preview_revision.py::test_current_sealed_native_producer_keeps_unchanged_and_changed_task_style_intents_distinct[native-drift]",
       "tests/test_task_preview_revision.py::test_current_sealed_native_producer_keeps_unchanged_and_changed_task_style_intents_distinct[source-drift]",
@@ -12749,6 +12753,14 @@
         "reason": "Generated group/source/state files and explicit monkeypatched capture/publication/inspection ports exercise ordered frozen selection, labels and current-readiness adapters. No retained private scientific inputs are used."
       },
       {
+        "nodeid": "tests/test_task_paper_selection.py::test_managed_path_alias_cannot_duplicate_saved_figure",
+        "reason": "Synthetic group and exact Managed alias selection; no private data."
+      },
+      {
+        "nodeid": "tests/test_task_paper_selection.py::test_mixed_authority_lists_exact_members_before_any_publisher",
+        "reason": "Synthetic group, Managed handle and legacy registration; no private data."
+      },
+      {
         "nodeid": "tests/test_task_paper_selection.py::test_group_read_is_stable_and_creates_no_original_metadata",
         "reason": "Generated group/source/state files and explicit monkeypatched capture/publication/inspection ports exercise ordered frozen selection, labels and current-readiness adapters. No retained private scientific inputs are used."
       },
@@ -12783,6 +12795,10 @@
       {
         "nodeid": "tests/test_task_papers_native.py::test_public_completed_group_freezes_once_and_reuses_current_native_publications",
         "reason": "Generated UVvis and FTIR CSVs under tmp_path exercise real native portable capture, sealed-publication packaging, explicit group order and exact recovery. The renamed capture-failure case retains its original retry/protection assertions; no private corpus or retained native goldens are used."
+      },
+      {
+        "nodeid": "tests/test_task_papers_native.py::test_public_paper_group_and_explicit_secondary_use_current_saved_figures",
+        "reason": "Generated authored UV–vis CSV and frequency instrument fixtures; real local native export, paper retry and published artifact checks; no private data."
       },
       {
         "nodeid": "tests/test_task_raw_replicate_mapping.py::test_batch_and_interactive_choices_share_immutable_confirmation",
@@ -26323,6 +26339,10 @@
       {
         "nodeid": "tests/test_managed_delivery.py::test_product_generates_index_originals_and_archive_without_manual_launcher",
         "reason": "case creates generated source/native/artifact stand-ins and in-memory sealed IR; audit/portable callbacks explicit and export forbidden. Source/index/archive membership only."
+      },
+      {
+        "nodeid": "tests/test_managed_delivery.py::test_undecided_managed_revision_blocks_before_packaging",
+        "reason": "Generated Managed head and pending review controls; no private data."
       },
       {
         "nodeid": "tests/test_native_document_edit.py::test_native_marker_activation_and_removal_survive_save_and_cold_reopen",

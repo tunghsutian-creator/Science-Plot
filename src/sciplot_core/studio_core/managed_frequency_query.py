@@ -1,5 +1,6 @@
 """Read public Managed frequency group and delivery evidence without a compiler."""
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,27 @@ def frequency_roots(layout: UserOutputLayout) -> tuple[Path, Path, Path]:
 def is_frequency_creation_owner(layout: UserOutputLayout, owner: str) -> bool:
     creation = read_json_object(frequency_roots(layout)[0])
     return creation is not None and creation.get("owner") == owner
+
+
+def registered_frequency_members(project: Path) -> list[dict[str, Any]]:
+    """Select canonical members in the saved order, independent of sibling export status."""
+    from sciplot_core.figure_plan import resolved_figure_plan_from_payload
+    from sciplot_core.project_lifecycle.attachment_index import Attachment, INDEX, validate_index
+
+    store = FileProjectStore(project)
+    observation = store.observe_members((INDEX, "figure-plan.json"), projection=False)
+    plan_bytes = observation.members["figure-plan.json"].data
+    index_bytes = observation.members[INDEX].data
+    if plan_bytes is None or index_bytes is None:
+        raise ValueError("The Managed frequency project has no registered figure plan.")
+    plan = resolved_figure_plan_from_payload(json.loads(plan_bytes))
+    attachments = validate_index(json.loads(index_bytes), observation.selected["project_id"])["attachments"]
+    entries = {entry["figure_id"]: entry for entry in attachments.values()}
+    if (plan is None or not plan.selected_figure_ids or len(entries) != len(attachments)
+            or not set(plan.selected_figure_ids).issubset(entries)):
+        raise ValueError("The saved frequency figure plan and attachment index do not agree.")
+    return [{"figure_id": task.figure_id, "title": task.title, "plot_id": entries[task.figure_id]["plot_id"],
+             "plot": str(Attachment(store, entries[task.figure_id]).root)} for task in plan.tasks]
 
 
 def frequency_receipt(record: Path, output: Path, manifest: dict[str, Any]) -> dict[str, Any]:

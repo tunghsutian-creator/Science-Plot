@@ -376,3 +376,26 @@ def test_publication_checks_original_again_after_exclusive_install(case, monkeyp
     assert result["blocker"]["reason_code"] == "managed_delivery_original_native_changed"
     assert Path(request["out"]).is_dir(), "Published evidence is preserved even when final currentness changed."
     assert native.read_bytes() == b"concurrent edit at publication boundary"
+
+
+def test_undecided_managed_revision_blocks_before_packaging(tmp_path, monkeypatch):
+    service = PlotService(backend=object())
+    plot = str(tmp_path / "plot")
+    head = {"document": {"plot_type": "ManagedPlot", "plot_id": "plot:review", "revision": 0,
+                         "scientific": {"data_sources": []}},
+            "binding": {"output": str(tmp_path / "original-artifacts")}}
+    monkeypatch.setattr(managed, "load_head", lambda _: head)
+    monkeypatch.setattr(managed, "require_current", lambda *_: None)
+    monkeypatch.setattr(managed, "active", lambda _: {"phase": "needs_review"})
+    monkeypatch.setattr(managed, "inspect_managed_native", lambda *_: pytest.fail("Pending review cannot be captured"))
+    out = tmp_path / "paper-out"
+    request = {"idempotency_key": "before-review", "out": str(out), "title": "Cannot publish preview",
+               "mode": "native_snapshot", "items": [{"plot": plot, "plot_id": "plot:review", "revision": 0, "label": "UV"}]}
+    with pytest.raises(EngineError) as broken:
+        service.deliver(request)
+    assert broken.value.reason_code == "managed_delivery_review_pending"
+    assert broken.value.repair["selection"] == request["items"][0]
+    assert not out.exists() and not list((tmp_path / ".sciplot_deliveries").glob("*/delivery.json"))
+    snapshot = service.inspect_delivery(request)
+    assert snapshot["status"] == "blocked" and snapshot["ready_to_use"] is False
+    assert snapshot["items"][0]["error"]["repair"]["phase"] == "needs_review"

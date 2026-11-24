@@ -219,3 +219,205 @@ def test_public_completed_group_freezes_once_and_reuses_current_native_publicati
     repeated = _public('start', '--group', root, '--out', out, '--paper-dir', paper, '--item-id', 'FTIR', '--item-id', 'UVvis')
     assert repeated['ready_to_use'] is True and repeated['title'] == result['title']
     assert (paper / 'paper.json').read_bytes() == frozen
+
+
+def _never_rebuild(*_args, **_kwargs):
+    pytest.fail("Paper capture/retry must not compile or export original plots.")
+
+
+def _cold_managed_paper(args, *, resume=False):
+    script = """import sys
+from sciplot_core.cli import main
+from sciplot_core.plot_backends.managed import ManagedVeuszCompiler
+from sciplot_core.plot_protocol.server import make_service
+from sciplot_core.task_semantic_owner import local_managed_actions
+
+def forbidden(*args, **kwargs):
+    raise AssertionError("Cold paper retry cannot compile or export original plots.")
+
+ManagedVeuszCompiler.compile_ir = ManagedVeuszCompiler.export_ir = forbidden
+service = make_service()
+try:
+    with local_managed_actions(forbidden, service.describe, service.deliver):
+        code = main(sys.argv[1:])
+finally:
+    service.close()
+sys.exit(code)
+"""
+    command = ["-c", script] if resume else ["-m", "sciplot_core.cli"]
+    return subprocess.run([sys.executable, *command, *args, "--json"], env=veusz_worker_environment(),
+                          capture_output=True, text=True, timeout=160, check=False)
+
+
+def _check_native_pair(out, selected, uv_head):
+    import pymupdf
+    from PIL import Image
+
+    items = json.loads((out / "index.json").read_bytes())["items"]
+    assert [item["order"] for item in items] == [1, 2]
+    assert [item["local_managed_continuation"] for item in items] == selected
+    assert items[0]["scientific_hash"] == uv_head["document"]["scientific_hash"]
+    assert items[0]["presentation_hash"] == uv_head["document"]["presentation_hash"]
+    for item in items:
+        ir_path = out / item["plotted_data"]["ir"]["path"]
+        ir = json.loads(ir_path.read_bytes())
+        width, height = ir["layout"]["width_mm"], ir["layout"]["height_mm"]
+        with pymupdf.open(out / item["files"]["pdf"]) as pdf:
+            assert len(pdf) == 1
+            assert tuple(pdf[0].rect)[2:] == pytest.approx((width * 72 / 25.4, height * 72 / 25.4), abs=1)
+        with Image.open(out / item["files"]["tiff_300"]) as image:
+            assert image.info["dpi"] == pytest.approx((300, 300), abs=.1)
+            assert image.size == pytest.approx((width * 300 / 25.4, height * 300 / 25.4), abs=2)
+        process = subprocess.run([sys.executable, "-m", "sciplot_core.veusz_worker", "inspect-plot-ir",
+                                  str(ir_path), str(out / item["files"]["editable"])],
+                                 env=veusz_worker_environment(), capture_output=True, text=True, timeout=90, check=False)
+        assert process.returncode == 0, process.stdout + process.stderr
+        evidence = json.loads(process.stdout)
+        assert evidence["status"] == "unchanged" and evidence["scientific_audit"]["status"] == "passed"
+    uv_ir = json.loads((out / items[0]["plotted_data"]["ir"]["path"]).read_bytes())
+    from sciplot_core.plot_backends.figure_marks import coordinates
+
+    layer, = uv_ir["views"][0]["layers"]
+    assert coordinates(uv_ir, layer)["x"] == [460.0, 400.0, 500.0]
+    assert coordinates(uv_ir, layer)["y"] == [5.0, 2.0, 1.0]
+    assert [scale["unit"] for scale in uv_ir["scales"]] == ["nm", "a.u."]
+    assert layer["marks"][0]["style"]["line_color"] == "#2277aa"
+
+
+@pytest.mark.comprehensive
+def test_public_paper_group_and_explicit_secondary_use_current_saved_figures(tmp_path, capsys, monkeypatch):
+    from sciplot_core.cli import main
+    from sciplot_core.plot_backends.managed import ManagedVeuszCompiler
+    from sciplot_core.plot_engine.storage import load_head
+    from sciplot_core.plot_protocol.server import make_service
+    from sciplot_core.studio_core.managed_frequency_query import registered_frequency_members
+    from sciplot_core.task_semantic_owner import local_managed_actions
+    from test_rheology_mean_suite_publication import _mean_input
+
+    frequency_raw, _ = _mean_input(tmp_path)
+    uv = tmp_path / "UVvis.csv"
+    raw_bytes = b"Wavelength,Absorbance\nnm,a.u.\nA,A\n460,5\n400,2\n500,1\n"
+    uv.write_bytes(raw_bytes)
+    group_dir, group_request = tmp_path / "group", tmp_path / "group-request.json"
+    uv_out, frequency_out = tmp_path / "uv", tmp_path / "frequency"
+    group_request.write_text(json.dumps({"version": 1, "title": "Manuscript", "items": [
+        {"id": "UV", "label": "UV-vis", "request": {
+            "version": 1, "action": "create", "source": str(uv), "out": str(uv_out)}},
+        {"id": "frequency", "label": "Frequency", "request": {
+            "version": 1, "action": "create", "source": str(frequency_raw), "out": str(frequency_out),
+            "rule_id": "rheology_frequency_sweep"}},
+    ]}))
+
+    def cli(args, expected=0):
+        code = main([*args, "--json"])
+        payload = json.loads(capsys.readouterr().out)
+        assert code == expected, payload
+        return payload
+
+    service = make_service()
+    try:
+        with local_managed_actions(service.create, service.describe, service.deliver):
+            group = cli(["task", "group", "start", "--request", str(group_request), "--group-dir", str(group_dir)])
+        uv_item, freq_item = group["items"]
+        assert group["status"] == "complete", group
+        uv_handle, = uv_item["plot_objects"]
+        uv_plot = Path(uv_handle["plot"])
+        original = load_head(uv_plot)
+        ir = json.loads(Path(original["binding"]["ir_path"]).read_bytes())
+        mark = ir["views"][0]["layers"][0]["marks"][0]["id"]
+        edited = service.patch(uv_plot, {"plot_id": uv_handle["plot_id"], "base_revision": 0,
+            "idempotency_key": "paper-uv-revised", "intent_class": "presentation",
+            "changes": [{"op": "set", "target": [mark], "property": "style", "value": {"line_color": "#2277aa"}}]})
+        assert edited["revision"] == 1 and edited["ready_to_use"], edited
+        revised = load_head(uv_plot)
+        assert revised["document"]["scientific_hash"] == original["document"]["scientific_hash"]
+        assert revised["document"]["presentation_hash"] != original["document"]["presentation_hash"]
+        frozen_uv_output = file_inventory(uv_out)
+
+        registered = registered_frequency_members(Path(freq_item["project"]))
+        assert [entry["plot"] for entry in registered] == [entry["plot"] for entry in freq_item["figures"]]
+        primary, secondary, *_ = registered
+        assert primary["figure_id"] == "storage_modulus_vs_frequency"
+        assert secondary["figure_id"] == "loss_modulus_vs_frequency"
+        # Break only the primary member's saved PDF. The exact secondary is
+        # cold, with only its generation-owned archived export-cache.
+        primary_pdf, = (Path(freq_item["project"]) / "figures" / primary["figure_id"]).glob("*.pdf")
+        original_pdf = primary_pdf.read_bytes()
+        primary_pdf.unlink()
+        selection = [{"plot": uv_handle["plot"], "plot_id": uv_handle["plot_id"], "revision": 1},
+                     {"plot": secondary["plot"], "plot_id": secondary["plot_id"], "revision": 0}]
+        explicit_out, request_file = tmp_path / "exact-two", tmp_path / "delivery-request.json"
+        request_file.write_text(json.dumps({"idempotency_key": "ordered-secondary", "mode": "native_snapshot",
+            "out": str(explicit_out), "title": "Exact paper pair",
+            "items": [{**item, "label": label} for item, label in zip(selection, ("UV revision", "Secondary"), strict=True)]}))
+
+        monkeypatch.setattr(ManagedVeuszCompiler, "compile_ir", _never_rebuild)
+        monkeypatch.setattr(ManagedVeuszCompiler, "export_ir", _never_rebuild)
+        # Actual closed CLI selection, with the existing direct transport.
+        explicit = cli(["plot", "deliver", "--request", str(request_file), "--direct"])
+        assert explicit["status"] == "complete"
+        _check_native_pair(explicit_out, selection, revised)
+
+        paper_dir, paper_out = tmp_path / "paper", tmp_path / "paper-out"
+        start = ["task", "paper", "start", "--group", str(group_dir), "--item-id", "frequency", "--item-id", "UV",
+                 "--out", str(paper_out), "--paper-dir", str(paper_dir)]
+        with local_managed_actions(_never_rebuild, service.describe, service.deliver):
+            partial = cli(start, expected=1)
+        assert partial["status"] == "partial" and partial["ready_to_use"] is False and not paper_out.exists(), partial
+        expected_plots = [entry["plot"] for entry in registered] + [str(uv_plot)]
+        assert [item["plot"] for item in partial["items"]] == expected_plots
+        assert [item["revision"] for item in partial["items"]] == [0, 0, 0, 0, 1]
+        failed, = [item for item in partial["items"] if item.get("error")]
+        assert failed["plot"] == primary["plot"]
+        assert failed["error"]["export_command"] == ["sciplot", "plot", "export", primary["plot"], "--json"]
+        owner = Path(partial["checkpoint"])
+        before = {path: file_inventory(path) for path in (paper_dir, owner, group_dir, Path(freq_item["project"]), uv_plot)}
+        check = _cold_managed_paper(["task", "paper", "inspect", str(paper_dir)])
+        assert check.returncode == 1, check.stdout + check.stderr
+        assert json.loads(check.stdout)["status"] == "partial"
+        assert before == {path: file_inventory(path) for path in before}
+        primary_pdf.write_bytes(original_pdf)
+        frozen = (paper_dir / "paper.json").read_bytes()
+        assert json.loads(frozen)["request"] == partial["delivery_request"]
+        sealed_attempts = [item["attempt"] for item in json.loads((owner / "delivery.json").read_bytes())["items"][1:]]
+
+        def lose_reply(request):
+            assert request == partial["delivery_request"]
+            assert service.deliver(request)["status"] == "complete"
+            raise RuntimeError("Simulated missing reply after the existing publisher installed its package")
+
+        with local_managed_actions(_never_rebuild, service.describe, lose_reply):
+            lost = cli(["task", "paper", "resume", str(paper_dir)], expected=1)
+            assert "missing reply" in lost["message"]
+        paper_inventory = file_inventory(paper_out)
+        assert (paper_dir / "paper.json").read_bytes() == frozen
+        assert [item["attempt"] for item in json.loads((owner / "delivery.json").read_bytes())["items"][1:]] == sealed_attempts
+
+        # Start replay and inspect must not use delivery, even with no local
+        # actions bound. A cold resume uses the exact same frozen request.
+        assert cli(start)["recorded_status"] == "complete"
+        proc = _cold_managed_paper(["task", "paper", "resume", str(paper_dir)], resume=True)
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        completed = json.loads(proc.stdout)
+        assert completed["delivery_request"] == partial["delivery_request"] and completed["ready_to_use"]
+        index = json.loads((paper_out / "index.json").read_bytes())
+        assert [item["local_managed_continuation"]["plot"] for item in index["items"]] == expected_plots
+        assert index["items"][-1]["local_managed_continuation"] == selection[0]
+        assert file_inventory(paper_out) == paper_inventory and file_inventory(uv_out) == frozen_uv_output
+
+        # Currentness is a read, not a promise to restore edited native files.
+        native = Path(revised["binding"]["document"])
+        native_bytes = native.read_bytes()
+        changed_native = native_bytes + b"\n# local native edit\n"
+        native.write_bytes(changed_native)
+        result = cli(["task", "paper", "inspect", str(paper_dir)], expected=1)
+        assert result["status"] == "blocked" and result["recorded_status"] == "complete"
+        assert result["items"][-1]["error"]["selection"]["plot"] == str(uv_plot)
+        assert native.read_bytes() == changed_native
+        native.write_bytes(native_bytes)
+        uv.write_bytes(raw_bytes + b"480,8\n")
+        result = cli(["task", "paper", "inspect", str(paper_dir)], expected=1)
+        assert result["status"] == "blocked" and result["ready_to_use"] is False
+        assert file_inventory(paper_out) == paper_inventory and (paper_dir / "paper.json").read_bytes() == frozen
+    finally:
+        service.close()

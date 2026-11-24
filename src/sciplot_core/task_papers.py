@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
+from sciplot_core.plot_engine.managed_delivery_contract import normalize_request as normalize_managed_delivery
 from sciplot_core.source_coverage.managed_documents import verify_managed_document_sources, source_records
 from sciplot_core.studio_core.document_edit_state import run_document_worker
 from sciplot_core.studio_core.project_query_paths import canonical_path
@@ -26,6 +27,9 @@ from sciplot_core.task_storage import task_location
 from sciplot_core.veusz_runtime import veusz_worker_environment
 
 
+_MANAGED_SELECTION = "sciplot_task_paper_managed_selection"
+
+
 def _save(root: Path, state: dict[str, Any]) -> None:
     state["state_sha256"] = canonical_json_sha256({k: v for k, v in state.items() if k != "state_sha256"}, allow_nan=False)
     atomic_write_json(root / "paper.json", state)
@@ -38,10 +42,13 @@ def _path(path: Path) -> Path:
 
 def _load(root: Path) -> dict[str, Any]:
     state = json.loads((root / "paper.json").read_text(encoding="utf-8"))
-    if (not isinstance(state, dict) or state.get("kind") != "sciplot_task_paper"
+    if (not isinstance(state, dict) or state.get("kind") not in {"sciplot_task_paper", _MANAGED_SELECTION}
             or state.get("version") != 1 or state.get("paper_dir") != str(root)
             or state.get("state_sha256") != canonical_json_sha256({k: v for k, v in state.items() if k != "state_sha256"}, allow_nan=False)):
         raise TaskControlError("paper_record_changed", "Paper task location, version or checkpoint changed.")
+    if state["kind"] == _MANAGED_SELECTION:
+        normalize_managed_delivery(state["request"])
+        return dict(state)
     normalize_paper_request(state["request"])
     for item in state["items"]:
         if item.get("attempt"):
@@ -201,7 +208,7 @@ def start_paper(request: object, *, paper_dir: Path, base_dir: Path | None = Non
     with external_project_session(root):
         if root.exists():
             state = _load(root)
-            if state["request"] != normalized or (selection_origin is not None and state.get("selection_origin") != selection_origin):
+            if state["kind"] != "sciplot_task_paper" or state["request"] != normalized or (selection_origin is not None and state.get("selection_origin") != selection_origin):
                 raise TaskControlError("paper_already_exists", "This paper task already owns a different ordered selection.")
             return _current_summary(root, state)
         else:
@@ -226,16 +233,75 @@ def start_paper(request: object, *, paper_dir: Path, base_dir: Path | None = Non
         return _summary(state)
 
 
+def _managed_summary(state: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
+    complete = result.get("status") == "complete" and result.get("ready_to_use") is True
+    return {**result, "paper_dir": state["paper_dir"], "title": state["request"]["title"], "out": state["request"]["out"],
+            "selection_origin": state["selection_origin"], "delivery_request": state["request"],
+            "next_step": {"action": "review_selected_exports_and_deliver" if complete else "inspect_and_retry_exact_selection",
+                          "paper_dir": state["paper_dir"]},
+            "model_calls_by_sciplot": 0, "journal_acceptance_evaluated": False}
+
+
+def _read_managed(state: dict[str, Any], *, paper_dir: Path | None = None) -> dict[str, Any]:
+    from sciplot_core.plot_protocol.server import make_service
+
+    service = make_service()
+    try:
+        return service.inspect_delivery(state["request"], paper_dir=paper_dir)
+    finally:
+        service.close()
+
+
+def _inspect(root: Path, state: dict[str, Any]) -> dict[str, Any]:
+    if state["kind"] == _MANAGED_SELECTION:
+        return _managed_summary(state, _read_managed(state))
+    return _current_summary(root, state)
+
+
+def _deliver_managed(state: dict[str, Any]) -> dict[str, Any]:
+    from sciplot_core.task_semantic_owner import deliver_managed
+
+    return _managed_summary(state, deliver_managed(state["request"]))
+
+
+def start_managed_group_paper(root: Path, *, out: Path, title: str, items: list[dict[str, Any]],
+                             selection_origin: dict[str, Any]) -> dict[str, Any]:
+    from sciplot_core.foundation.research_destination import require_data_destination
+
+    request = normalize_managed_delivery({"out": str(out), "title": title, "mode": "native_snapshot", "items": items,
+        "idempotency_key": "paper-group:" + canonical_json_sha256([str(root), selection_origin, items], allow_nan=False)})
+    require_data_destination(root)
+    require_data_destination(out)
+    # Refuse overlap before allocating even the paper lease in a selected namespace.
+    state = {"kind": _MANAGED_SELECTION, "version": 1, "paper_dir": str(root),
+             "request": request, "selection_origin": selection_origin}
+    _read_managed(state, paper_dir=root)
+    root.parent.mkdir(parents=True, exist_ok=True)
+    with external_project_session(root):
+        if root.exists():
+            saved = _load(root)
+            if (saved["kind"], saved["request"], saved.get("selection_origin")) != (_MANAGED_SELECTION, request, selection_origin):
+                raise TaskControlError("paper_already_exists", "This paper checkpoint owns another frozen selection.")
+            return _inspect(root, saved)
+        if out.exists():
+            raise TaskControlError("paper_output_exists", "Choose a new paper output; existing output is preserved.")
+        root.mkdir(mode=0o700)
+        _save(root, state)
+        return _deliver_managed(state)
+
+
 def inspect_paper(paper: Path) -> dict[str, Any]:
     root = _path(paper)
     with external_project_session(root):
-        return _current_summary(root, _load(root))
+        return _inspect(root, _load(root))
 
 
 def resume_paper(paper: Path) -> dict[str, Any]:
     root = _path(paper)
     with external_project_session(root):
         state = _load(root)
+        if state["kind"] == _MANAGED_SELECTION:
+            return _deliver_managed(state)
         if state["status"] == "complete":
             return _current_summary(root, state)
         _validate_locations(root, state["request"])
