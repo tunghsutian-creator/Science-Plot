@@ -21,11 +21,11 @@ MANAGED_STORE_CLAIM = "managed-store-claim.json"
 
 
 
-def managed_publication_target(root: Path, request: dict[str, Any]) -> Path:
-    """Admit a user destination separately from the canonical Store claim."""
-    output = canonical_path(Path(request["out"]))
+def managed_publication_target(root: Path, output: Path, sources: list[dict[str, Any]]) -> Path:
+    """Admit the resolved expert destination separately from the canonical Store claim."""
+    output = canonical_path(output)
     require_data_destination(output)
-    originals = [canonical_path(Path(source["path"])) for source in request["data_binding"]["data_sources"]]
+    originals = [canonical_path(Path(source["path"])) for source in sources]
     if any(output.is_relative_to(path) or path.is_relative_to(output) for path in [root, *originals]):
         raise EngineError("managed_output_conflict", "The visible output cannot overlap the Managed store or an original source.")
     if output.exists() and (not output.is_dir() or

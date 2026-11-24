@@ -152,16 +152,19 @@ class FilesystemProjectTargets:
         control = _source_control_parent(source) / ".sciplot_documents"
         root = legacy if self.repository.exists(legacy / "managed-creation.json") else control / "managed" / digest(request["idempotency_key"])
         old_attempt = self.repository.exists(root / "managed-creation.json")
-        # Public expert output is a publication destination, not a backend
-        # workspace. Host authorization stays with the existing member owner.
-        public_output = self.publish_fresh_managed_output and "out" in request
-        if not old_attempt and (request.get("storage") == "project_store_v2" or public_output):
+        versioned_task = request.get("storage") == "project_store_v2"
+        # Keep the historical expert output locator without adding it to the
+        # request. A versioned task publishes through its own delivery owner.
+        output = (Path(request["out"]) if "out" in request else
+                  source.parent / (source.stem + "_SciPlot") / identifier.replace(":", "_"))
+        public_output = self.publish_fresh_managed_output and not versioned_task
+        if not old_attempt and (versioned_task or public_output):
             if not isinstance(self.repository, ComposedProjectRepository):
                 raise EngineError("managed_store_required", "The versioned Managed task requires the Project Store repository.")
             from .attachment_targets import attached_managed_creation
             from .managed_store_target import managed_publication_target, open_managed_store
 
-            publication = managed_publication_target(root, request) if public_output else None
+            publication = managed_publication_target(root, output, sources) if public_output else None
             declares_host_execution = bool(request.get("scientific_executors")) or any(
                 node.get("kind") == "external" for node in request["data_binding"].get("transforms", []))
 
@@ -178,7 +181,8 @@ class FilesystemProjectTargets:
             attached = attached_managed_creation(self.repository, request, store=store, publication=publication)
             assert attached is not None
             return attached
-        output = canonical_path(Path(request["out"])) if "out" in request else source.parent / (source.stem + "_SciPlot") / identifier.replace(":", "_")
+        if "out" in request:
+            output = canonical_path(output)
         if output == source or output == source.parent or output in source.parents or output == root:
             raise EngineError("managed_output_conflict", "Select a distinct managed output directory beside the source.")
         if not old_attempt:
