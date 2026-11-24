@@ -113,9 +113,9 @@ def resolve_attached_open(repository: ComposedProjectRepository, target: Path, f
     return ImportTarget(root, project, selected_id, plot_id)
 
 
-def attached_managed_creation(repository: ComposedProjectRepository,
-                              request: dict[str, Any]) -> ManagedCreationLocation | None:
-    store = _store(repository)
+def attached_managed_creation(repository: ComposedProjectRepository, request: dict[str, Any], *,
+                              store: FileProjectStore | None = None) -> ManagedCreationLocation | None:
+    store = store if store is not None else _store(repository)
     if store is None:
         return None
     snapshot = store.snapshot()

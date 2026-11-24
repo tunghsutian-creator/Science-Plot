@@ -147,11 +147,23 @@ class FilesystemProjectTargets:
         source = canonical_path(Path(sources[0]["path"]))
         identifier = "plot:" + digest([str(source.parent), request["idempotency_key"]])[:24]
         legacy = source.parent / ".sciplot_documents" / "managed" / digest(request["idempotency_key"])
-        root = legacy if self.repository.exists(legacy / "managed-creation.json") else _source_control_parent(source) / ".sciplot_documents" / "managed" / digest(request["idempotency_key"])
+        control = _source_control_parent(source) / ".sciplot_documents"
+        root = legacy if self.repository.exists(legacy / "managed-creation.json") else control / "managed" / digest(request["idempotency_key"])
+        old_attempt = self.repository.exists(root / "managed-creation.json")
+        if not old_attempt and request.get("storage") == "project_store_v2":
+            if not isinstance(self.repository, ComposedProjectRepository):
+                raise EngineError("managed_store_required", "The versioned Managed task requires the Project Store repository.")
+            from .attachment_targets import attached_managed_creation
+            from .managed_store_target import open_managed_store
+
+            store = open_managed_store(canonical_path(root), request)
+            attached = attached_managed_creation(self.repository, request, store=store)
+            assert attached is not None
+            return attached
         output = canonical_path(Path(request["out"])) if "out" in request else source.parent / (source.stem + "_SciPlot") / identifier.replace(":", "_")
         if output == source or output == source.parent or output in source.parents or output == root:
             raise EngineError("managed_output_conflict", "Select a distinct managed output directory beside the source.")
-        if not self.repository.exists(root / "managed-creation.json"):
+        if not old_attempt:
             from sciplot_core.foundation.research_destination import require_data_destination
             require_data_destination(root)
             require_data_destination(output)

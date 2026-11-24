@@ -28,6 +28,7 @@ ATTACHED_SOURCE_PATHS = frozenset({
     'src/sciplot_core/project_lifecycle/command_dispatch.py',
     'src/sciplot_core/project_lifecycle/frozen_namespace.py',
     'src/sciplot_core/project_lifecycle/legacy_namespace.py',
+    'src/sciplot_core/project_lifecycle/managed_store_target.py',
     'src/sciplot_core/project_lifecycle/namespace_capture.py',
     'src/sciplot_core/project_lifecycle/repository_router.py',
     'src/sciplot_core/project_lifecycle/store_composition.py',
