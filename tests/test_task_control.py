@@ -22,7 +22,7 @@ def test_explicit_scientific_presentation_never_silently_substitutes(tmp_path, m
     path = tmp_path / "original.csv"
     original = b"Wavenumber,Transmittance\ncm^-1,%\nA,A\n4000,60\n3900,72\n"
     path.write_bytes(original)
-    monkeypatch.setattr(task_planning, "build_plan_preview", lambda *_a, **_k: pytest.fail("planned incompatible scientific presentation"))
+    monkeypatch.setattr(task_planning, "resolve_plan_preview", lambda *_a, **_k: pytest.fail("planned incompatible scientific presentation"))
     monkeypatch.setattr(execution, "create_project", lambda *_a, **_k: pytest.fail("rendered incompatible scientific presentation"))
     request = {"version": 1, "action": "create", "source": str(path), "rule_id": rule, "template": template, **requirement}
     result = control.start_task(request, task_dir=tmp_path / "task")
@@ -245,7 +245,7 @@ def test_performance_directory_cannot_bypass_failed_plan_via_file_only_exception
 
 def test_unknown_experiment_pauses_and_resumes_only_with_current_source(tmp_path, monkeypatch):
     path = source(tmp_path)
-    monkeypatch.setattr(task_planning, "inspect_payload", lambda _: {})
+    monkeypatch.setattr(task_planning, "observe_inspection", lambda _: ({}, None))
     calls = []
     monkeypatch.setattr(execution, "create_project", lambda *a, **k: calls.append(k) or receipt(tmp_path / "p"))
     task = tmp_path / "task"
@@ -272,7 +272,7 @@ def test_default_task_directory_creates_its_history_parent_before_acquiring_leas
 
 def test_source_change_while_question_pending_never_executes(tmp_path, monkeypatch):
     path = source(tmp_path)
-    monkeypatch.setattr(task_planning, "inspect_payload", lambda _: {})
+    monkeypatch.setattr(task_planning, "observe_inspection", lambda _: ({}, None))
     monkeypatch.setattr(execution, "create_project", lambda *a, **k: pytest.fail("stale source executed"))
     task = tmp_path / "task"
     control.start_task({"version": 1, "action": "create", "source": str(path)}, task_dir=task)

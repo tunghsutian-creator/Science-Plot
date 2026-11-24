@@ -300,6 +300,16 @@ def _scan_curve_series_table(
     return best
 
 
+def curve_table_sample_prefix(table_name: str) -> str:
+    """Match the established intake duplicate-prefix convention."""
+
+    if "__" in table_name:
+        left, right = table_name.rsplit("__", maxsplit=1)
+        if left == right:
+            return right
+    return table_name
+
+
 def _scan_curve_series_source(
     source: Path,
     *,
@@ -319,11 +329,7 @@ def _scan_curve_series_source(
         else _read_candidate_tables(source)
     )
     for sheet_name, raw in tables:
-        table_sample_prefix = sheet_name or sample_prefix
-        if "__" in table_sample_prefix:
-            left, right = table_sample_prefix.rsplit("__", maxsplit=1)
-            if left == right:
-                table_sample_prefix = right
+        table_sample_prefix = curve_table_sample_prefix(sheet_name or sample_prefix)
         series = _scan_curve_series_table(
             raw,
             x_aliases=x_aliases,

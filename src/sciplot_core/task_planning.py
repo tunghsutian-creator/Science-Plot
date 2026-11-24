@@ -13,8 +13,8 @@ from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.materials_rules.catalog import iter_public_rules, resolve_rule_template
-from sciplot_core.plan_preview import build_plan_preview
-from sciplot_core.render import inspect_payload
+from sciplot_core.plan_preview import PlanPreviewResolution, resolve_plan_preview
+from sciplot_core.render.inspection import observe_inspection
 from sciplot_core.semantic import classify_source
 from sciplot_core.source_tables import read_raw_table
 from sciplot_core.studio_core.project_query_paths import canonical_path
@@ -146,7 +146,7 @@ def _needs_rule_choice(
     state["question"]["question_id"] = canonical_json_sha256(state["question"], allow_nan=False)
 
 
-def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
+def plan_task(root: Path, state: dict[str, Any]) -> PlanPreviewResolution | None:
     source = assert_source_current(state)
     request = state["request"]
     selected = dict(state.get("selection") or {
@@ -159,9 +159,10 @@ def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
             _needs_rule_choice(state, reason_code=getattr(exc, "reason_code", "invalid_profile"),
                                message=f"此配置不能用于当前来源：{exc} 请重新确认实验规则。", source=source)
             return None
+    inspected_plan = None
     if "rule_id" not in selected:
         try:
-            inspection = inspect_payload(source)
+            inspection, inspected_plan = observe_inspection(source)
         except (OSError, ValueError, TypeError) as exc:
             inspection = {"inspection_error": str(exc)}
         resolution = inspection.get("inspection_resolution") or {}
@@ -235,7 +236,12 @@ def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
         if disclosure is None:
             return None
         plan_request.update(summary_statistic="mean_sample_sd_n", replicate_summary_disclosure=disclosure)
-    plan = dict(build_plan_preview(source, request=plan_request))
+    observed = (
+        inspected_plan
+        if inspected_plan is not None and plan_request == {"rule_id": selected["rule_id"]}
+        else resolve_plan_preview(source, request=plan_request)
+    )
+    plan = observed.payload
     atomic_write_json(root / "plan.json", plan)
     state["selection"] = {"rule_id": plan["rule_id"], "template": plan["template"]}
     blocker_snapshot = plan.get("blocker")
@@ -303,7 +309,7 @@ def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
         if blocker is not None:
             state.update(status="blocked", phase="planning", blocker=blocker)
             return None
-    return plan
+    return observed
 
 
 def save_profile(root: Path, state: dict[str, Any]) -> None:

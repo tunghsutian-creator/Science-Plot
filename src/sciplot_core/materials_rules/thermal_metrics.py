@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 import numpy as np
+import pandas as pd
 
 from sciplot_core.materials_rules.metric_tables import (
     _metric,
@@ -12,7 +13,7 @@ from sciplot_core.materials_rules.metric_tables import (
 )
 
 
-def _dsc_metrics(source_path: Path) -> list[dict[str, Any]]:
+def _dsc_metrics(source_path: Path | pd.DataFrame) -> list[dict[str, Any]]:
     series = _read_labeled_paired_curve_table(
         source_path, y_tokens=("heat flow", "dsc")
     )
@@ -93,7 +94,7 @@ def _dsc_metrics(source_path: Path) -> list[dict[str, Any]]:
     ]
 
 
-def _swelling_metrics(source_path: Path) -> list[dict[str, Any]]:
+def _swelling_metrics(source_path: Path | pd.DataFrame) -> list[dict[str, Any]]:
     series = _read_labeled_paired_curve_table(source_path, y_tokens=("swelling ratio",))
     if not series:
         return [

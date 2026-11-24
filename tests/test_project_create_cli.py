@@ -66,7 +66,23 @@ def test_create_uses_shared_preparation_and_publication_once(tmp_path, monkeypat
     calls = _stub(monkeypatch)
     assert command.dispatch_project_create(args) == 0
     layout = resolve_user_output_layout(args.target, requested_delivery_root=args.out)
-    assert calls == [((args.target,), {
+    (call_args, call_options), = calls
+    snapshot = call_options.pop("_scientific_source")
+    assert snapshot.source == args.target
+    assert snapshot.figure_plan.to_payload() == json.loads(args.expected_plan.read_text())["resolved_figure_plan"]
+
+    # Compare a raw no-sample-row curve after its historical Intake rename.
+    # The rebound snapshot must equal fresh resolution without reparsing.
+    from sciplot_core.semantic_sources.scientific_source import resolve_scientific_source
+    from sciplot_core.semantic_sources.scientific_source_single_curve import bind_archived_single_curve
+
+    archived = tmp_path / "archive"
+    archived.mkdir()
+    (archived / f"renamed__{args.target.name}").write_bytes(args.target.read_bytes())
+    request = {"rule_id": "uvvis_spectrum", "template": "curve"}
+    equivalent = resolve_scientific_source(archived, request=request, **request)
+    assert bind_archived_single_curve(snapshot, archived, request=request, template="curve") == equivalent
+    assert [(call_args, call_options)] == [((args.target,), {
         "output_root": layout.workspace_root / "projects", "delivery_root": layout.delivery_root,
         "rule_id": "uvvis_spectrum", "template": "curve",
     })]

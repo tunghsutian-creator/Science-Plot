@@ -51,13 +51,13 @@ def _metric(
 
 
 def _read_labeled_paired_curve_series(
-    path: Path,
+    source: Path | pd.DataFrame,
     *,
     x_tokens: tuple[str, ...] = (),
     y_tokens: tuple[str, ...] = (),
 ) -> list[tuple[str, str, pd.DataFrame]]:
     return _labeled_paired_curve_series(
-        read_raw_table(path), x_tokens=x_tokens, y_tokens=y_tokens
+        read_raw_table(source) if isinstance(source, Path) else source, x_tokens=x_tokens, y_tokens=y_tokens
     )
 
 
@@ -138,7 +138,7 @@ def _labeled_paired_curve_table(
 
 
 def _read_labeled_paired_curve_table(
-    path: Path,
+    source: Path | pd.DataFrame,
     *,
     x_tokens: tuple[str, ...] = (),
     y_tokens: tuple[str, ...] = (),
@@ -146,7 +146,7 @@ def _read_labeled_paired_curve_table(
     return [
         (sample, frame)
         for sample, _y_header, frame in _read_labeled_paired_curve_series(
-            path,
+            source,
             x_tokens=x_tokens,
             y_tokens=y_tokens,
         )

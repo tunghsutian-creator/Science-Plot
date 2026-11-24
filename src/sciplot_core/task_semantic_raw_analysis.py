@@ -1,39 +1,20 @@
 """Admit a verified raw curve and preserve its existing scientific analysis."""
+from __future__ import annotations
+
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.task_errors import TaskControlError
 
 
-def raw_curve_analysis(source: Path, rule_id: str, plan: dict[str, Any], source_sha256: str) -> list[dict[str, Any]]:
-    """Run the same registered scientific analysis on the verified canonical curve."""
-    from tempfile import TemporaryDirectory
-
-    from sciplot_core.materials_rules.analysis import compute_analysis_metrics
-    from sciplot_core.materials_rules.catalog import get_rule, semantic_payload_from_rule
-    from sciplot_core.semantic_sources.curve_output import _write_curve_table
-    from sciplot_core.semantic_sources.scientific_source_single_curve import resolve_single_curve_transform
-
-    rule = get_rule(rule_id)
-    resolved = resolve_single_curve_transform(source, rule=rule)
-    if file_sha256(source) != source_sha256 or resolved.contract.to_payload() != plan["scientific_transform"]:
-        raise TaskControlError("source_changed", "The original scientific curve changed before its analysis.")
-    # The old owner analyzes this normalized table. Using its exact writer
-    # preserves header aliases and per-sample parsing even for TSV originals.
-    with TemporaryDirectory(prefix="sciplot-raw-analysis-") as directory:
-        workspace = Path(directory)
-        canonical = workspace / "curve.csv"
-        _write_curve_table(list(resolved.series), canonical)
-        semantic = semantic_payload_from_rule(rule, confidence=100.0)
-        return compute_analysis_metrics(source_path=canonical, processed_source=canonical,
-                                        semantic=semantic, output_dir=workspace)
+if TYPE_CHECKING:
+    from sciplot_core.semantic_sources.scientific_source_models import ResolvedScientificSource
 
 
-def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
+def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any],
+                    observed: ResolvedScientificSource | None) -> bool:
     """Freeze the same source, columns, sample and units under Managed authority."""
     request = state["request"]
     source = Path(request["source"])
@@ -53,8 +34,15 @@ def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any]) -> bool:
             or "data_mapping" in plan or "source_options" in plan):
         return _native_only(state, "raw_plan_not_managed",
                             "The selected template, mapping or source options are outside the verified Managed curve contract.")
+    if (
+        observed is None or observed.source != source.resolve() or observed.rule_id != rule_id
+        or observed.source_sha256 != state["source_sha256"] or observed.transform is None
+        or observed.figure_plan is None
+        or observed.figure_plan.plan_sha256 != plan["resolved_figure_plan"]["plan_sha256"]
+    ):
+        raise TaskControlError("source_changed", "The resolved observation does not match this scientific plan.")
     try:
-        if _admit_verified_curve(state, plan, source, rule_id):
+        if _admit_verified_curve(state, plan, source, observed):
             return True
     except TaskControlError as exc:
         # These are specific observation-contract refusals. The registered
@@ -72,14 +60,18 @@ def _native_only(state: dict[str, Any], reason_code: str, message: str) -> bool:
     return False
 
 
-def _admit_verified_curve(state: dict[str, Any], plan: dict[str, Any], source: Path, rule_id: str) -> bool:
+def _admit_verified_curve(state: dict[str, Any], plan: dict[str, Any], source: Path,
+                          observed: ResolvedScientificSource) -> bool:
+    rule_id = observed.rule_id
     ftir = rule_id == "ftir_spectrum"
     gpc = rule_id == "gpc_sec_chromatogram"
-    transform = plan.get("scientific_transform") or {}
+    observed_transform = observed.transform
+    assert observed_transform is not None
+    transform = observed_transform.contract.to_payload()
     output = transform.get("output") or {}
     columns, series = transform.get("source_columns", []), output.get("series", [])
     if ftir and len(series) >= 2:
-        return _admit_ftir_stack(state, plan, source, transform, output, columns, series)
+        return _admit_ftir_stack(state, plan, source, observed, transform, output, columns, series)
     if not (len(columns) == len(series) == 1
             and output.get("series_order") == [series[0]["sample"]]
             and columns[0]["sample"] == series[0]["sample"]
@@ -92,7 +84,7 @@ def _admit_verified_curve(state: dict[str, Any], plan: dict[str, Any], source: P
         return False
     from sciplot_core.materials_rules.catalog import get_rule
     from sciplot_core.policy.contract_queries import size_preset_contract
-    from sciplot_core.task_semantic_plan import prepare_plan
+    from sciplot_core.task_semantic_plan import prepare_verified_curve_plan
 
     rule = get_rule(rule_id)
     selected_id, = plan["resolved_figure_plan"]["selected_figure_ids"]
@@ -140,10 +132,10 @@ def _admit_verified_curve(state: dict[str, Any], plan: dict[str, Any], source: P
 
         if _quantity(columns[0]["response"]["header"]) != "derivative_mass":
             return False  # A generic "Derivative" header does not prove the DTG unit context.
-    semantic = prepare_plan([source], intent)
+    semantic = prepare_verified_curve_plan(source, intent, pairs=[
+        {role: columns[0][original_role]["column_index_zero_based"] for role, original_role, _ in coordinates}
+    ])
     frozen = semantic["sources"][0]
-    if canonical_json_sha256({"kind": "file", "content_sha256": frozen["sha256"]}) != state["source_sha256"]:
-        raise TaskControlError("source_changed", "The original file changed after the raw scientific plan.")
     candidates = frozen["candidates"]
     bindings = semantic.get("resolved_bindings", [])
     if semantic["decisions"] or len(candidates) != 1 or len(candidates[0]["blocks"]) != 1 or len(bindings) != 1:
@@ -192,15 +184,31 @@ def _admit_verified_curve(state: dict[str, Any], plan: dict[str, Any], source: P
     axis_labels = {role: axis.display_label.replace("$^{-1}$", "⁻¹") for role, _, axis in coordinates}
     if ftir:
         axis_labels["y"] = "Transmittance (%)" if ftir_mode == "transmittance" else "Absorbance (a.u.)"
-    return _freeze_raw(state, plan, source, intent, semantic, (size.width_mm, size.height_mm), axis_labels, presentation)
+    return _freeze_raw(state, plan, source, observed, intent, semantic, (size.width_mm, size.height_mm), axis_labels, presentation)
 
 
-def _freeze_raw(state: dict[str, Any], plan: dict[str, Any], source: Path, intent: dict[str, Any],
+def _freeze_raw(state: dict[str, Any], plan: dict[str, Any], source: Path,
+                observed: ResolvedScientificSource, intent: dict[str, Any],
                 semantic: dict[str, Any], size: tuple[float, float], axis_labels: dict[str, str],
                 presentation: dict[str, Any]) -> bool:
     request, rule_id = state["request"], plan["rule_id"]
+    from sciplot_core.foundation.json_hashing import canonical_json_sha256
+    from sciplot_core.materials_rules.analysis import compute_resolved_curve_metrics
+    from sciplot_core.materials_rules.catalog import get_rule, semantic_payload_from_rule
+
     digest = semantic["sources"][0]["sha256"]
-    analysis = raw_curve_analysis(source, rule_id, plan, digest)
+    if (
+        canonical_json_sha256({"kind": "file", "content_sha256": digest}) != observed.source_sha256
+        or source_tree_sha256(source) != observed.source_sha256
+    ):
+        raise TaskControlError("source_changed", "The original scientific curve changed before its analysis.")
+    transform = observed.transform
+    assert transform is not None
+    analysis = compute_resolved_curve_metrics(
+        transform, semantic=semantic_payload_from_rule(get_rule(rule_id), confidence=100.0),
+    )
+    if source_tree_sha256(source) != observed.source_sha256:
+        raise TaskControlError("source_changed", "The original scientific curve changed during its analysis.")
     state.update(initial_request=deepcopy(request), analysis_metrics=analysis,
                  creation_admission={"route": "managed_plot", "reason_code": "verified_raw_curve"},
                  request={"version": 1, "action": "create", "sources": [str(source)], "intent": intent,
@@ -215,13 +223,14 @@ def _freeze_raw(state: dict[str, Any], plan: dict[str, Any], source: Path, inten
 
 
 def _admit_ftir_stack(
-    state: dict[str, Any], plan: dict[str, Any], source: Path, transform: dict[str, Any],
+    state: dict[str, Any], plan: dict[str, Any], source: Path, observed: ResolvedScientificSource,
+    transform: dict[str, Any],
     output: dict[str, Any], columns: list[dict[str, Any]], series: list[dict[str, Any]],
 ) -> bool:
     """Require every literal sample and paired original measurement in the old plan."""
     from sciplot_core.policy.contract_queries import size_preset_contract
     from sciplot_core.studio_render.spectral_axis_display import spectral_frame_size
-    from sciplot_core.task_semantic_plan import prepare_plan
+    from sciplot_core.task_semantic_plan import prepare_verified_curve_plan
 
     mode = output.get("response_mode")
     if mode not in {"transmittance", "absorbance"}:
@@ -258,10 +267,11 @@ def _admit_ftir_stack(
     intent: dict[str, Any] = {"rule_id": "ftir_spectrum",
               "x": {"quantity": "wavenumber", "header": headers["x"], "scale": "linear", "direction": "descending"},
               "y": {"quantity": mode, "header": headers["response"], "scale": "linear", "direction": "ascending"}}
-    semantic = prepare_plan([source], intent)
+    semantic = prepare_verified_curve_plan(source, intent, pairs=[
+        {"x": group["x"]["column_index_zero_based"], "y": group["response"]["column_index_zero_based"]}
+        for group in columns
+    ])
     frozen = semantic["sources"][0]
-    if canonical_json_sha256({"kind": "file", "content_sha256": frozen["sha256"]}) != state["source_sha256"]:
-        raise TaskControlError("source_changed", "The original file changed after the raw FTIR plan.")
     candidates = frozen["candidates"]
     bindings = semantic.get("resolved_bindings", [])
     if semantic["decisions"] or len(candidates) != 1 or len(bindings) != len(series):
@@ -286,5 +296,5 @@ def _admit_ftir_stack(
                 return False
     size = size_preset_contract(spectral_frame_size(len(series)))
     labels = {"x": "Wavenumber (cm⁻¹)", "y": "Transmittance (%)" if mode == "transmittance" else "Absorbance"}
-    return _freeze_raw(state, plan, source, intent, semantic, (size.width_mm, size.height_mm), labels,
+    return _freeze_raw(state, plan, source, observed, intent, semantic, (size.width_mm, size.height_mm), labels,
                        {"display_stack": "spectral_stack_v1", "show_y_ticks": False})

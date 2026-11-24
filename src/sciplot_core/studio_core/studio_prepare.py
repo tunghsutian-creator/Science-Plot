@@ -7,6 +7,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any
 
+from sciplot_core.semantic_sources.scientific_source_models import ResolvedScientificSource
 from sciplot_core.terminal_source_binding import (
     SealedTerminalSourceBinding,
     TerminalSourceBindingError,
@@ -34,6 +35,7 @@ def prepare_studio_document(
     _terminal_source_binding: SealedTerminalSourceBinding | None = None,
     _terminal_source_prepared: bool = False,
     _new_creation: bool = False,
+    _scientific_source: ResolvedScientificSource | None = None,
 ) -> dict[str, Any]:
     resolved = Path(target).expanduser().resolve()
     target_info = _resolve_studio_target(
@@ -44,8 +46,11 @@ def prepare_studio_document(
         template=template,
         project_name=project_name,
         figure_set_path_replacer=figure_set_path_replacer,
+        scientific_source=_scientific_source,
     )
     if target_info["mode"] == "vsz":
+        if _scientific_source is not None:
+            raise ValueError("A scientific observation requires a source-bound Studio request.")
         if _terminal_source_binding is not None:
             raise TerminalSourceBindingError(
                 "terminal_source_binding_request_mismatch",
@@ -78,7 +83,7 @@ def prepare_studio_document(
         figure_set_path_replacer=figure_set_path_replacer,
         _terminal_source_binding=_terminal_source_binding,
         _terminal_source_prepared=_terminal_source_prepared,
-        _new_creation=_new_creation)
+        _new_creation=_new_creation, _scientific_source=_scientific_source)
 
 
 def _resolve_studio_target(
@@ -90,6 +95,7 @@ def _resolve_studio_target(
     template: str | None = None,
     project_name: str | None = None,
     figure_set_path_replacer: Callable[[Path, Path], None] | None = None,
+    scientific_source: ResolvedScientificSource | None = None,
 ) -> dict[str, Any]:
     delivery_target = resolve_delivery_target(path)
     if delivery_target is not None:
@@ -109,6 +115,7 @@ def _resolve_studio_target(
                 template=template,
                 project_name=project_name,
                 figure_set_path_replacer=figure_set_path_replacer,
+                scientific_source=scientific_source,
             )
         return {"mode": "project", "project_dir": path, "request": request}
     if path.is_file() and path.suffix.lower() == ".json":
@@ -122,10 +129,28 @@ def _resolve_studio_target(
             template=template,
             project_name=project_name,
             figure_set_path_replacer=figure_set_path_replacer,
+            scientific_source=scientific_source,
         )
     raise ValueError(
         "studio accepts a SciPlot project directory, plot_request.json, or .vsz document."
     )
+
+
+def _intake_scientific_source(
+    project: Path, observed: ResolvedScientificSource | None,
+) -> ResolvedScientificSource | None:
+    if observed is None:
+        return None
+    from sciplot_core.semantic_sources.scientific_source_single_curve import bind_archived_single_curve
+    from sciplot_core.studio_core.json_files import _read_json
+    from sciplot_core.studio_core.request_paths import _resolve_request_input
+
+    request = _read_json(project / "plot_request.json")
+    archive = _resolve_request_input(request, base_dir=project)
+    template = request.get("template")
+    if archive is None or not isinstance(template, str):
+        return None
+    return bind_archived_single_curve(observed, archive, request=request, template=template)
 
 
 def _qt_first_project_from_source(
@@ -137,6 +162,7 @@ def _qt_first_project_from_source(
     template: str | None = None,
     project_name: str | None = None,
     figure_set_path_replacer: Callable[[Path, Path], None] | None = None,
+    scientific_source: ResolvedScientificSource | None = None,
 ) -> dict[str, Any]:
     from sciplot_core.intake.project import create_intake_project_from_session
     from sciplot_core.intake.session import prepare_intake_session
@@ -169,6 +195,7 @@ def _qt_first_project_from_source(
                 project_name=None,
                 figure_set_path_replacer=figure_set_path_replacer,
                 _new_creation=True,
+                _scientific_source=_intake_scientific_source(project_dir, scientific_source),
             )
             prepared = payload
         except Exception as exc:

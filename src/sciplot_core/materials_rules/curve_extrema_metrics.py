@@ -18,7 +18,7 @@ def _raw_table(path: Path) -> pd.DataFrame:
     return read_raw_table(path).dropna(how="all").dropna(axis=1, how="all")
 
 
-def _tga_metrics(source_path: Path) -> list[dict[str, Any]]:
+def _tga_metrics(source_path: Path | pd.DataFrame) -> list[dict[str, Any]]:
     """Compute each sample's metrics from the normalized paired-curve table."""
 
     series = _read_labeled_paired_curve_table(
@@ -76,7 +76,7 @@ def _tga_series_metrics(data: pd.DataFrame, *, suffix: str) -> list[dict[str, An
 
 
 def _paired_extreme_position_metrics(
-    source_path: Path,
+    source_path: Path | pd.DataFrame,
     *,
     metric_name: str,
     x_unit: str,

@@ -11,9 +11,7 @@ from sciplot_core.semantic_sources.models import (
 )
 
 
-def _write_curve_table(
-    series_list: list[CurveSeriesPayload], output_path: Path
-) -> None:
+def curve_table_frame(series_list: list[CurveSeriesPayload] | tuple[CurveSeriesPayload, ...]) -> pd.DataFrame:
     max_points = max(len(series.points) for series in series_list)
     rows: list[list[object]] = [[], [], []]
     for series in series_list:
@@ -29,5 +27,11 @@ def _write_curve_table(
             else:
                 row.extend(["", ""])
         rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def _write_curve_table(
+    series_list: list[CurveSeriesPayload], output_path: Path
+) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(rows).to_csv(output_path, header=False, index=False)
+    curve_table_frame(series_list).to_csv(output_path, header=False, index=False)

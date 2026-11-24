@@ -62,7 +62,8 @@ def _coordinate_binding(column: dict[str, Any], coordinate: dict[str, Any], role
 
 
 def _coordinate_decisions(sources: list[dict[str, Any]], intent: dict[str, Any],
-                          choices: dict[str, Any], adapter: str | None) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[tuple[dict[str, Any], dict[str, Any]]]]:
+                          choices: dict[str, Any], adapter: str | None,
+                          verified_pairs: list[dict[str, int]] | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[tuple[dict[str, Any], dict[str, Any]]]]:
     from sciplot_core.task_semantic_figure import _source_views
     from sciplot_core.task_semantic_frequency import frequency_derivation, frequency_condition
 
@@ -89,7 +90,14 @@ def _coordinate_decisions(sources: list[dict[str, Any]], intent: dict[str, Any],
                           **({"header": choices[role + "_header"]} if role + "_header" in choices else {})}
             for block in candidate["blocks"]:
                     columns = block.get("columns") or [column for column in candidate["columns"] if column["column_index"] in block["column_indices"]]
-                    eligible = coordinate_columns(columns, block, coordinate, role)
+                    if verified_pairs is None:
+                        eligible = coordinate_columns(columns, block, coordinate, role)
+                    else:
+                        # The scientific owner already chose the exact original
+                        # pair. Test its admissibility, never choose a substitute.
+                        original = verified_pairs[index][role]
+                        exact = [column for column in columns if column["column_index"] == original]
+                        eligible = coordinate_columns(exact, block, coordinate, role)
                     derived = frequency_derivation(columns, coordinate) if adapter == "rheology_frequency" and role == "y" else None
                     has_selector = any(field in coordinate for field in ("header", "headers", "column_id"))
                     if derived and not has_selector:
@@ -144,6 +152,19 @@ def _coordinate_decisions(sources: list[dict[str, Any]], intent: dict[str, Any],
 
 
 def prepare_plan(paths: list[Path], intent: dict[str, Any]) -> dict[str, Any]:
+    return _prepare_plan(paths, intent)
+
+
+def prepare_verified_curve_plan(
+    path: Path, intent: dict[str, Any], *, pairs: list[dict[str, int]],
+) -> dict[str, Any]:
+    """Compile proved selected pairs against literal original layout evidence."""
+
+    return _prepare_plan([path], intent, verified_pairs=pairs)
+
+
+def _prepare_plan(paths: list[Path], intent: dict[str, Any], *,
+                  verified_pairs: list[dict[str, int]] | None = None) -> dict[str, Any]:
     from sciplot_core.source_inspection.semantic_evidence import inspect_semantic_tables
     from sciplot_core.task_semantic_selection import select_source_blocks, source_observation_scope
 
@@ -173,10 +194,11 @@ def prepare_plan(paths: list[Path], intent: dict[str, Any]) -> dict[str, Any]:
             "authority": "Preparation evidence only. Confirmed source facts compile into the existing Managed document; original bytes stay immutable.",
             "raw_data": "original bytes retained; selected original blocks and explicit exclusions are recorded; source row bounds are zero-based and data_end_row is exclusive. point_count and selected_point_count count physical row positions in the confirmed original region, including missing coordinates; they are not finite measurement counts",
             "interpolation": "Display interpolation retains raw marker points; gaps and non-increasing time boundaries remain separate runs."}
-    return _resolve_plan(plan, intent, {}, adapter)
+    return _resolve_plan(plan, intent, {}, adapter, verified_pairs=verified_pairs)
 
 
-def _plan_decisions(sources: list[dict[str, Any]], intent: dict[str, Any], choices: dict[str, Any], adapter: str | None) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[tuple[dict[str, Any], dict[str, Any]]]]:
+def _plan_decisions(sources: list[dict[str, Any]], intent: dict[str, Any], choices: dict[str, Any], adapter: str | None,
+                    verified_pairs: list[dict[str, int]] | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[tuple[dict[str, Any], dict[str, Any]]]]:
     from sciplot_core.task_semantic_temperature import temperature_decisions, temperature_selector
 
     temperature_selector(intent, choices)
@@ -185,7 +207,17 @@ def _plan_decisions(sources: list[dict[str, Any]], intent: dict[str, Any], choic
     if multiple:
         return [{"field": "tables", "options": multiple,
                  "message": "Choose one exact original table candidate for every listed source before coordinate validation. No alternative was silently excluded."}], [], []
-    decisions, bindings, views = _coordinate_decisions(sources, intent, choices, adapter)
+    if verified_pairs is not None:
+        blocks = [block for source in sources for candidate in source["candidates"] for block in candidate["blocks"]]
+        if len(blocks) != len(verified_pairs):
+            raise TaskControlError("semantic_coordinate_mapping_required", "Original sample blocks differ from the registered pairs.")
+        # Header selectors used by stacked FTIR must still have one physical
+        # match per block, even after the scientific owner has selected a pair.
+        for role in ("x", "y"):
+            if "header" in intent[role] and any(sum(column["header"] == intent[role]["header"]
+                        for column in block["columns"]) != 1 for block in blocks):
+                raise TaskControlError("semantic_coordinate_mapping_required", "The registered pair is not unique in its original sample block.")
+    decisions, bindings, views = _coordinate_decisions(sources, intent, choices, adapter, verified_pairs)
     if (adapter or intent.get("stages")) and intent["x"]["quantity"] == "time":
         from sciplot_core.task_semantic_figure import _source_views
 
@@ -222,7 +254,8 @@ def selected_table_plan(plan: dict[str, Any], intent: dict[str, Any], choices: d
     return _resolve_plan(plan, intent, choices, scientific_adapter(intent))
 
 
-def _resolve_plan(plan: dict[str, Any], intent: dict[str, Any], choices: dict[str, Any], adapter: str | None) -> dict[str, Any]:
+def _resolve_plan(plan: dict[str, Any], intent: dict[str, Any], choices: dict[str, Any], adapter: str | None,
+                  *, verified_pairs: list[dict[str, int]] | None = None) -> dict[str, Any]:
     """Resolve one confirmed plan; lowering never interprets source layout again."""
     from sciplot_core.task_semantic_figure import _source_candidate
     from sciplot_core.task_semantic_temperature import temperature_column, temperature_selector
@@ -234,7 +267,7 @@ def _resolve_plan(plan: dict[str, Any], intent: dict[str, Any], choices: dict[st
         selected.pop(name, None)
     if not any(len(source["candidates"]) > 1 and source["source_id"] not in choices.get("tables", {}) for source in selected["sources"]):
         selected["sources"] = [{**source, "candidates": [_source_candidate(source, choices)]} for source in selected["sources"]]
-    decisions, bindings, source_views = _plan_decisions(selected["sources"], intent, choices, adapter)
+    decisions, bindings, source_views = _plan_decisions(selected["sources"], intent, choices, adapter, verified_pairs)
     selected["decisions"] = [decision for decision in decisions if decision["field"] not in choices]
     if selected["decisions"]:
         return selected

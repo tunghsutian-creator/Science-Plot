@@ -17,7 +17,7 @@ from sciplot_core.materials_rules.metric_tables import (
 
 
 def _ftir_peak_position_metrics(
-    source_path: Path,
+    source_path: Path | pd.DataFrame,
     *,
     metric_name: str = "observed_response_extremum_wavenumber_cm-1",
 ) -> list[dict[str, Any]]:
@@ -87,7 +87,7 @@ def _ftir_peak_position_metrics(
 
 
 def _interior_local_peak_position_metrics(
-    source_path: Path,
+    source_path: Path | pd.DataFrame,
     *,
     metric_name: str,
     x_unit: str,

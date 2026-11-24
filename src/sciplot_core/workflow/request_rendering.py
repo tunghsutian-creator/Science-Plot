@@ -355,6 +355,7 @@ def _render_semantic_plan_request(
             processed_source=processed_source,
             semantic=semantic,
             output_dir=output_dir,
+            resolved_transform=resolved_scientific_source.transform if resolved_scientific_source is not None else None,
         ),
     }
     if named_recipe_binding is not None:

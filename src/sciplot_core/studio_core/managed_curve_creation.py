@@ -7,12 +7,14 @@ from typing import Any
 
 from sciplot_core.foundation.project_session_lease import external_project_session
 from sciplot_core.output_contract import UserOutputLayout
+from sciplot_core.semantic_sources.scientific_source_models import ResolvedScientificSource
 from sciplot_core.task_semantic_creation import admit_raw_curve, current_result, run_creation
 from sciplot_core.task_semantic_delivery import finish_delivery
 from sciplot_core.task_storage import load_task, save_task
 
 
 def create_curve_project(source: Path, plan: dict[str, Any], layout: UserOutputLayout, *,
+                         scientific_source: ResolvedScientificSource | None,
                          require_new: Callable[[UserOutputLayout], None]) -> dict[str, Any] | None:
     """Run the same source/plan/engine/delivery journal as ordinary Managed tasks."""
     workspace = layout.workspace_root
@@ -24,7 +26,7 @@ def create_curve_project(source: Path, plan: dict[str, Any], layout: UserOutputL
              "source_sha256": expected["source_tree_sha256"], "project_creation_plan": expected,
              "phase": "planning", "status": "running", "created_at": datetime.now(timezone.utc).isoformat()}
     if not (journal / "task.json").is_file():
-        if workspace.exists() or not admit_raw_curve(draft, plan):
+        if workspace.exists() or not admit_raw_curve(draft, plan, scientific_source):
             return None
         draft["project_creation_figure"] = plan["resolved_figure_plan"]["tasks"][0]
         require_new(layout)

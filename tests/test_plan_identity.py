@@ -126,14 +126,14 @@ def test_expected_plan_rechecks_source_after_scientific_comparison(
 ):
     source = _source(tmp_path)
     expected = _preview(source)
-    build = preview_module.build_plan_preview
+    build = preview_module.resolve_plan_preview
 
     def changing_preview(*args, **kwargs):
         result = build(*args, **kwargs)
         source.write_text(source.read_text().replace("450,0.2", "450,0.25"))
         return result
 
-    monkeypatch.setattr(preview_module, "build_plan_preview", changing_preview)
+    monkeypatch.setattr(preview_module, "resolve_plan_preview", changing_preview)
     with pytest.raises(ValueError, match="during expected-plan validation"):
         verify_expected_plan(
             source, expected, rule_id="uvvis_spectrum", template="curve"
@@ -180,7 +180,7 @@ def test_autoplot_without_expected_plan_does_not_add_preview_work(
         pytest.fail("Legacy invocation unexpectedly rebuilt a plan")
 
     monkeypatch.setattr(autoplot_module, "run_one_step", existing_runner)
-    monkeypatch.setattr(preview_module, "build_plan_preview", forbidden_preview)
+    monkeypatch.setattr(preview_module, "resolve_plan_preview", forbidden_preview)
     with pytest.raises(ReachedExistingRunner):
         autoplot_module.run_autoplot(source, output_root=tmp_path / "output")
     assert captured[0]["rule_id"] is None and captured[0]["template"] is None

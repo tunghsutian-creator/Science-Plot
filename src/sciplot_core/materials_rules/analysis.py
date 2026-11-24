@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+import pandas as pd
 
 import sciplot_core.materials_rules.metric_tables as metric_tables
 from sciplot_core.materials_rules.metric_tables import (
@@ -45,6 +47,10 @@ from sciplot_core.materials_rules.impact_metrics import (
 )
 
 
+if TYPE_CHECKING:
+    from sciplot_core.semantic_sources.scientific_transform import ResolvedScientificTransform
+
+
 def _analysis_metric_name(semantic: dict[str, Any], fallback: str) -> str:
     analysis_plan = semantic.get("analysis_plan") or []
     if analysis_plan and isinstance(analysis_plan[0], dict):
@@ -76,13 +82,20 @@ def compute_analysis_metrics(
     semantic: dict[str, Any],
     output_dir: Path,
     summary_statistic: str | None = None,
+    resolved_transform: ResolvedScientificTransform | None = None,
 ) -> list[dict[str, Any]]:
     rule_id = str(semantic.get("rule_id") or "")
     processed = (
         processed_source if processed_source and processed_source.exists() else None
     )
     canonical_source = processed or source_path
-    if rule_id == "rheology_stress_relaxation" and processed is not None:
+    if rule_id in _SINGLE_CURVE_METRIC_RULES:
+        rows = (
+            compute_resolved_curve_metrics(resolved_transform, semantic=semantic)
+            if resolved_transform is not None and processed is not None
+            else _single_curve_metrics(canonical_source, semantic)
+        )
+    elif rule_id == "rheology_stress_relaxation" and processed is not None:
         rows = _stress_relaxation_metrics(processed)
     elif rule_id == "rheology_creep" and processed is not None:
         rows = _creep_metrics(processed)
@@ -90,10 +103,6 @@ def compute_analysis_metrics(
         rows = _tensile_metrics(processed)
     elif rule_id == "torque_curve" and processed is not None:
         rows = _torque_metrics(processed)
-    elif rule_id == "tga_curve":
-        rows = _tga_metrics(canonical_source)
-    elif rule_id == "dsc_curve":
-        rows = _dsc_metrics(canonical_source)
     elif rule_id == "rheology_frequency_sweep":
         rows = _terminal_y_metrics(
             canonical_source,
@@ -225,9 +234,55 @@ def compute_analysis_metrics(
             x_tokens=("temperature",),
             y_tokens=("storage modulus",),
         )
+    elif rule_id == "impact_metric" and processed is not None:
+        rows = [] if summary_statistic == "raw_only" else _impact_metrics(processed)
+    else:
+        rows = [
+            _metric(
+                item["metric"],
+                None,
+                item.get("unit", ""),
+                "skipped",
+                "Metric is registered but no deterministic calculator is available yet.",
+            )
+            for item in semantic.get("analysis_plan", [])
+        ]
+    _write_metrics_csv(rows, output_dir / "tables" / "analysis_metrics.csv")
+    return rows
+
+
+_SINGLE_CURVE_METRIC_RULES = frozenset({
+    "tga_curve", "dsc_curve", "dtg_curve", "swelling_curve", "ftir_spectrum",
+    "uvvis_spectrum", "xrd_pattern", "saxs_profile", "gpc_sec_chromatogram",
+})
+
+
+def compute_resolved_curve_metrics(
+    transform: ResolvedScientificTransform, *, semantic: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Apply existing metric definitions to the same ordered canonical curve data."""
+
+    from sciplot_core.semantic_sources.curve_output import curve_table_frame
+
+    if transform.contract.semantic_family != semantic.get("semantic_family"):
+        raise ValueError("Resolved curve metrics require the same scientific family.")
+    # Legacy normalized tables have text-valued metadata plus decimal cells.
+    # Keep that same projection, including the same to_numeric policy, in memory.
+    from pandas._libs.parsers import STR_NA_VALUES
+
+    frame = curve_table_frame(transform.series).map(str)
+    return _single_curve_metrics(frame.replace(list(STR_NA_VALUES), float("nan")), semantic)
+
+
+def _single_curve_metrics(source: Path | pd.DataFrame, semantic: dict[str, Any]) -> list[dict[str, Any]]:
+    rule_id = str(semantic.get("rule_id") or "")
+    if rule_id == "tga_curve":
+        rows = _tga_metrics(source)
+    elif rule_id == "dsc_curve":
+        rows = _dsc_metrics(source)
     elif rule_id == "dtg_curve":
         rows = _paired_extreme_position_metrics(
-            canonical_source,
+            source,
             metric_name=_analysis_metric_name(semantic, "dtg_peak_temperature_C"),
             x_unit=semantic["axis_plan"]["x"]["canonical_unit"],
             extreme="maximum",
@@ -239,12 +294,10 @@ def compute_analysis_metrics(
             ),
         )
     elif rule_id == "swelling_curve":
-        rows = _swelling_metrics(canonical_source)
-    elif rule_id == "impact_metric" and processed is not None:
-        rows = [] if summary_statistic == "raw_only" else _impact_metrics(processed)
+        rows = _swelling_metrics(source)
     elif rule_id == "ftir_spectrum":
         rows = _ftir_peak_position_metrics(
-            canonical_source,
+            source,
             metric_name=_analysis_metric_name(
                 semantic,
                 "observed_response_extremum_wavenumber_cm-1",
@@ -252,7 +305,7 @@ def compute_analysis_metrics(
         )
     elif rule_id == "uvvis_spectrum":
         rows = _paired_extreme_position_metrics(
-            canonical_source,
+            source,
             metric_name=_analysis_metric_name(semantic, "strongest_peak_position"),
             x_unit=semantic["axis_plan"]["x"]["canonical_unit"],
             extreme="maximum",
@@ -261,7 +314,7 @@ def compute_analysis_metrics(
         )
     elif rule_id == "xrd_pattern":
         rows = _paired_extreme_position_metrics(
-            canonical_source,
+            source,
             metric_name=_analysis_metric_name(semantic, "main_peak_2theta"),
             x_unit=semantic["axis_plan"]["x"]["canonical_unit"],
             extreme="maximum",
@@ -274,7 +327,7 @@ def compute_analysis_metrics(
         )
     elif rule_id == "saxs_profile":
         rows = _interior_local_peak_position_metrics(
-            canonical_source,
+            source,
             metric_name=_analysis_metric_name(semantic, "main_scattering_peak_q"),
             x_unit=semantic["axis_plan"]["x"]["canonical_unit"],
             x_tokens=("q",),
@@ -282,7 +335,7 @@ def compute_analysis_metrics(
         )
     elif rule_id == "gpc_sec_chromatogram":
         rows = _paired_extreme_position_metrics(
-            canonical_source,
+            source,
             metric_name=_analysis_metric_name(
                 semantic,
                 "peak_molar_mass_g_mol",
@@ -301,15 +354,5 @@ def compute_analysis_metrics(
             ),
         )
     else:
-        rows = [
-            _metric(
-                item["metric"],
-                None,
-                item.get("unit", ""),
-                "skipped",
-                "Metric is registered but no deterministic calculator is available yet.",
-            )
-            for item in semantic.get("analysis_plan", [])
-        ]
-    _write_metrics_csv(rows, output_dir / "tables" / "analysis_metrics.csv")
+        raise ValueError(f"No deterministic single-curve metrics for {rule_id!r}.")
     return rows

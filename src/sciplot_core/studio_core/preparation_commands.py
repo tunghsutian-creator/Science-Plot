@@ -19,6 +19,7 @@ from sciplot_core.project_store.runtime import selected_project_store, logical_r
 from sciplot_core.studio_core.preparation_candidate import (
     StudioPreparationCandidate, require_preparation_candidate, studio_preparation_candidate,
 )
+from sciplot_core.semantic_sources.scientific_source_models import ResolvedScientificSource
 from sciplot_core.terminal_source_binding import SealedTerminalSourceBinding
 from sciplot_core.studio_core.preparation_original_sources import (
     capture_original_input, verify_original_ledger, original_tree_reads, checked_original_sources,
@@ -35,7 +36,8 @@ def prepare_studio_candidate(candidate: StudioPreparationCandidate, *, request_t
                              regenerate_generated: bool = False,
                              figure_set_path_replacer: Callable[[Path, Path], None] | None = None,
                              _terminal_source_binding: SealedTerminalSourceBinding | None = None,
-                             _terminal_source_prepared: bool = False, _new_creation: bool = False) -> dict[str, Any]:
+                             _terminal_source_prepared: bool = False, _new_creation: bool = False,
+                             _scientific_source: ResolvedScientificSource | None = None) -> dict[str, Any]:
     """Compose with an already held candidate; never import or publish a head."""
     require_preparation_candidate(candidate.project_dir)
     from sciplot_core.studio_core.studio_prepare_core import prepare_private_studio_project
@@ -61,7 +63,8 @@ def prepare_studio_candidate(candidate: StudioPreparationCandidate, *, request_t
             template=template, project_name=project_name, regenerate_generated=regenerate_generated,
             figure_set_path_replacer=figure_set_path_replacer,
             terminal_source_binding=_terminal_source_binding,
-            terminal_source_prepared=_terminal_source_prepared, new_creation=_new_creation)
+            terminal_source_prepared=_terminal_source_prepared, new_creation=_new_creation,
+            scientific_source=_scientific_source)
 
 
 def _produced_resource(candidate: StudioPreparationCandidate, actual: Path, version: str, mode: int) -> str | None:
@@ -259,7 +262,8 @@ def prepare_studio_generation(project: Path, *, request_target: bool = False,
                               regenerate_generated: bool = False,
                               figure_set_path_replacer: Callable[[Path, Path], None] | None = None,
                               _terminal_source_binding: SealedTerminalSourceBinding | None = None,
-                              _terminal_source_prepared: bool = False, _new_creation: bool = False) -> dict[str, Any]:
+                              _terminal_source_prepared: bool = False, _new_creation: bool = False,
+                             _scientific_source: ResolvedScientificSource | None = None) -> dict[str, Any]:
     """The sole active-project writer for every public preparation caller."""
     from sciplot_core.project_manifest import read_intake_project_manifest, stage_intake_project_manifest
     from sciplot_core.project_host_factory import project_store
@@ -272,14 +276,15 @@ def prepare_studio_generation(project: Path, *, request_target: bool = False,
     if (not request_target and request_relative == "plot_request.json" and delivery_root is None
             and rule_id is None and template is None and project_name is None and not regenerate_generated
             and _terminal_source_binding is None
-            and not _terminal_source_prepared and not _new_creation):
+            and not _terminal_source_prepared and not _new_creation and _scientific_source is None):
         before = _admit_saved_native_reuse(store, before)
     with current_preparation_runtime(store, before) as verify_sources, studio_preparation_candidate(store, snapshot=before) as candidate:
         payload = prepare_studio_candidate(candidate, request_target=request_target, request_relative=request_relative, delivery_root=delivery_root,
             rule_id=rule_id, template=template, project_name=project_name,
             regenerate_generated=regenerate_generated, figure_set_path_replacer=figure_set_path_replacer,
             _terminal_source_binding=_terminal_source_binding,
-            _terminal_source_prepared=_terminal_source_prepared, _new_creation=_new_creation)
+            _terminal_source_prepared=_terminal_source_prepared, _new_creation=_new_creation,
+            _scientific_source=_scientific_source)
         audits, sources = audit_studio_candidate(candidate, payload)
         candidate.finalize()
         result = candidate.project_payload(payload)

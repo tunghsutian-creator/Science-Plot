@@ -106,15 +106,25 @@ def test_source_only_uvvis_single_and_group_keep_managed_authority_through_retry
             "version": 1, "action": "create", "source": str(raw), "out": str(group_out)}}]}))
     single_root = tmp_path / "single"
     service = make_service()
+    from sciplot_core.semantic_sources import scientific_source_single_curve as curve_owner
+
     real_admit, real_deliver = task_semantic_creation.admit_raw_curve, service.deliver
-    attempts, admits = [], []
+    real_resolve = curve_owner.resolve_single_curve_transform
+    attempts, admits, observations = [], [], []
+
+    def resolve_once(source, **kwargs):
+        observations.append(source)
+        return real_resolve(source, **kwargs)
+
+    monkeypatch.setattr(curve_owner, "resolve_single_curve_transform", resolve_once)
 
     def native_ordinary_forbidden(*_args, **_kwargs):
         pytest.fail("A verified Managed UV–vis creation cannot dispatch the native compatibility route.")
 
-    def admit(state, plan):
+    def admit(state, plan, observed):
         admits.append(state["task_dir"])
-        return real_admit(state, plan)
+        assert observed is not None
+        return real_admit(state, plan, observed)
 
     def lose_delivery(wire):
         # Drop a response after the actual delivery owner completed its write.
@@ -143,6 +153,8 @@ def test_source_only_uvvis_single_and_group_keep_managed_authority_through_retry
         frozen = load_task(child)
         assert blocked["items"][0]["status"] == "blocked"
         assert blocked["items"][0]["task"]["blocker"]["message"] == "lost delivery reply after publication"
+        assert observations == [raw, raw]  # Exactly one observation for each original creation.
+        assert frozen["analysis_metrics"][0]["value"] == 460.
         assert frozen["creation_admission"] == {"route": "managed_plot", "reason_code": "verified_raw_curve"}
         assert frozen["phase"] == "delivering" and (group_out / "index.json").is_file()
         before_delivery = {p.relative_to(group_out): p.read_bytes() for p in group_out.rglob("*") if p.is_file()}

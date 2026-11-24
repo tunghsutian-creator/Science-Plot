@@ -8,6 +8,7 @@ from subprocess import TimeoutExpired
 from typing import Any
 
 from sciplot_core.foundation.json_io import atomic_write_json
+from sciplot_core.plan_preview import PlanPreviewResolution
 from sciplot_core.studio_core.document_edit import apply_document_edit
 from sciplot_core.studio_core.project_creation import create_project, export_project
 from sciplot_core.studio_core.project_query_paths import canonical_path
@@ -74,13 +75,15 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
         admit_ordinary = False
     _phase(root, state, "planning")
     request = state["request"]
+    observed = None
     if "categorical" in request:
         from sciplot_core.task_categorical_creation import plan_categorical_task
 
         plan = plan_categorical_task(state)
     else:
-        plan = plan_task(root, state)
-        if plan is not None:
+        observed = plan_task(root, state)
+        plan = observed.payload if observed is not None else None
+        if observed is not None:
             save_profile(root, state)
     if plan is None:
         save_task(root, state)
@@ -92,16 +95,17 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
     elif admit_ordinary:
         from sciplot_core.task_semantic_creation import admit_raw_curve, run_creation as run_managed
 
-        if admit_raw_curve(state, plan):
+        if admit_raw_curve(state, plan, observed.scientific_source if observed is not None else None):
             save_task(root, state)
             run_managed(root, state)
             return
         # Native ineligibility (not an execution error) is saved by the next
         # creating checkpoint before calling the native creator.
-    _execute_creation(root, state, plan)
+    _execute_creation(root, state, plan, observed=observed)
 
 
-def _execute_creation(root: Path, state: dict[str, Any], plan: dict[str, Any]) -> None:
+def _execute_creation(root: Path, state: dict[str, Any], plan: dict[str, Any], *,
+                      observed: PlanPreviewResolution | None = None) -> None:
     from sciplot_core.task_prepared_creation import checkpoint_prepared, is_prepared
 
     _phase(root, state, "creating")
@@ -119,6 +123,8 @@ def _execute_creation(root: Path, state: dict[str, Any], plan: dict[str, Any]) -
     if state.get("defer_creation_export") is True:
         options["publish"] = False
     options["_creation_owner"] = state["task_dir"]
+    if observed is not None:
+        options["_observed_plan"] = observed
     result = create_project(Path(state["request"]["source"]), **options)
     if state.get("defer_creation_export") is True:
         if result.get("kind") != "sciplot_project_prepared_result" or not is_prepared(state):

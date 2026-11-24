@@ -15,6 +15,7 @@ from sciplot_core.figure_plan import (
     validate_preparation_figure_plan,
 )
 from sciplot_core.foundation.file_hashing import existing_file_sha256
+from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.operation_modes import normal_mode_payload
@@ -27,6 +28,7 @@ from sciplot_core.readiness.rule_certification import (
     current_certified_rule_contract_snapshot,
 )
 from sciplot_core.semantic_sources.scientific_source import (
+    ResolvedScientificSource,
     ScientificSourceResolutionError,
     resolve_scientific_source,
 )
@@ -98,6 +100,7 @@ def generate_studio_document(
     _terminal_source_binding: SealedTerminalSourceBinding | None = None,
     _terminal_source_prepared: bool = False,
     _new_creation: bool = False,
+    _scientific_source: ResolvedScientificSource | None = None,
 ) -> dict[str, Any]:
     """Build a generated VSZ plus the publication and figure-set contracts."""
     from sciplot_core.studio_core.preparation_candidate import require_preparation_candidate
@@ -169,7 +172,15 @@ def generate_studio_document(
         project_dir=project_dir,
     )
     try:
-        resolved_scientific_source = (
+        if _scientific_source is not None and (
+            terminal_worker or _scientific_source.source != source_input
+            or _scientific_source.rule_id != request_rule_id
+            or source_tree_sha256(source_input) != _scientific_source.source_sha256
+        ):
+            raise ScientificSourceResolutionError(
+                "source_changed", "The verified scientific snapshot does not match this preparation input.",
+            )
+        resolved_scientific_source = _scientific_source or (
             resolve_scientific_source(
                 source_input,
                 rule_id=request_rule_id,

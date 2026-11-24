@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.figure_plan import (
     ResolvedFigurePlan,
     resolve_preparation_figure_plan,
@@ -15,6 +16,7 @@ from sciplot_core.figure_plan import (
 )
 from sciplot_core.semantic_sources.scientific_source import (
     ResolvedScientificSource,
+    ScientificSourceResolutionError,
     resolve_scientific_source,
 )
 from sciplot_core.materials_rules.unit_formatting import format_unit_label
@@ -167,10 +169,18 @@ def resolve_workflow_scientific_source(
     template: str,
     study_model: dict[str, Any],
     request: dict[str, Any],
+    observed: ResolvedScientificSource | None = None,
 ) -> tuple[ResolvedScientificSource | None, ResolvedFigurePlan | None]:
-    """Resolve the scientific source and current plan once for this run."""
+    """Bind one scientific observation to the workflow's exact current input."""
 
-    resolved_source = resolve_scientific_source(
+    if observed is not None and (
+        observed.source != input_path or observed.rule_id != rule_id
+        or observed.source_sha256 != source_tree_sha256(input_path)
+    ):
+        raise ScientificSourceResolutionError(
+            "source_changed", "The verified scientific snapshot does not match this workflow input.",
+        )
+    resolved_source = observed or resolve_scientific_source(
         input_path,
         rule_id=rule_id,
         template=template,

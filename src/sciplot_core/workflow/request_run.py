@@ -51,6 +51,7 @@ from sciplot_core.workflow.route_intent import (
 from sciplot_core.workflow.source_binding import (
     verify_workflow_figure_plan_source_binding,
 )
+from sciplot_core.semantic_sources.scientific_source_models import ResolvedScientificSource
 from sciplot_core.workflow.scientific_source_resolution import (
     _validate_semantic_template,
     bind_workflow_semantic_render_options,
@@ -124,6 +125,7 @@ def _run_request_in_managed_output(
     previous_delivery: dict[str, Any] | None = None,
     frequency_authority: Path | None = None, frequency_prepared: Any = None,
     frequency_required: bool = False,
+    observed_scientific_source: ResolvedScientificSource | None = None,
 ) -> dict[str, Any]:
     """Resolve inputs, enforce semantic gates, then render and publish."""
 
@@ -193,6 +195,7 @@ def _run_request_in_managed_output(
             template=effective_template,
             study_model=study_model,
             request=request,
+            observed=observed_scientific_source,
         )
     except (FigurePlanResolutionError, ScientificSourceResolutionError) as exc:
         raise ValueError(f"{exc.reason_code}: {exc}") from exc

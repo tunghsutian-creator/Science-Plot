@@ -11,6 +11,7 @@ from sciplot_core.studio_core.json_files import _read_json
 from sciplot_core.studio_core.preparation_candidate import StudioPreparationCandidate, require_preparation_candidate
 from sciplot_core.studio_core.prepare_existing import reuse_existing_studio_document
 from sciplot_core.studio_core.prepare_generated import generate_studio_document
+from sciplot_core.semantic_sources.scientific_source_models import ResolvedScientificSource
 from sciplot_core.terminal_source_binding import SealedTerminalSourceBinding
 
 
@@ -20,7 +21,8 @@ def prepare_private_studio_project(candidate: StudioPreparationCandidate, *, req
                                    regenerate_generated: bool,
                                    figure_set_path_replacer: Callable[[Path, Path], None] | None,
                                    terminal_source_binding: SealedTerminalSourceBinding | None,
-                                   terminal_source_prepared: bool, new_creation: bool) -> dict[str, Any]:
+                                   terminal_source_prepared: bool, new_creation: bool,
+                                   scientific_source: ResolvedScientificSource | None = None) -> dict[str, Any]:
     """Apply configuration and choose exact reuse or scientific generation privately."""
     project = candidate.project_dir
     require_preparation_candidate(project)
@@ -39,4 +41,5 @@ def prepare_private_studio_project(candidate: StudioPreparationCandidate, *, req
         rule_id=rule_id, template=template, project_name=project_name,
         figure_set_path_replacer=figure_set_path_replacer,
         _terminal_source_binding=terminal_source_binding,
-        _terminal_source_prepared=terminal_source_prepared, _new_creation=new_creation)
+        _terminal_source_prepared=terminal_source_prepared, _new_creation=new_creation,
+        _scientific_source=scientific_source)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -36,25 +37,43 @@ from sciplot_core.readiness.rule_certification import (
 )
 from sciplot_core.semantic import classify_source
 from sciplot_core.semantic_sources.scientific_source import (
+    ResolvedScientificSource,
     ScientificSourceResolutionError,
     resolve_scientific_source,
 )
 from sciplot_core.study_model import study_model_from_request
 
 
-def build_plan_preview(
+@dataclass(frozen=True, slots=True)
+class PlanPreviewResolution:
+    """One operation's preview projection and its live scientific facts."""
+
+    payload: PlanPreviewPayload
+    scientific_source: ResolvedScientificSource | None = None
+
+
+def build_plan_preview(input_path: Path, *, request: dict[str, Any]) -> PlanPreviewPayload:
+    """Project the current plan for public consumers; observed data stay in memory."""
+
+    return resolve_plan_preview(input_path, request=request).payload
+
+
+def resolve_plan_preview(
     input_path: Path,
     *,
     request: dict[str, Any],
     _replay_categorical: bool = False,
-) -> PlanPreviewPayload:
-    """Resolve semantic intent and selected tasks without rendering or writes."""
+) -> PlanPreviewResolution:
+    """Observe a source once for the preview and any same-operation consumer."""
+
+    def blocked(**kwargs: Any) -> PlanPreviewResolution:
+        return PlanPreviewResolution(_blocked_preview(**kwargs))
 
     source = input_path.expanduser().resolve()
     if "categorical_binding" in request:
         from sciplot_core.categorical_plan import categorical_preview
 
-        return categorical_preview(source, request=request, current_identity=not _replay_categorical)
+        return PlanPreviewResolution(categorical_preview(source, request=request, current_identity=not _replay_categorical))
     if "data_mapping_execution" in request or "data_mapping_proposal_id" in request:
         return _build_mapped_plan_preview(source, request=request)
     request_snapshot = deepcopy(request)
@@ -72,7 +91,7 @@ def build_plan_preview(
             or not requested_rule_value
             or requested_rule_value.strip() != requested_rule_value
         ):
-            return _blocked_preview(
+            return blocked(
                 source=source,
                 rule_id=None,
                 template=preview_template,
@@ -85,7 +104,7 @@ def build_plan_preview(
         try:
             explicit_rule = get_rule(requested_rule_value)
         except ValueError as exc:
-            return _blocked_preview(
+            return blocked(
                 source=source,
                 rule_id=requested_rule_value,
                 template=preview_template,
@@ -98,7 +117,7 @@ def build_plan_preview(
                 requested_template,
             )
         except ValueError as exc:
-            return _blocked_preview(
+            return blocked(
                 source=source,
                 rule_id=explicit_rule.rule_id,
                 template=preview_template,
@@ -111,7 +130,7 @@ def build_plan_preview(
         )
         if invocation["availability"] != "ready":
             reasons = invocation["reason_codes"]
-            return _blocked_preview(
+            return blocked(
                 source=source,
                 rule_id=explicit_rule.rule_id,
                 template=explicit_template or explicit_rule.template,
@@ -122,7 +141,7 @@ def build_plan_preview(
                 ),
             )
     if not source.exists():
-        return _blocked_preview(
+        return blocked(
             source=source,
             rule_id=explicit_rule.rule_id if explicit_rule is not None else None,
             template=explicit_template or preview_template,
@@ -136,7 +155,7 @@ def build_plan_preview(
         source_hash = source_tree_sha256(source)
         semantic = classify_source(source, requested_rule_id=requested_rule_id)
     except (OSError, UnicodeError) as exc:
-        return _blocked_preview(
+        return blocked(
             source=source,
             rule_id=explicit_rule.rule_id if explicit_rule is not None else None,
             template=explicit_template or preview_template,
@@ -157,7 +176,7 @@ def build_plan_preview(
             try:
                 template = resolve_rule_template(classified_rule, requested_template)
             except ValueError as exc:
-                return _blocked_preview(
+                return blocked(
                     source=source,
                     rule_id=rule_id,
                     template=preview_template,
@@ -170,7 +189,7 @@ def build_plan_preview(
         template = str(requested_template or semantic.get("template") or "curve")
     inspection_error = semantic.get("vendor_error")
     if inspection_error and not source.is_dir():
-        return _blocked_preview(
+        return blocked(
             source=source,
             rule_id=rule_id,
             template=template,
@@ -182,7 +201,7 @@ def build_plan_preview(
     try:
         options = validate_source_options(source, request_snapshot, rule_id=rule_id, template=template)
     except ValueError as exc:
-        return _blocked_preview(source=source, rule_id=rule_id, template=template,
+        return blocked(source=source, rule_id=rule_id, template=template,
             reason_code="plan_source_option_invalid", message=str(exc))
     study_model = study_model_from_request(
         request=request_snapshot,
@@ -198,7 +217,7 @@ def build_plan_preview(
             study_model=study_model,
         )
     except (FigurePlanResolutionError, ScientificSourceResolutionError) as exc:
-        return _blocked_preview(
+        return blocked(
             source=source,
             rule_id=rule_id,
             template=template,
@@ -227,7 +246,7 @@ def build_plan_preview(
             )
         )
     except FigurePlanResolutionError as exc:
-        return _blocked_preview(
+        return blocked(
             source=source,
             rule_id=rule_id,
             template=template,
@@ -238,7 +257,7 @@ def build_plan_preview(
     if inspection_error and plan is None:
         # A generic file reader cannot validate a directory. Only a complete
         # plan from its existing scientific owner can supersede that failure.
-        return _blocked_preview(
+        return blocked(
             source=source, rule_id=rule_id, template=template,
             reason_code="plan_source_inspection_failed", message=str(inspection_error),
         )
@@ -248,8 +267,11 @@ def build_plan_preview(
         )
     except OSError:
         source_still_current = False
-    if not source_still_current:
-        return _blocked_preview(
+    if not source_still_current or (
+        resolved_scientific_source is not None
+        and resolved_scientific_source.source_sha256 != source_hash
+    ):
+        return blocked(
             source=source,
             rule_id=rule_id,
             template=template,
@@ -269,12 +291,12 @@ def build_plan_preview(
     payload["preview_identity"] = preview_identity_for(
         dict(payload), source_sha256=source_hash
     )
-    return payload
+    return PlanPreviewResolution(payload, resolved_scientific_source)
 
 
 def _build_mapped_plan_preview(
     source: Path, *, request: dict[str, Any]
-) -> PlanPreviewPayload:
+) -> PlanPreviewResolution:
     """Keep original identity while scientific owners resolve the mapped table."""
 
     try:
@@ -282,9 +304,10 @@ def _build_mapped_plan_preview(
         from sciplot_core.data_mapping.plan_binding import mapped_preview_request
 
         effective_request = mapped_preview_request(canonical_request, binding)
-        payload = build_plan_preview(
+        resolved = resolve_plan_preview(
             Path(binding["effective_input"]), request=effective_request
         )
+        payload = resolved.payload
         if payload["status"] != "blocked":
             verify_mapping_sample_identity(binding, payload["scientific_transform"])
         # Verification after scientific resolution guards both the original
@@ -293,20 +316,20 @@ def _build_mapped_plan_preview(
         if current_binding != binding:
             raise ValueError("The confirmed mapping changed during plan resolution.")
     except (OSError, ValueError, KeyError, TypeError) as exc:
-        return _blocked_preview(
+        return PlanPreviewResolution(_blocked_preview(
             source=source,
             rule_id=request.get("rule_id"),
             template=str(request.get("template") or "curve"),
             reason_code="plan_mapping_invalid",
             message=str(exc),
-        )
+        ))
     payload["source"] = str(source)
     payload["data_mapping"] = binding
     if payload["status"] != "blocked":
         payload["preview_identity"] = preview_identity_for(
             dict(payload), source_sha256=binding["original_input_sha256"]
         )
-    return payload
+    return resolved
 
 
 def verify_expected_plan(
@@ -316,7 +339,21 @@ def verify_expected_plan(
     rule_id: str | None,
     template: str | None,
 ) -> dict[str, Any]:
-    """Rebuild a fresh preview before project creation; this is not a run lock."""
+    """Verify an external preview and return its public projection."""
+
+    return dict(resolve_expected_plan(source, expected, rule_id=rule_id, template=template).payload)
+
+
+def resolve_expected_plan(
+    source: Path,
+    expected: dict[str, Any],
+    *,
+    rule_id: str | None,
+    template: str | None,
+    observed: PlanPreviewResolution | None = None,
+) -> PlanPreviewResolution:
+    """Bind a current expectation, reusing only this operation's observation."""
+
     if (
         not isinstance(expected, dict)
         or expected.get("kind") != "sciplot_figure_plan_preview"
@@ -356,11 +393,14 @@ def verify_expected_plan(
             key: mapping.get(key)
             for key in ("data_mapping_execution", "data_mapping_proposal_id")
         })
-    current = build_plan_preview(
+    resolved = observed or resolve_plan_preview(
         source,
         request={key: value for key, value in selected.items() if value is not None},
         _replay_categorical=True,
     )
+    current = resolved.payload
+    if observed is not None and (current.get("rule_id") != selected["rule_id"] or current.get("template") != selected["template"]):
+        raise ValueError("Expected plan is stale or its rule, template, or scientific selections changed; run plan again.")
     if current["status"] == "blocked":
         blocker = current.get("blocker")
         raise ValueError(
@@ -383,7 +423,7 @@ def verify_expected_plan(
         raise ValueError(
             "Source changed during expected-plan validation; run plan again."
         )
-    return dict(current)
+    return resolved
 
 
 __all__ = [

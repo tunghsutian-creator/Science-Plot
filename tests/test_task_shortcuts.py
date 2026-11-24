@@ -45,28 +45,30 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
     shortcuts.create_task(Path("/original.csv"), profile=Path("/profile.json"))
     assert requests == [{"version": 1, "action": "create", "source": "/original.csv", "profile": "/profile.json"}]
 
-    from sciplot_core.plan_preview import build_plan_preview
+    from sciplot_core.plan_preview import resolve_plan_preview
     from sciplot_core.task_semantic_creation import admit_raw_curve, build_managed_request
 
     raw = tmp_path / "UVvis.csv"
     original = b"Wavelength,Absorbance\nnm,a.u.\nSample A,Sample A\n400,1.5\n460,3.25\n500,-1\n"
     raw.write_bytes(original)
-    plan = build_plan_preview(raw, request={"rule_id": "uvvis_spectrum"})
+    plan_observed = resolve_plan_preview(raw, request={"rule_id": "uvvis_spectrum"})
+    plan = plan_observed.payload
     request = {"version": 1, "action": "create", "source": str(raw)}
     candidate = {"request": request, "source_sha256": plan["preview_identity"]["source_tree_sha256"],
                  "task_dir": str(tmp_path / "task")}
     unmigrated = deepcopy(candidate)
     unmigrated["request"]["profile"] = "/existing/presentation-profile.json"
-    assert not admit_raw_curve(unmigrated, plan)
+    assert not admit_raw_curve(unmigrated, plan, plan_observed.scientific_source)
     assert unmigrated["request"]["source"] == str(raw) and "intent" not in unmigrated["request"]
     wide = tmp_path / "UVvis-shared-x.csv"
     wide.write_text("Wavelength,Absorbance,Absorbance\nnm,a.u.,a.u.\nA,A,B\n400,2,3\n460,5,4\n500,1,2\n")
-    wide_plan = build_plan_preview(wide, request={"rule_id": "uvvis_spectrum"})
+    wide_plan_observed = resolve_plan_preview(wide, request={"rule_id": "uvvis_spectrum"})
+    wide_plan = wide_plan_observed.payload
     wide_state = {"request": {**request, "source": str(wide)}, "source_sha256": wide_plan["preview_identity"]["source_tree_sha256"]}
-    assert not admit_raw_curve(wide_state, wide_plan)  # The Managed binding has no unique matching coordinate.
+    assert not admit_raw_curve(wide_state, wide_plan, wide_plan_observed.scientific_source)  # The Managed binding has no unique matching coordinate.
     assert wide_state["creation_admission"]["reason_code"] == "raw_science_not_verified_for_managed"
     assert wide_state["request"]["source"] == str(wide)
-    assert admit_raw_curve(candidate, plan)
+    assert admit_raw_curve(candidate, plan, plan_observed.scientific_source)
     assert candidate["initial_request"] == request
     assert candidate["plan_confirmation"]["figure_plan"] == plan["resolved_figure_plan"]["plan_sha256"]
     compiled = build_managed_request(candidate)
@@ -103,10 +105,11 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
         path = tmp_path / (family + ".csv")
         points = "30,100\n100,94\n150,89\n" if family == "tga_curve" else "1,3\n2,6\n3,4\n"
         path.write_text(f"{header}\n{units}\nA,A\n" + points)
-        plan = build_plan_preview(path, request={"rule_id": family})
+        plan_observed = resolve_plan_preview(path, request={"rule_id": family})
+        plan = plan_observed.payload
         candidate = {"request": {**request, "source": str(path)}, "task_dir": str(tmp_path / family),
                      "source_sha256": plan["preview_identity"]["source_tree_sha256"]}
-        assert admit_raw_curve(candidate, plan)
+        assert admit_raw_curve(candidate, plan, plan_observed.scientific_source)
         built = build_managed_request(candidate)
         figure = built["template_definition"]["figure_spec"]
         assert [axis["label"] for axis in figure["views"][0]["axes"]] == expected_labels
@@ -143,10 +146,11 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
         original = (f"Wavenumber,{response}\ncm^-1,{unit}\nA,A\n"
                     + "".join(f"{x},{y}\n" for x, y in zip(x_values, values, strict=True))).encode()
         spectrum.write_bytes(original)
-        plan = build_plan_preview(spectrum, request={"rule_id": "ftir_spectrum"})
+        plan_observed = resolve_plan_preview(spectrum, request={"rule_id": "ftir_spectrum"})
+        plan = plan_observed.payload
         state = {"request": {**request, "source": str(spectrum)}, "task_dir": str(tmp_path / response),
                  "source_sha256": plan["preview_identity"]["source_tree_sha256"]}
-        assert admit_raw_curve(state, plan) == (expected_label is not None)
+        assert admit_raw_curve(state, plan, plan_observed.scientific_source) == (expected_label is not None)
         if expected_label is None:
             assert state["request"]["source"] == str(spectrum)
             continue
@@ -174,10 +178,11 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
     raw_stack = (b"Wavenumber,Transmittance,Wavenumber,Transmittance\ncm^-1,%,cm^-1,%\nA,A,B,B\n"
                  b"1500,90,1300,10\n400,66,500,13\n1000,92,1100,11\n")
     multi.write_bytes(raw_stack)
-    plan = build_plan_preview(multi, request={"rule_id": "ftir_spectrum"})
+    plan_observed = resolve_plan_preview(multi, request={"rule_id": "ftir_spectrum"})
+    plan = plan_observed.payload
     stack_state = {"request": {**request, "source": str(multi)}, "task_dir": str(tmp_path / "multi-task"),
                    "source_sha256": plan["preview_identity"]["source_tree_sha256"]}
-    assert admit_raw_curve(stack_state, plan)
+    assert admit_raw_curve(stack_state, plan, plan_observed.scientific_source)
     result = build_managed_request(stack_state)
     spec = result["template_definition"]["figure_spec"]
     assert spec["layout"] == {"width_mm": 120, "height_mm": 110}
@@ -213,10 +218,11 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
     gpc = tmp_path / "gpc.csv"
     chromatogram = b"Molar mass (g/mol),dW/dLogM\n9000,0.1\n3000,0.8\n1000,0.5\n"
     gpc.write_bytes(chromatogram)
-    plan = build_plan_preview(gpc, request={"rule_id": "gpc_sec_chromatogram"})
+    plan_observed = resolve_plan_preview(gpc, request={"rule_id": "gpc_sec_chromatogram"})
+    plan = plan_observed.payload
     state = {"request": {**request, "source": str(gpc)}, "task_dir": str(tmp_path / "gpc-task"),
              "source_sha256": plan["preview_identity"]["source_tree_sha256"]}
-    assert admit_raw_curve(state, plan)
+    assert admit_raw_curve(state, plan, plan_observed.scientific_source)
     result = build_managed_request(state)
     spec = result["template_definition"]["figure_spec"]
     x, y = spec["scales"]
@@ -251,11 +257,12 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
     assert gpc.read_bytes() == chromatogram
     alternate = tmp_path / "gpc-adjacent.csv"
     alternate.write_bytes(chromatogram.replace(b"Molar mass (g/mol),dW/dLogM", b"Molar mass,dW/dLogM\ng/mol,\nA,A"))
-    adjacent = build_plan_preview(alternate, request={"rule_id": "gpc_sec_chromatogram"})
+    adjacent_observed = resolve_plan_preview(alternate, request={"rule_id": "gpc_sec_chromatogram"})
+    adjacent = adjacent_observed.payload
     alternate_state = {"request": {**request, "source": str(alternate)}, "task_dir": str(tmp_path / "gpc-adjacent-task"),
                        "source_sha256": adjacent["preview_identity"]["source_tree_sha256"]}
     assert adjacent["status"] == "planned"
-    assert admit_raw_curve(alternate_state, adjacent)
+    assert admit_raw_curve(alternate_state, adjacent, adjacent_observed.scientific_source)
     adjacent_wire = build_managed_request(alternate_state)
     adjacent_binding = adjacent_wire["data_binding"]
     adjacent_source, = adjacent_binding["data_sources"]
@@ -267,10 +274,11 @@ def test_create_preserves_profile_and_source_adjacent_default(ready, monkeypatch
 
     path = tmp_path / "signed-xrd.csv"
     path.write_text("2theta,Intensity\ndegree,a.u.\nB,B\n1,-3\n2,6\n3,4\n")
-    plan = build_plan_preview(path, request={"rule_id": "xrd_pattern"})
+    plan_observed = resolve_plan_preview(path, request={"rule_id": "xrd_pattern"})
+    plan = plan_observed.payload
     candidate = {"request": {**request, "source": str(path)}, "task_dir": str(tmp_path / "signed"),
                  "source_sha256": plan["preview_identity"]["source_tree_sha256"]}
-    assert admit_raw_curve(candidate, plan)
+    assert admit_raw_curve(candidate, plan, plan_observed.scientific_source)
     signed = build_managed_request(candidate)
     y = signed["template_definition"]["figure_spec"]["scales"][1]
     assert y["domain"][0] < -3 and y["domain_rule"]["minimum"] == {"mode": "auto_zero_if_nonnegative"}

@@ -99,7 +99,7 @@ def test_headerless_creation_still_works_without_claiming_reusable_profile(tmp_p
 @pytest.mark.parametrize("answer", [{"rule_id": "not_a_real_rule"}, {"rule_id": "uvvis_spectrum", "template": "pie"}])
 def test_wrong_scientific_choice_remains_answerable(tmp_path, monkeypatch, creation_calls, answer):
     source = _table(tmp_path / "UVvis.csv")
-    monkeypatch.setattr(task_planning, "inspect_payload", lambda _: {})
+    monkeypatch.setattr(task_planning, "observe_inspection", lambda _: ({}, None))
     task = tmp_path / "task"
     initial = task_control.start_task({"version": 1, "action": "create", "source": str(source),
                                        "curve_display": "raw_overlay"}, task_dir=task)

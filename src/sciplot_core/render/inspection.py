@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.ingest import normalized_source
 from sciplot_core.source_inspection import inspect_input_file
 from sciplot_core.semantic import classify_source
+
+if TYPE_CHECKING:
+    from sciplot_core.plan_preview import PlanPreviewResolution
 
 
 _GENERIC_PRESENTATION_WARNING_MARKERS = (
@@ -158,17 +161,19 @@ def _semantic_only_inspection_payload(
     semantics: dict[str, Any],
     *,
     inspection_error: Exception,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], PlanPreviewResolution | None]:
     rule_id = str(semantics.get("rule_id") or "")
     directory_plan = None
     failed_directory_plan = None
+    directory_observation = None
     if source.is_dir():
         # Directory names are only candidates. Let the existing scientific
         # owner validate the actual files without preparing or rendering them.
-        from sciplot_core.plan_preview import build_plan_preview
+        from sciplot_core.plan_preview import resolve_plan_preview
 
         try:
-            candidate_plan = build_plan_preview(source, request={"rule_id": rule_id})
+            directory_observation = resolve_plan_preview(source, request={"rule_id": rule_id})
+            candidate_plan = directory_observation.payload
             if candidate_plan["status"] == "planned" and candidate_plan.get("blocker") is None:
                 directory_plan = candidate_plan
             else:
@@ -215,7 +220,7 @@ def _semantic_only_inspection_payload(
             # Historical payload key retained for consumers of inspection JSON.
             "vendor_inspection_error": str(inspection_error),
             "sciplot_semantics": semantics,
-        }
+        }, directory_observation
     candidate = _material_rule_recommendation(semantics)
     candidate.update(
         {
@@ -271,16 +276,16 @@ def _semantic_only_inspection_payload(
         ],
         "vendor_inspection_error": str(inspection_error),
         "sciplot_semantics": semantics,
-    }
+    }, None
 
 
-def inspect_payload(
+def observe_inspection(
     input_path: Path,
     *,
     sheet: str | int = 0,
     inspect_source: Callable[[Path, str | int], Any] = inspect_input_file,
     classify: Callable[..., dict[str, Any]] = classify_source,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], PlanPreviewResolution | None]:
     with normalized_source(input_path) as source:
         if source.is_file() and source.stat().st_size <= 0:
             raise ValueError(f"Input file is empty: {source}")
@@ -376,4 +381,16 @@ def inspect_payload(
                 "generic_template": inspected_template or "unknown",
             }
             payload["inspection_warning_provenance"] = warning_provenance
-    return payload
+    return payload, None
+
+
+def inspect_payload(
+    input_path: Path,
+    *,
+    sheet: str | int = 0,
+    inspect_source: Callable[[Path, str | int], Any] = inspect_input_file,
+    classify: Callable[..., dict[str, Any]] = classify_source,
+) -> dict[str, Any]:
+    return observe_inspection(
+        input_path, sheet=sheet, inspect_source=inspect_source, classify=classify,
+    )[0]

@@ -16,7 +16,8 @@ from sciplot_core.output_contract import (
     resolve_user_output_layout,
 )
 from sciplot_core.foundation.source_tree import source_tree_sha256
-from sciplot_core.plan_preview import verify_expected_plan
+from sciplot_core.plan_preview import PlanPreviewResolution, resolve_expected_plan
+from sciplot_core.semantic_sources.scientific_source_models import ResolvedScientificSource
 from sciplot_core.studio_core.project_export import export_project_document
 from sciplot_core.studio_core.project_query import resolve_project_path
 from sciplot_core.studio_core.project_query_paths import canonical_path
@@ -59,28 +60,31 @@ def create_project(
     on_prepared: Callable[[dict[str, Any]], None] | None = None,
     publish: bool = True,
     _creation_owner: str = "project",
+    _observed_plan: PlanPreviewResolution | None = None,
 ) -> dict[str, Any]:
     source = canonical_path(source)
     if (expected_plan.get("rule_id") is not None
             and not isinstance(expected_plan["rule_id"], str)) or not isinstance(
                 expected_plan.get("template"), str):
         raise ValueError("The expected plan has invalid rule/template identities.")
-    verified = verify_expected_plan(
+    observed = resolve_expected_plan(
         source, expected_plan, rule_id=expected_plan.get("rule_id"),
-        template=expected_plan.get("template"),
+        template=expected_plan.get("template"), observed=_observed_plan,
     )
+    verified = observed.payload
     layout = resolve_user_output_layout(source, requested_delivery_root=output_dir)
     if publish and verified["rule_id"] == "rheology_frequency_sweep":
         from .managed_frequency_creation import create_frequency_project
 
         managed = create_frequency_project(source, verified, layout, require_new=require_new_layout,
-                                           owner=_creation_owner)
+                                           owner=_creation_owner, scientific_source=observed.scientific_source)
         if managed is not None:
             return managed
     if publish and on_prepared is None and _creation_owner == "project":
         from .managed_curve_creation import create_curve_project
 
-        managed = create_curve_project(source, verified, layout, require_new=require_new_layout)
+        managed = create_curve_project(source, verified, layout, scientific_source=observed.scientific_source,
+                                       require_new=require_new_layout)
         if managed is not None:
             return managed
     require_new_layout(layout)
@@ -93,12 +97,13 @@ def create_project(
     if layout.delivery_root.exists():
         raise ValueError("The requested new delivery was occupied before project creation.")
     if "data_mapping" in verified or "source_options" in verified:
-        payload = _prepare_mapped_project(source, verified=verified, layout=layout)
+        payload = _prepare_mapped_project(source, verified=verified, layout=layout,
+                                          scientific_source=observed.scientific_source)
     else:
         payload = prepare_studio_document(
             source, output_root=layout.workspace_root / "projects",
             delivery_root=layout.delivery_root, rule_id=verified["rule_id"],
-            template=verified["template"],
+            template=verified["template"], _scientific_source=observed.scientific_source,
         )
     if source_tree_sha256(source) != verified["preview_identity"]["source_tree_sha256"]:
         raise ValueError(
@@ -121,7 +126,8 @@ def create_project(
 
 
 def _prepare_mapped_project(
-    source: Path, *, verified: dict[str, Any], layout: UserOutputLayout
+    source: Path, *, verified: dict[str, Any], layout: UserOutputLayout,
+    scientific_source: ResolvedScientificSource | None,
 ) -> dict[str, Any]:
     """Enter the existing canonical-request Studio route with confirmed lineage."""
 
@@ -131,8 +137,9 @@ def _prepare_mapped_project(
     request_path = project / "plot_request.json"
     atomic_write_json(request_path, request)
     if verified["rule_id"] == "rheology_stress_relaxation":
-        return prepare_studio_document(request_path, rule_id=verified["rule_id"], template=verified["template"])
-    return prepare_studio_document(request_path, _new_creation=True)
+        return prepare_studio_document(request_path, rule_id=verified["rule_id"], template=verified["template"],
+                                       _scientific_source=scientific_source)
+    return prepare_studio_document(request_path, _new_creation=True, _scientific_source=scientific_source)
 
 
 def request_from_verified_plan(source: Path, *, verified: dict[str, Any], project_dir: Path,
