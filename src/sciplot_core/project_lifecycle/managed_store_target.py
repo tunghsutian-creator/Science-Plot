@@ -1,5 +1,6 @@
 """Reserve a new Managed project's root without giving it an external write grant."""
 
+from collections.abc import Callable
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -32,18 +33,30 @@ def managed_publication_target(root: Path, request: dict[str, Any]) -> Path:
         raise EngineError("managed_output_conflict", "The selected output directory already contains files.")
     return output
 
-def open_managed_store(root: Path, request: dict[str, Any]) -> FileProjectStore:
-    """Recover one exact root claim, then use the normal selected Store writer."""
+
+def open_managed_store(root: Path, request: dict[str, Any], *,
+                       authorize_new: Callable[[], None] | None = None) -> FileProjectStore:
+    """Recover one exact root claim through the existing Store writer.
+
+    Authorization precedes a fresh claim; the existing journal retains
+    completed or uncertain execution facts without re-admitting the command.
+    """
     require_data_destination(root)
     for source in request["data_binding"]["data_sources"]:
         path = canonical_path(Path(source["path"]))
         if path == root or path.is_relative_to(root) or root.is_relative_to(path):
             raise EngineError("managed_output_conflict", "The Managed store cannot overlap an original source.")
     claim = {"kind": "sciplot_managed_store_claim", "version": 1, "request_sha256": digest(request)}
+    admitted = authorize_new is None
+    if authorize_new is not None and not root.exists():
+        authorize_new()
+        admitted = True
     root.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     with external_project_session(root):
         canonical_path(root)
         if not root.exists():
+            if not admitted and authorize_new is not None:
+                authorize_new()
             with TemporaryDirectory(prefix=".managed-store-", dir=root.parent) as directory:
                 candidate = Path(directory) / "project"
                 candidate.mkdir(mode=0o700)

@@ -153,12 +153,8 @@ class FilesystemProjectTargets:
         root = legacy if self.repository.exists(legacy / "managed-creation.json") else control / "managed" / digest(request["idempotency_key"])
         old_attempt = self.repository.exists(root / "managed-creation.json")
         # Public expert output is a publication destination, not a backend
-        # workspace. Leave registered external-executor creation on its
-        # original route until it has equivalent Store host grants.
-        public_output = (self.publish_fresh_managed_output and "out" in request
-                         and not request.get("scientific_executors")
-                         and not any(node.get("kind") == "external"
-                                     for node in request["data_binding"].get("transforms", [])))
+        # workspace. Host authorization stays with the existing member owner.
+        public_output = self.publish_fresh_managed_output and "out" in request
         if not old_attempt and (request.get("storage") == "project_store_v2" or public_output):
             if not isinstance(self.repository, ComposedProjectRepository):
                 raise EngineError("managed_store_required", "The versioned Managed task requires the Project Store repository.")
@@ -166,7 +162,19 @@ class FilesystemProjectTargets:
             from .managed_store_target import managed_publication_target, open_managed_store
 
             publication = managed_publication_target(root, request) if public_output else None
-            store = open_managed_store(canonical_path(root), request)
+            declares_host_execution = bool(request.get("scientific_executors")) or any(
+                node.get("kind") == "external" for node in request["data_binding"].get("transforms", []))
+
+            def admit_host_execution() -> None:
+                # Prove the exact current host registration before creating a
+                # Store claim. The actual member is admitted by the same owner
+                # under the writer lease, with its allocated stable plot ID.
+                from .managed_creation import new_managed_member
+
+                new_managed_member(request, identifier)
+
+            store = open_managed_store(canonical_path(root), request,
+                                       authorize_new=admit_host_execution if declares_host_execution else None)
             attached = attached_managed_creation(self.repository, request, store=store, publication=publication)
             assert attached is not None
             return attached
