@@ -3,21 +3,25 @@
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.project_store.io import observe_existing_store
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.plot_engine.backend_router import BackendRouter
 from sciplot_core.plot_engine.current import changed_inputs
 from sciplot_core.plot_engine.managed_state import read_canonical
-from sciplot_core.plot_engine.storage import active, document_root, load_head
-from sciplot_core.project_lifecycle.context import content_sha256, repository_scope
+from sciplot_core.plot_engine.storage import active, document_root
+from sciplot_core.project_lifecycle.context import content_sha256, repository, repository_scope
 from sciplot_core.project_lifecycle.attachment_index import Attachment, read_index, require_local_owner
 from sciplot_core.project_lifecycle.attachment_projection import derived_relative, metadata_view
 from sciplot_core.project_lifecycle.frozen_namespace import FrozenNamespaceRepository
 from sciplot_core.project_lifecycle.file_content import read_snapshot
-from sciplot_core.project_store.runtime import project_runtime
+from sciplot_core.project_store.source_resolver import query_sources
 from sciplot_core.plot_backends.veusz import VeuszBackend
 from sciplot_core.studio_core.project_query import inspect_project
-from sciplot_core.studio_core.project_query_paths import bound_delivery_project, canonical_path, read_object
+from sciplot_core.foundation.canonical_paths import canonical_path
+from sciplot_core.project_lifecycle.figure_observation import (
+    attachments_by_figure, bound_delivery_project, observe_plot_head, read_object,
+)
 from sciplot_core.studio_core.delivery_target import resolve_delivery_target
 
 
@@ -41,6 +45,7 @@ def record_path(value: Any, *, base: Path | None = None) -> Path:
     return canonical_path(path)
 
 
+@observe_existing_store()
 def document_evidence(root: Path, *, attachment: Attachment | None = None,
                       snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
     if attachment is None:
@@ -81,7 +86,9 @@ def document_evidence(root: Path, *, attachment: Attachment | None = None,
     captured = FrozenNamespaceRepository(attachment.origin, attachment.root, members)
     with repository_scope(captured):
         # Validate the original sealed envelope before projecting runtime paths.
-        head = metadata_view(captured.load_head(attachment.origin), attachment)
+        head = observe_plot_head(attachment.origin, owner=captured)
+        assert head is not None
+        head = metadata_view(head, attachment)
         if (head["document"]["plot_id"] != attachment.entry["plot_id"]
                 or head["binding"].get("project", str(attachment.store.root)) != str(attachment.store.root)
                 or head["binding"].get("figure_id", attachment.entry["figure_id"]) != attachment.entry["figure_id"]):
@@ -105,7 +112,7 @@ def document_evidence(root: Path, *, attachment: Attachment | None = None,
         captured = FrozenNamespaceRepository(attachment.origin, attachment.root, members,
             artifacts={path: fact['bytes'] for path, fact in artifacts.items() if fact is not None},
             artifact_roots=artifact_roots)
-    with repository_scope(captured), project_runtime(attachment.store, generation=snapshot['generation']):
+    with repository_scope(captured), query_sources(attachment.store, generation=snapshot['generation']):
         result = _document_evidence(root, head=head, pending=pending, attached=True)
     for path, before in artifacts.items():
         after = read_snapshot(path) if path.exists() or path.is_symlink() else None
@@ -120,7 +127,8 @@ def _document_evidence(root: Path, *, head: dict[str, Any] | None = None,
                        pending: dict[str, Any] | None = None, attached: bool = False) -> dict[str, Any]:
     """Use the document owner, including content seals and native mutation guards."""
     head_sha = content_sha256(root / "head.json")
-    head = head if head is not None else load_head(root)
+    head = head if head is not None else observe_plot_head(root, owner=repository())
+    assert head is not None
     doc, binding = head["document"], head["binding"]
     # A copied authority must not silently operate on the original absolute binding.
     if doc.get("plot_type") == "ManagedPlot" and record_path(binding["root"]) != root:
@@ -181,6 +189,7 @@ def _document_evidence(root: Path, *, head: dict[str, Any] | None = None,
             "project": binding.get("project"), "figure_id": binding.get("figure_id")}
 
 
+@observe_existing_store()
 def project_evidence(project: Path, source: Path, source_sha256: str | None,
                      *, receipt_sha256: str | None = None,
                      receipt_source: Path | None = None) -> dict[str, Any] | None:
@@ -258,14 +267,11 @@ def project_evidence(project: Path, source: Path, source_sha256: str | None,
             if snapshot['generation'] != generation:
                 raise ValueError("The project generation changed during saved-work discovery.")
         index = read_index(store, snapshot) if store is not None else None
+        registered = attachments_by_figure(store, index) if store is not None and index is not None else {}
         for figure in query["figures"]:
-            entries = [entry for entry in index["attachments"].values()
-                       if entry["figure_id"] == figure["figure_id"]] if index is not None else []
-            if len(entries) > 1:
-                raise ValueError("One figure has competing current semantic attachments.")
-            if entries:
-                assert store is not None and snapshot is not None
-                attachment = Attachment(store, entries[0])
+            attachment = registered.get(figure["figure_id"])
+            if attachment is not None:
+                assert snapshot is not None
                 documents.append(document_evidence(attachment.root, attachment=attachment, snapshot=snapshot))
             else:
                 root = document_root(project, figure["figure_id"])

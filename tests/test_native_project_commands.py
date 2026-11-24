@@ -90,7 +90,7 @@ def test_candidate_native_failure_after_private_write_is_unknown_and_never_retri
 
 def test_identified_draft_preserves_its_read_witness_across_unrelated_figure_export(project):
     from sciplot_core.studio_core.native_adoption import adopt_saved_native
-    from sciplot_core.studio_core.project_query import resolve_project_figure
+    from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
     from sciplot_core.studio_core.project_session import ProjectSessionLease
     from sciplot_core.studio_core.project_command_scope import figure_read_witness
 

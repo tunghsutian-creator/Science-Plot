@@ -351,7 +351,7 @@ def test_public_paper_group_and_explicit_secondary_use_current_saved_figures(tmp
     from sciplot_core.plot_backends.managed import ManagedVeuszCompiler
     from sciplot_core.plot_engine.storage import load_head
     from sciplot_core.plot_protocol.server import make_service
-    from sciplot_core.studio_core.managed_frequency_query import registered_frequency_members
+    from sciplot_core.project_lifecycle.figure_observation import observe_frequency_figures
     from sciplot_core.task_semantic_owner import local_managed_actions
     from test_rheology_mean_suite_publication import _mean_input
 
@@ -395,7 +395,7 @@ def test_public_paper_group_and_explicit_secondary_use_current_saved_figures(tmp
         assert revised["document"]["presentation_hash"] != original["document"]["presentation_hash"]
         frozen_uv_output = file_inventory(uv_out)
 
-        registered = registered_frequency_members(Path(freq_item["project"]))
+        registered = observe_frequency_figures(Path(freq_item["project"])).figures
         assert [entry["plot"] for entry in registered] == [entry["plot"] for entry in freq_item["figures"]]
         primary, secondary, *_ = registered
         assert primary["figure_id"] == "storage_modulus_vs_frequency"

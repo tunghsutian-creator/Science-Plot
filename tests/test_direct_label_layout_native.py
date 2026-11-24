@@ -13,7 +13,7 @@ from sciplot_core.qa.audit_support import _run_veusz_audit
 from sciplot_core.smoke.data_mapping import _write_synthetic_ftir
 from sciplot_core.source_coverage.managed_documents import _verify_prepared_data
 from sciplot_core.studio_core.document_edit_state import run_document_worker
-from sciplot_core.studio_core.project_query import resolve_project_figure
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
 from sciplot_core.studio_core.review_artifacts import _current_layout_issues
 from sciplot_core.studio_render.direct_label_layout import DIRECT_LABEL_LAYOUT_KEY as KEY, DIRECT_LABEL_LAYOUT_VERSION as VERSION
 from test_categorical_source_identity import snapshots

@@ -8,7 +8,8 @@ from sciplot_core.automation_states import RULE_REPAIR_STATE
 from sciplot_core.publish_state import build_publish_state
 from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot, _assert_snapshot_current
 from sciplot_core.studio_core.project_query_evidence import latest_run, publication_indicators
-from sciplot_core.studio_core.project_query_paths import project_snapshot, canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
+from sciplot_core.project_lifecycle.figure_observation import project_snapshot
 from sciplot_core.studio_core.rule_readiness import resolve_studio_rule_publication_readiness
 from sciplot_core.studio_core.source_update_commit import file_inventory
 from sciplot_core.task_contract import TaskControlError

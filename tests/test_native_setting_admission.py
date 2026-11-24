@@ -147,7 +147,7 @@ def test_existing_command_phase_never_repeats_readonly_validation_or_native_effe
         request_id = ("a" if phase == "unknown" else "b") * 64
         from sciplot_core.studio_core.document_edit_state import native_edit_request_key
         from sciplot_core.studio_core.project_command_scope import figure_binding
-        from sciplot_core.studio_core.project_query import resolve_project_figure
+        from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
 
         binding = figure_binding(
             f.project, resolve_project_figure(f.project, "first"), store=f.store

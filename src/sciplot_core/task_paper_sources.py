@@ -12,9 +12,9 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot, _assert_snapshot_current
 from sciplot_core.source_coverage.managed_documents import source_records
-from sciplot_core.studio_core.project_query import resolve_project_figure
+from sciplot_core.project_lifecycle.figure_observation import observe_legacy_project
 from sciplot_core.studio_core.project_query_evidence import source_indicators
-from sciplot_core.studio_core.project_query_paths import canonical_path, project_snapshot
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.veusz_runtime import veusz_worker_environment
 
@@ -31,10 +31,10 @@ def native_link_sources(document: Path) -> list[dict[str, Any]]:
 
 
 def capture_selection(project: Path, figure_id: str) -> dict[str, Any]:
-    selected = resolve_project_figure(project, figure_id)
-    root = Path(selected["project"])
-    request, _, figures = project_snapshot(root)
-    source = source_indicators(root, request, [next(f for f in figures if f["figure_id"] == figure_id)])
+    observation = observe_legacy_project(project)
+    root, request = observation.project, observation.request
+    selected = observation.select(figure_id)
+    source = source_indicators(root, request, [selected])
     if source["current"] is False or source["prepared"]["current"] is not True:
         raise TaskControlError("paper_source_stale", "The selected figure's recorded sources are stale or unverified.")
     spec = json.loads(Path(selected["spec"]).read_text())
@@ -78,7 +78,8 @@ def capture_selection(project: Path, figure_id: str) -> dict[str, Any]:
     for snapshot, expected in snapshots:
         _assert_snapshot_current(snapshot, label="paper scientific source", expected_sha256=expected)
     source_hashes = {str(s["path"]): s["sha256"] for s, _expected in snapshots}
-    version = {"request_sha256": file_sha256(root / "plot_request.json"),
+    observation.require_current(selected=selected)
+    version = {"request_sha256": observation.request_sha256,
                "document_sha256": selected["document_sha256"], "spec_sha256": selected["spec_sha256"],
                "source_sha256": canonical_json_sha256({"files": source_hashes, "memberships": memberships}, allow_nan=False)}
     return {"project": str(root), "figure_id": figure_id, "document": selected["document"],
@@ -86,22 +87,21 @@ def capture_selection(project: Path, figure_id: str) -> dict[str, Any]:
             "source_memberships": memberships,
             "source_identities": {str(s["path"]): {k: v for k, v in s["identity"].items() if k != "ctime_ns"}
                                   for s, _expected in snapshots},
-            "figure_set_sha256": file_sha256(root / "studio/figure_set.json")
-            if (root / "studio/figure_set.json").exists() else None,
+            "figure_set_sha256": observation.registry_sha256,
             "source_scope": source["scope"], "document_authority": "saved_vsz"}
 
 
 def assert_selection_current(selection: dict[str, Any]) -> None:
     project = Path(selection["project"])
-    current = resolve_project_figure(project, selection["figure_id"])
+    observation = observe_legacy_project(project)
+    current = observation.select(selection["figure_id"])
     version = selection["version"]
-    registry = project / "studio/figure_set.json"
-    if (current["project"] != selection["project"]
+    if (str(observation.project) != selection["project"]
             or current["document"] != selection["document"] or current["spec"] != selection["spec"]
             or current["document_sha256"] != version["document_sha256"]
             or current["spec_sha256"] != version["spec_sha256"]
-            or file_sha256(project / "plot_request.json") != version["request_sha256"]
-            or (file_sha256(registry) if registry.exists() else None) != selection["figure_set_sha256"]):
+            or observation.request_sha256 != version["request_sha256"]
+            or observation.registry_sha256 != selection["figure_set_sha256"]):
         raise TaskControlError("paper_selection_changed", "A selected project's identity, specification or saved VSZ changed. Start a new paper selection.")
     for value, expected in selection["source_memberships"].items():
         path = canonical_path(Path(value))
@@ -120,3 +120,7 @@ def assert_selection_current(selection: dict[str, Any]) -> None:
         snapshots.append((snapshot, expected))
     for snapshot, expected in snapshots:
         _assert_snapshot_current(snapshot, label="paper scientific source", expected_sha256=expected)
+    try:
+        observation.require_current(selected=current)
+    except ValueError as exc:
+        raise TaskControlError("paper_selection_changed", str(exc)) from exc

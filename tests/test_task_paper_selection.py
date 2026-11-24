@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -32,7 +33,8 @@ def group(tmp_path, monkeypatch):
                         "steps": [{"task_dir": str(root / "tasks" / item["id"])}]} for item in sources]}
     save_group(root, state)
     monkeypatch.setattr(selection, "step_state", lambda step: children[step["task_dir"]])
-    monkeypatch.setattr(selection, "project_snapshot", lambda project: ({}, "primary", [{"figure_id": "primary", "status": "ready", **_REGISTERED_VERSION}]))
+    monkeypatch.setattr(selection, "observe_legacy_project", lambda _: SimpleNamespace(
+        figures=[{"figure_id": "primary", "status": "ready", **_REGISTERED_VERSION}], require_current=lambda: None))
     saved = []
     monkeypatch.setattr(selection, "start_paper", lambda request, **options: saved.append((request, options)) or {"status": "complete"})
     monkeypatch.setattr(selection, "inspect_paper", lambda _: {"status": "complete", "ready_to_use": True})
@@ -136,7 +138,8 @@ def test_only_multi_figure_projects_add_titles_or_necessary_stable_identity(grou
     root, _, _, saved = group
     figures = [{"figure_id": "internal-A", "title": "Observed curve", "status": "ready", **_REGISTERED_VERSION},
                {"figure_id": "internal-B", "title": "Reference", "status": "ready", **_REGISTERED_VERSION}]
-    monkeypatch.setattr(selection, "project_snapshot", lambda _: ({}, "internal-A", figures))
+    monkeypatch.setattr(selection, "observe_legacy_project",
+                        lambda _: SimpleNamespace(figures=figures, require_current=lambda: None))
     selection.start_group_paper(root, out=tmp_path / "out", paper_dir=tmp_path / "paper", item_ids=["A"])
     assert [item["label"] for item in saved[-1][0]["items"]] == ["P0_3_0_7_log_Observed_curve", "P0_3_0_7_log_Reference"]
     figures[1]["title"] = "Observed curve"
@@ -181,7 +184,7 @@ def test_mixed_authority_lists_exact_members_before_any_publisher(group, tmp_pat
     first = next(iter(children.values()))
     handle = _saved_handle(first)
     monkeypatch.setattr(selection, "start_managed_group_paper", lambda *a, **k: pytest.fail("Mixed selection cannot package"))
-    monkeypatch.setattr(selection, "describe_managed", lambda *_: pytest.fail("Mixed selection cannot dispatch Managed reads"))
+    monkeypatch.setattr(selection, "observe_plot_head", lambda *_: pytest.fail("Mixed selection cannot dispatch Managed reads"))
     paper, out = tmp_path / "paper", tmp_path / "out"
     with pytest.raises(TaskControlError) as broken:
         selection.start_group_paper(root, out=out, paper_dir=paper)
@@ -198,7 +201,7 @@ def test_managed_path_alias_cannot_duplicate_saved_figure(group, tmp_path, monke
     first, second = children.values()
     handle = _saved_handle(first)
     _saved_handle(second)["plot"] = str(Path(handle["plot"]).parent / "alias" / ".." / Path(handle["plot"]).name)
-    monkeypatch.setattr(selection, "describe_managed", lambda _: {**handle, "revision": 2})
+    monkeypatch.setattr(selection, "observe_plot_head", lambda _: {"document": {**handle, "revision": 2}})
     paper, out = tmp_path / "paper", tmp_path / "out"
     with pytest.raises(EngineError) as broken:
         selection.start_group_paper(root, out=out, paper_dir=paper)

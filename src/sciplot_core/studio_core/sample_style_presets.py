@@ -12,8 +12,9 @@ from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.studio_core.annotation_schema import AnnotationOperationError, validate_operation_batch
 from sciplot_core.studio_core.document_edit_policy import SAMPLE_STYLE_FIELDS
 from sciplot_core.studio_core.document_edit_state import audit_edited_document, new_preview_directory
-from sciplot_core.studio_core.project_query import inspect_project, resolve_project_figure
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
+from sciplot_core.studio_core.project_query import inspect_project
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.studio_core.sample_style import sample_style_targets
 
 

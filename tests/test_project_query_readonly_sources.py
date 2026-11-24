@@ -1,5 +1,6 @@
 """Source inspection reads exact live or cold facts without materializing views."""
 import json
+import shutil
 from copy import deepcopy
 from contextlib import nullcontext
 from pathlib import Path
@@ -22,7 +23,7 @@ from sciplot_core.project_store import ProjectConflict, ProjectStoreError
 from sciplot_core.project_store.io import digest
 from sciplot_core.foundation.source_locations import selected_source_resolver
 from sciplot_core.studio_core.project_query import inspect_project
-from sciplot_core.studio_core.project_query_paths import bound_delivery_project
+from sciplot_core.project_lifecycle.figure_observation import bound_delivery_project
 from sciplot_core.studio_core.project_query_evidence import _exports_match
 from sciplot_core.delivery.package_validation import verify_delivery_package
 
@@ -73,12 +74,15 @@ def processed_project(tmp_path):
 def test_public_processed_directory_inspection_is_completely_read_only(tmp_path, monkeypatch):
     project, _delivery_root, _store = processed_project(tmp_path)
     expected = source_tree_sha256(project / "source")
+    locks = project.parent / ".sciplot_session_locks"
+    shutil.rmtree(locks)
     before = inventory(tmp_path)
     no_views(monkeypatch)
     result = inspect_project(project)
     assert result["source"]["input"]["sha256"] == expected
     assert result["source"]["prepared"]["current"] is True
     assert inventory(tmp_path) == before
+    assert not locks.exists()
 
 
 def test_delivery_entry_with_processed_directory_never_materializes(tmp_path, monkeypatch):

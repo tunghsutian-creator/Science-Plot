@@ -7,8 +7,10 @@ from sciplot_core.delivery.filesystem_metadata import is_delivery_finder_metadat
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_io import read_json_object
 from sciplot_core.plot_engine.errors import EngineError
-from sciplot_core.plot_engine.storage import digest, load_head
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.plot_engine.storage import digest
+from sciplot_core.project_lifecycle.context import repository
+from sciplot_core.project_lifecycle.figure_observation import observe_plot_head
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.studio_core.source_update_files import file_inventory
 
 
@@ -52,7 +54,8 @@ def local_managed_target(root: Path, figure_id: str | None) -> dict[str, Any]:
     original = item["local_managed_continuation"]
     try:
         plot = canonical_path(Path(original["plot"]))
-        head = load_head(plot)
+        head = observe_plot_head(plot, owner=repository())
+        assert head is not None
     except (OSError, ValueError) as exc:
         raise EngineError("managed_delivery_native_snapshot_only", "The original local ManagedPlot is unavailable. This package contains an independent native snapshot, not a portable ManagedPlot registry.",
                           action="inspect_native_snapshot", document=str(root / item["files"]["editable"])) from exc

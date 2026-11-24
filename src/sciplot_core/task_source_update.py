@@ -13,7 +13,8 @@ from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.studio_core.document_edit_state import (
     check_artifact, new_preview_directory, run_document_worker,
 )
-from sciplot_core.studio_core.project_query_paths import canonical_path, resolve_project_path
+from sciplot_core.foundation.canonical_paths import canonical_path
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_path
 from sciplot_core.studio_core.preparation_candidate import require_preparation_candidate
 from sciplot_core.studio_core.source_update_sources import baseline_scope
 from sciplot_core.project_store.runtime import project_runtime

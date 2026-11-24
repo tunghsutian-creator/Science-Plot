@@ -11,6 +11,7 @@ import pytest
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.delivery_identity import make_delivery_binding
+from sciplot_core.project_lifecycle import figure_observation
 from sciplot_core.studio_core import project_query as query
 from sciplot_core.studio_core import project_query_evidence as evidence
 from sciplot_core.studio_core.project_query_evidence import source_indicators
@@ -195,10 +196,14 @@ def test_explicit_object_has_saved_hash_target_and_scoped_native_capabilities(
 )
 def test_explicit_managed_entries_resolve_canonical_project(project, entry):
     target = project / entry
-    assert query.resolve_project_path(target) == project
-    selected = query.resolve_project_figure(target)
+    assert figure_observation.resolve_project_path(target) == project
+    selected = figure_observation.resolve_project_figure(target)
     assert selected["figure_id"] == ("second" if "second" in entry else "first")
     assert Path(selected["spec"]).is_file()
+    if entry.endswith(".vsz"):
+        other = "second" if selected["figure_id"] == "first" else "first"
+        with pytest.raises(ValueError, match="figure ID does not match"):
+            figure_observation.resolve_project_figure(target, other)
 
 
 def test_bound_delivery_remains_queryable_with_unmerged_visible_edits(project):
@@ -207,7 +212,7 @@ def test_bound_delivery_remains_queryable_with_unmerged_visible_edits(project):
     visible.write_bytes(b"unmerged visible styling")
     before = _inventory(root)
     for entry in (root, root / "Open_in_Veusz.command", visible):
-        assert query.resolve_project_path(entry) == project
+        assert figure_observation.resolve_project_path(entry) == project
         result = query.inspect_project(entry)
         assert result["delivery"]["current"] is False
         assert result["delivery"]["binding_current"] is True
@@ -230,16 +235,16 @@ def test_delivery_resolver_rejects_portable_missing_source_or_foreign_binding(
         request["delivery_output"] = str(root.with_name("Other"))
         _write(project / "plot_request.json", request)
     with pytest.raises(ValueError, match="binding|source"):
-        query.resolve_project_path(root)
+        figure_observation.resolve_project_path(root)
 
 
 def test_corrupt_registry_and_unregistered_document_do_not_fallback_to_primary(project):
     rogue = project / "studio/rogue.vsz"
     rogue.write_text("rogue")
     with pytest.raises(ValueError, match="not a registered"):
-        query.resolve_project_path(rogue)
+        figure_observation.resolve_project_path(rogue)
     with pytest.raises(ValueError, match="Unknown figure_id"):
-        query.resolve_project_figure(project, "unknown")
+        figure_observation.resolve_project_figure(project, "unknown")
     (project / "studio/figure_set.json").write_text('{"invalid": true}')
     with pytest.raises(ValueError, match="registry"):
         query.inspect_project(project)

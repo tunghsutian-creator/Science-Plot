@@ -138,7 +138,7 @@ def _native_document_probe(
 
 
 def _project_native_probe(project_dir: Path) -> dict[str, Any]:
-    from sciplot_core.studio_core.project_query_paths import project_snapshot
+    from sciplot_core.project_lifecycle.figure_observation import project_snapshot
 
     _request, _primary, figures = project_snapshot(project_dir)
     documents = [Path(entry["document"]) for entry in figures if entry.get("status") == "ready"]

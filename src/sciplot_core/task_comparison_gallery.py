@@ -10,7 +10,7 @@ from typing import Any
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.studio_core.document_edit_review import verified_document_edit_review
 from sciplot_core.studio_core.project_command_scope import project_store
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.task_review_html import badge, copy_field, evidence_panel, image_href, image_link, text, write_page
 
 

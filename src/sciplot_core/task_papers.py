@@ -15,7 +15,7 @@ from sciplot_core.plot_engine.managed_delivery_contract import normalize_request
 from sciplot_core.source_coverage.file_snapshots import _assert_snapshot_current
 from sciplot_core.source_coverage.managed_documents import verify_managed_document_sources, source_records
 from sciplot_core.studio_core.document_edit_state import run_document_worker
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.studio_core.project_session import external_project_session
 from sciplot_core.studio_core.source_update_commit import file_inventory
 from sciplot_core.task_contract import TaskControlError

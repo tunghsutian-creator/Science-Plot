@@ -14,7 +14,7 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.plot_document.schema import DIGEST, IDENTIFIER, closed
 from sciplot_core.plot_document.validation import validate_wire
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 
 from .errors import EngineError
 

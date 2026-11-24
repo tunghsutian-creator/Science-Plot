@@ -17,11 +17,8 @@ from sciplot_core.project_store.runtime import (
     projected_runtime_directory, projected_runtime_artifact, projected_runtime_project_root,
 )
 from sciplot_core.source_coverage.managed_documents import source_records
-from sciplot_core.studio_core.project_query_paths import (
-    bound_delivery_project,
-    canonical_path,
-    read_object,
-)
+from sciplot_core.foundation.canonical_paths import canonical_path
+from sciplot_core.project_lifecycle.figure_observation import bound_delivery_project, read_object
 
 
 def _indicator(current: bool | None, **fields: Any) -> dict[str, Any]:

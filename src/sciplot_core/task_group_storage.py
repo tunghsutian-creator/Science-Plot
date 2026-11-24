@@ -10,8 +10,8 @@ from typing import Any
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.output_contract import resolve_user_output_layout
-from sciplot_core.studio_core.project_query import resolve_project_path
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_group_contract import group_request_schema, validate_shape
 from sciplot_core.task_storage import load_task, task_location

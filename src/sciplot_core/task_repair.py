@@ -6,7 +6,7 @@ from typing import Any
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.task_contract import TaskControlError, task_request_schema, task_response_schema
 from sciplot_core.task_storage import load_task, task_path, task_summary
 

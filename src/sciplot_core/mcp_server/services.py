@@ -179,7 +179,7 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             expected_document_sha256=arguments["expected_document_sha256"])
     if name == "sciplot_edit_apply":
         from sciplot_core.studio_core.document_edit import apply_document_edit
-        from sciplot_core.studio_core.project_query_paths import canonical_path
+        from sciplot_core.foundation.canonical_paths import canonical_path
 
         path = canonical_path(Path(arguments["review_path"]))
         if path.stat().st_size > 16 * 1024 * 1024:
@@ -207,7 +207,7 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         return export_project(project)
     if name == "sciplot_operation":
         from sciplot_core.studio_core.document_edit_commit import read_edit_operation
-        from sciplot_core.studio_core.project_query import resolve_project_path
+        from sciplot_core.project_lifecycle.figure_observation import resolve_project_path
 
         return read_edit_operation(resolve_project_path(project), arguments["operation_id"])
     raise AdapterError("unknown_tool", "Use a tool returned by tools/list.")

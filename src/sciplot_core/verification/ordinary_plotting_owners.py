@@ -343,7 +343,7 @@ DIRECT_LABEL_LAYOUT_OWNER = ChangedOwner(
 _MANAGED_CURVE_PROJECT_TEST = "tests/test_managed_curve_project_creation.py"
 MANAGED_CURVE_PROJECT_PATHS = frozenset({
     "src/sciplot_core/studio_core/managed_curve_creation.py",
-    "src/sciplot_core/studio_core/managed_curve_query.py",
+    "src/sciplot_core/project_lifecycle/figure_observation.py",
     _MANAGED_CURVE_PROJECT_TEST,
 })
 MANAGED_CURVE_PROJECT_FOCUSED = ("tests/test_project_create_cli.py", "tests/test_task_shortcuts.py")

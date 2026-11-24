@@ -1,5 +1,6 @@
 """Canonical ManagedPlot authority cannot be bypassed through its legacy project."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -47,19 +48,26 @@ def test_project_capture_and_currentness_require_existing_managed_authority(tmp_
     assert error.value.code == "assembly_managed_reference_required"
 
 
-def test_project_catalogue_returns_managed_reference_without_mutating_source(tmp_path, monkeypatch):
-    from sciplot_core.studio_core import project_query_paths
-
+def test_project_catalogue_returns_managed_reference_without_mutating_source(tmp_path):
     project = tmp_path / "registered-project"
-    project.mkdir()
+    studio = project / "studio"
+    (studio / "figures").mkdir(parents=True)
+    (project / "plot_request.json").write_text("{}")
+    (studio / "document.vsz").write_text("saved native shadow")
+    (studio / "spec.json").write_text("{}")
+    (studio / "figures/legacy-figure.vsz").write_text("saved native panel")
+    (studio / "figures/legacy-figure.spec.json").write_text("{}")
+    (studio / "figure_set.json").write_text(json.dumps({
+        "kind": "sciplot_studio_figure_set", "version": 1,
+        "primary_figure_id": "managed-figure",
+        "figures": [{"title": "Canonical panel", "figure_id": "managed-figure", "status": "ready"},
+                    {"title": "Saved native panel", "figure_id": "legacy-figure", "status": "ready"}],
+    }))
     root, document = canonical_managed(tmp_path, project, "managed-figure")
-    original = (root / "head.json").read_bytes()
-    monkeypatch.setattr(project_query_paths, "resolve_project_path", lambda path: Path(path))
-    monkeypatch.setattr(project_query_paths, "project_snapshot", lambda _path: ({}, {}, [
-        {"title": "Canonical panel", "figure_id": "managed-figure"},
-        {"title": "Saved native panel", "figure_id": "legacy-figure"}]))
+    original = {path: path.read_bytes() for path in project.rglob("*") if path.is_file()}
     rows = project_references(project)
     assert rows[0][1] == {"kind": "managed", "project": str(root), "plot_id": document["plot_id"]}
     assert rows[1][1] == {"kind": "project", "project": str(project), "figure_id": "legacy-figure"}
-    assert (root / "head.json").read_bytes() == original
+    assert {path: path.read_bytes() for path in project.rglob("*") if path.is_file()} == original
+    assert not (project / ".sciplot_store").exists()
     assert not Path(load_head(root)["binding"]["document"]).exists()

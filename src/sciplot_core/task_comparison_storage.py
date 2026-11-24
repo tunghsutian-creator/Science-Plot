@@ -13,7 +13,7 @@ from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.studio_core.document_edit_review import verified_document_edit_review
 from sciplot_core.studio_core.document_edit_state import check_artifact, preview_identity
 from sciplot_core.studio_core.project_command_scope import project_store
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.task_comparison_contract import candidate_request, comparison_request_schema
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_group_contract import validate_shape

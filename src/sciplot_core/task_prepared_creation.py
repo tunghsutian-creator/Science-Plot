@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from sciplot_core.foundation.source_tree import source_tree_sha256
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.studio_core.source_update_commit import file_inventory
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_storage import save_task

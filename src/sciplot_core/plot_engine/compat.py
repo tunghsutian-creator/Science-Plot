@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.task_series_edits import compile_series_style
 
 from .edit_entry import admit_edit_entry, bind_edit_entry, edit_entry_owner, edit_entry_session, edit_service_owner, read_edit_entry

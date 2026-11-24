@@ -1,52 +1,27 @@
 """Read public Managed frequency group and delivery evidence without a compiler."""
 
-import json
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.project_store.io import observe_existing_store
 from sciplot_core.delivery.package_validation import verify_delivery_package
-from sciplot_core.delivery_identity import DELIVERY_IDENTITY, read_delivery_binding
-from sciplot_core.policy.render_options import DELIVERY_PROJECT_DIR
-from sciplot_core.foundation.canonical_paths import canonical_path
-from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import read_json_object
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.output_contract import REQUEST_DELIVERY_ROOT_KEY, UserOutputLayout
-from sciplot_core.project_store import FileProjectStore
 
-AUTHORITY = ".sciplot-frequency"
-_RECORD = "frequency-creation.json"
+from sciplot_core.project_lifecycle.figure_observation import (
+    FREQUENCY_AUTHORITY, FREQUENCY_RECORD, locate_frequency_project, observe_frequency_figures,
+)
 
 
 def frequency_roots(layout: UserOutputLayout) -> tuple[Path, Path, Path]:
     workspace = layout.workspace_root
-    return workspace / _RECORD, workspace / "runs" / "run_001", workspace / AUTHORITY
+    return workspace / FREQUENCY_RECORD, workspace / "runs" / "run_001", workspace / FREQUENCY_AUTHORITY
 
 
 def is_frequency_creation_owner(layout: UserOutputLayout, owner: str) -> bool:
     creation = read_json_object(frequency_roots(layout)[0])
     return creation is not None and creation.get("owner") == owner
-
-
-def registered_frequency_members(project: Path) -> list[dict[str, Any]]:
-    """Select canonical members in the saved order, independent of sibling export status."""
-    from sciplot_core.figure_plan import resolved_figure_plan_from_payload
-    from sciplot_core.project_lifecycle.attachment_index import Attachment, INDEX, validate_index
-
-    store = FileProjectStore(project)
-    observation = store.observe_members((INDEX, "figure-plan.json"), projection=False)
-    plan_bytes = observation.members["figure-plan.json"].data
-    index_bytes = observation.members[INDEX].data
-    if plan_bytes is None or index_bytes is None:
-        raise ValueError("The Managed frequency project has no registered figure plan.")
-    plan = resolved_figure_plan_from_payload(json.loads(plan_bytes))
-    attachments = validate_index(json.loads(index_bytes), observation.selected["project_id"])["attachments"]
-    entries = {entry["figure_id"]: entry for entry in attachments.values()}
-    if (plan is None or not plan.selected_figure_ids or len(entries) != len(attachments)
-            or not set(plan.selected_figure_ids).issubset(entries)):
-        raise ValueError("The saved frequency figure plan and attachment index do not agree.")
-    return [{"figure_id": task.figure_id, "title": task.title, "plot_id": entries[task.figure_id]["plot_id"],
-             "plot": str(Attachment(store, entries[task.figure_id]).root)} for task in plan.tasks]
 
 
 def frequency_receipt(record: Path, output: Path, manifest: dict[str, Any]) -> dict[str, Any]:
@@ -73,47 +48,17 @@ def frequency_receipt(record: Path, output: Path, manifest: dict[str, Any]) -> d
 
 
 def is_frequency_project_request(request: Path) -> bool:
-    return request.name == "plot_request.json" and (request.parent / _RECORD).is_file()
+    return request.name == "plot_request.json" and (request.parent / FREQUENCY_RECORD).is_file()
 
 
+@observe_existing_store()
 def inspect_frequency_creation(project: Path) -> dict[str, Any] | None:
-    """Revalidate read-only project/delivery status without native work."""
-    project = canonical_path(project)
-    workspace = project.parent.parent if project.parent.name == AUTHORITY else None
-    visible = binding = None
-    document = project if project.suffix.casefold() == ".vsz" and project.parent.name == DELIVERY_PROJECT_DIR else None
-    if workspace is None:
-        if project.name == "plot_request.json":
-            workspace = project.parent
-        elif project.is_dir() and (project / _RECORD).is_file():
-            workspace = project
-        else:
-            visible = (project.parent.parent if document is not None
-                       else project.parent if project.name == DELIVERY_IDENTITY else project)
-            if not visible.is_dir() or not (visible / DELIVERY_IDENTITY).is_file():
-                return None
-            binding = read_delivery_binding(visible)
-            if binding is None or not binding.request:
-                return None
-            workspace = Path(binding.request).parent
-    creation = read_json_object(workspace / _RECORD)
-    if creation is None:
+    """Project the original publication's readiness, not the current figure catalogue."""
+    observed = locate_frequency_project(project)
+    if observed is None:
         return None
+    project, canonical_request, creation, document = observed
     request = creation["request"]
-    canonical_request = workspace / "plot_request.json"
-    if read_json_object(canonical_request) != request:
-        raise ValueError("The saved Managed frequency plotting request changed.")
-    authority = workspace / AUTHORITY / canonical_json_sha256(request)
-    if ((visible is not None and (visible != Path(request[REQUEST_DELIVERY_ROOT_KEY])
-                                  or binding.root != str(visible) or binding.request != str(canonical_request)))
-            or (project.parent.name == AUTHORITY and project != authority)):
-        raise ValueError("The selected frequency location does not match its exact saved project.")
-    if document is not None:
-        if not document.is_file():
-            raise ValueError(f"The selected delivery document does not exist: {document}")
-        if binding is None or document.name not in dict(binding.documents):
-            raise ValueError(f"The selected VSZ is not registered in this delivery: {document}")
-    project = authority
     output = Path(request["output"])
     manifest = read_json_object(output / "manifest.json")
     if manifest is None or manifest.get("result", {}).get("managed_frequency", {}).get("project") != str(project):
@@ -124,10 +69,13 @@ def inspect_frequency_creation(project: Path) -> dict[str, Any] | None:
         if selected is None:
             raise ValueError(f"The selected VSZ is not bound to a saved figure: {document}")
         receipt["selected_figure"] = selected
-    current = FileProjectStore(project).snapshot()
+    current = observe_frequency_figures(project, projection=True)
+    if [(item["figure_id"], item["plot"]) for item in receipt["figures"]] != [
+            (item["figure_id"], item["plot"]) for item in current.figures]:
+        raise ValueError("The published figures no longer identify this Managed frequency project.")
     original = manifest["result"]["managed_frequency"]["generation"]
     source_current = source_tree_sha256(Path(request["input"])) == creation["source_sha256"]
-    qa_current = (current["generation"] == original and current["projection_status"] == "current"
+    qa_current = (current.generation == original and current.projection_status == "current"
                   and manifest["publication_qa"]["status"] == "passed")
     delivery = verify_delivery_package(manifest["delivery_package"], expected_root=Path(request[REQUEST_DELIVERY_ROOT_KEY]),
                                        expected_manifest=manifest)

@@ -20,7 +20,7 @@ def _admit(project: Path, target: Path) -> dict:
     """Exercise the existing Store/adoption primitives, without a Window adapter."""
     from sciplot_core.studio_core.native_adoption import adopt_saved_native
     from sciplot_core.studio_core.project_command_scope import figure_read_state, project_store
-    from sciplot_core.studio_core.project_query import resolve_project_figure
+    from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
     from sciplot_core.project_store.runtime import project_runtime
 
     selected = resolve_project_figure(target)

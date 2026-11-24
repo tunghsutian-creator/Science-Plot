@@ -5,7 +5,7 @@ from typing import Any
 
 from sciplot_core.doctor import doctor_payload
 from sciplot_core.studio_core.annotation_schema import validate_operation_batch
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.task_contract import TaskControlError, validate_task_request
 from sciplot_core.task_control import inspect_task, start_task
 from sciplot_core.task_edit_context import edit_context

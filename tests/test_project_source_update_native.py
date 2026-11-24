@@ -28,7 +28,7 @@ def _files(root: Path) -> dict[str, bytes]:
 @pytest.mark.parametrize("ys,status", [([1, 2, 3, 4, 5], "missing"), ([1, 4, 1, 3, 1], "ambiguous")])
 def test_native_peak_revision_missing_and_multiple_candidates(tmp_path, ys, status):
     from sciplot_core.task_control import start_task, resume_task, inspect_task
-    from sciplot_core.studio_core.project_query import resolve_project_figure
+    from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
     from sciplot_core.studio_core.peak_analysis import inspect_peak_candidates
     from sciplot_core.foundation.file_hashing import file_sha256
     from sciplot_core.studio_core.annotation_operations import inspect_annotation_state

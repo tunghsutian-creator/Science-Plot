@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.source_tables.read_session import with_table_reads
 from sciplot_core.source_coverage.native_file_snapshots import observed_native_document
 from sciplot_core.studio_core.document_edit_policy import filter_editable_fields
@@ -17,23 +16,17 @@ from sciplot_core.studio_core.project_query_evidence import (
     publication_indicators,
     source_indicators,
 )
-from sciplot_core.studio_core.project_query_paths import (
-    project_snapshot,
-    resolve_project_path,
+from sciplot_core.project_lifecycle.figure_observation import (
+    LegacyFigureObservation,
+    observe_legacy_project,
+    observe_managed_curve,
     select_figure,
 )
 from sciplot_core.veusz_runtime import veusz_worker_environment
 from sciplot_core.native_process import run_worker
-from sciplot_core.studio_core.project_command_scope import project_read_runtime
-
-
-def resolve_project_figure(
-    project: Path, figure_id: str | None = None
-) -> dict[str, Any]:
-    """Resolve one registered saved figure without starting a Qt runtime."""
-    root = resolve_project_path(project)
-    _, primary, figures = project_snapshot(root)
-    return {"project": str(root), **select_figure(project, primary, figures, figure_id)}
+from sciplot_core.project_host_factory import project_store
+from sciplot_core.project_store.io import observe_existing_store
+from sciplot_core.project_store.source_resolver import query_sources
 
 
 def _inspect_document(document: Path) -> dict[str, Any]:
@@ -63,9 +56,8 @@ def _inspect_document(document: Path) -> dict[str, Any]:
 
 
 @with_table_reads
-@project_read_runtime
 def _inspect_legacy_project(
-    project: Path,
+    observation: LegacyFigureObservation,
     *,
     figure_id: str | None = None,
     object_path: str | None = None,
@@ -78,14 +70,10 @@ def _inspect_legacy_project(
     ``status=ok`` only means the query succeeded. No rendering, scientific audit,
     human review, publication, or readiness certification is performed here.
     """
-    root = resolve_project_path(project)
-    request_path = root / "plot_request.json"
-    request_sha = existing_file_sha256(request_path)
-    registry_sha = existing_file_sha256(root / "studio" / "figure_set.json")
-    request, primary, figures = project_snapshot(root)
+    root, request, figures = observation.project, observation.request, observation.figures
     selection_requested = (figure_id is not None or object_path is not None or native is not None
                            or include_annotations or include_axes)
-    selected = select_figure(project, primary, figures, figure_id) if selection_requested else None
+    selected = observation.select(figure_id) if selection_requested else None
     selected_metadata: dict[str, Any] = {}
     for figure in figures:
         spec = json.loads(Path(figure["spec"]).read_text())
@@ -108,9 +96,9 @@ def _inspect_legacy_project(
         "version": 1,
         "status": "ok",
         "project": str(root),
-        "request": str(request_path),
-        "request_sha256": request_sha,
-        "primary_figure_id": primary,
+        "request": str(root / "plot_request.json"),
+        "request_sha256": observation.request_sha256,
+        "primary_figure_id": observation.primary_figure_id,
         "figures": figures,
         "source": source,
         **publication_indicators(root, request, figures, source),
@@ -123,7 +111,7 @@ def _inspect_legacy_project(
         payload["selected_figure"] = {**selected, **selected_metadata}
     inspect_native = native if native is not None else (figure_id is not None or object_path is not None)
     if inspect_native or object_path is not None:
-        figure = selected or select_figure(project, primary, figures, figure_id)
+        figure = selected or observation.select(figure_id)
         state = _inspect_document(Path(figure["document"]))
         if state.get("document") != {
             "path": figure["document"],
@@ -155,39 +143,51 @@ def _inspect_legacy_project(
             },
             "object_count": len(widgets),
         }
-    if (
-        existing_file_sha256(request_path) != request_sha
-        or existing_file_sha256(root / "studio" / "figure_set.json") != registry_sha
-        or any(
-            existing_file_sha256(Path(item[field])) != item[field + "_sha256"]
-            for item in figures
-            for field in ("document", "spec")
-        )
-    ):
-        raise ValueError("The saved project changed during inspection; query again.")
+    observation.require_current()
     return payload
 
 
+def _curve_project_status(observed: tuple[dict[str, Any], dict[str, Any], bool]) -> dict[str, Any]:
+    from sciplot_core.task_semantic_creation import current_result
+
+    item, state, selected = observed
+    plot = item["plot"]
+    result = current_result(state)
+    current = result.get("current_project") or {}
+    if current.get("plot_id") is not None and (current["plot_id"], current["revision"]) != (item["plot_id"], item["revision"]):
+        raise ValueError("The selected Managed project advanced during inspection; query again.")
+    cache = current.get("export_current") or {}
+    return {"kind": "sciplot_project_inspection", "version": 1, "status": "ok", "project": str(plot),
+            "request": str(Path(state["task_dir"]) / "task.json"), "primary_figure_id": item["figure_id"], "figures": [item],
+            **({"selected_figure": item} if selected else {}),
+            "source": {"current": current.get("status") == "current"},
+            "qa": {"current": cache.get("current") is True and cache.get("byte_inventory_verified") is True},
+            "delivery": {"current": result.get("native_delivery_current") is True}, "ready_to_use": result.get("ready_to_use") is True,
+            "readiness_evaluated": True, "document_authority": "managed_plot", "live_gui_state_evaluated": False,
+            "next_step": {"action": "open_managed_plot", "cli_argv": ["sciplot", "plot", "open", str(plot), "--json"]}}
+
+
+@observe_existing_store()
 def inspect_project(project: Path, **options: Any) -> dict[str, Any]:
-    from sciplot_core.studio_core.managed_curve_query import inspect_curve_project
     from sciplot_core.studio_core.managed_frequency_query import inspect_frequency_creation
 
-    curve = inspect_curve_project(project, figure_id=options.get("figure_id"))
+    curve = observe_managed_curve(project, figure_id=options.get("figure_id"))
     if curve is not None:
         if any(options.get(key) for key in ("object_path", "native", "include_annotations", "include_axes")):
             raise ValueError("Managed figures expose their current objects through plot open; use the reported canonical plot path.")
-        return curve
+        return _curve_project_status(curve)
     managed = inspect_frequency_creation(project)
     if managed is None:
-        return _inspect_legacy_project(project, **options)
+        observation = observe_legacy_project(project)
+        if (observation.project / ".sciplot_store").exists():
+            with query_sources(project_store(observation.project)):
+                return _inspect_legacy_project(observation, **options)
+        return _inspect_legacy_project(observation, **options)
     if any(options.get(key) for key in ("object_path", "native", "include_annotations", "include_axes")):
         raise ValueError("Managed figures expose their current objects through plot open; use the reported figure plot path.")
     if options.get("figure_id") is not None:
-        selected = managed.get("selected_figure")
-        if selected is not None and selected["figure_id"] != options["figure_id"]:
-            raise ValueError("The requested figure ID does not match the selected delivery VSZ.")
         managed["selected_figure"] = select_figure(project, managed["primary_figure_id"], managed["figures"], options["figure_id"])
     return managed
 
 
-__all__ = ["inspect_project", "resolve_project_figure", "resolve_project_path"]
+__all__ = ["inspect_project"]

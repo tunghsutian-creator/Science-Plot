@@ -4,12 +4,14 @@ from pathlib import Path
 import re
 from typing import Any
 
-from sciplot_core.studio_core.project_query_paths import canonical_path, project_snapshot
+from sciplot_core.foundation.canonical_paths import canonical_path
+from sciplot_core.project_lifecycle.figure_observation import (
+    observe_frequency_figures, observe_legacy_project, observe_plot_head,
+)
 from sciplot_core.studio_core.project_session import external_project_session
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_group_storage import group_path, load_group, step_state
 from sciplot_core.task_papers import _path, _load, _inspect, start_paper, inspect_paper, start_managed_group_paper
-from sciplot_core.task_semantic_owner import describe_managed
 from sciplot_core.task_storage import task_location
 from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot, _assert_snapshot_current
 
@@ -70,13 +72,13 @@ def start_group_paper(group: Path, *, paper_dir: Path, out: Path, title: str | N
             raise TaskControlError("paper_group_project_ambiguous", "The selected item does not identify one canonical original project.")
         project = canonical_path(Path(next(iter(projects))))
         if frequency:
-            from sciplot_core.studio_core.managed_frequency_query import registered_frequency_members
-
-            figures = registered_frequency_members(project)
+            figures = observe_frequency_figures(project).figures
         elif handles:
             figures = [{**handle, "figure_id": handle["plot_id"]} for handle in handles]
         else:
-            _, _, figures = project_snapshot(project)
+            observation = observe_legacy_project(project)
+            figures = observation.figures
+            observation.require_current()
         for figure in figures:
             registered.append({"item_id": identifier, "project": str(project), "figure": figure,
                                "label": _label(item, figure, figures),
@@ -95,10 +97,12 @@ def start_group_paper(group: Path, *, paper_dir: Path, out: Path, title: str | N
     for item in registered:
         figure = item["figure"]
         if managed:
-            current = describe_managed(Path(figure["plot"]))
+            head = observe_plot_head(Path(figure["plot"]))
+            assert head is not None
+            current = head["document"]
             if current.get("plot_type") != "ManagedPlot" or current.get("plot_id") != figure["plot_id"]:
                 raise TaskControlError("paper_group_figure_changed", f"The registered figure no longer identifies its saved ManagedPlot: {figure['plot']}")
-            selected.append({**{key: current[key] for key in ("plot", "plot_id", "revision")}, "label": item["label"]})
+            selected.append({"plot": figure["plot"], **{key: current[key] for key in ("plot_id", "revision")}, "label": item["label"]})
         else:
             if figure["status"] != "ready":
                 raise TaskControlError("paper_group_figure_pending", "Every selected registered figure must have a saved native document.")

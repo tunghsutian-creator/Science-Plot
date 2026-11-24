@@ -7,7 +7,7 @@ from typing import Any
 from sciplot_core.plot_document.schema import IDENTIFIER, closed
 from sciplot_core.plot_document.validation import validate_wire
 from sciplot_core.plot_engine.errors import EngineError
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 
 
 def managed_delivery_schema() -> dict[str, Any]:

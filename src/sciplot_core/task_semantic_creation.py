@@ -5,7 +5,7 @@ from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.task_errors import TaskControlError
 from sciplot_core.task_semantic_raw_analysis import admit_raw_curve as admit_raw_curve
 from sciplot_core.task_storage import save_task, task_summary

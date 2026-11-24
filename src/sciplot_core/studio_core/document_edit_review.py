@@ -12,7 +12,7 @@ from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.project_commands import CommandKind, ProjectCommand, ProjectCommands
 from sciplot_core.studio_core.document_edit_state import check_artifact, native_edit_request_key
 from sciplot_core.studio_core.project_command_scope import project_store
-from sciplot_core.studio_core.project_query import resolve_project_path
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_path
 
 
 def reviewed_edit(record: dict[str, Any], project: Path) -> dict[str, Any]:

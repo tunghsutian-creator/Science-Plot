@@ -9,34 +9,41 @@ from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_engine.managed_state import input_files, require_inputs
-from sciplot_core.plot_engine.storage import digest, document_root, load_head, read
+from sciplot_core.plot_engine.storage import digest, read
+from sciplot_core.project_lifecycle.figure_observation import (
+    observe_legacy_project, observe_plot_head, observe_project_figure_heads,
+)
 from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot, _assert_snapshot_current
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.task_paper_sources import assert_selection_current, capture_selection
 
 from .errors import AssemblyError
 
 
-def project_reference(project: str | Path, figure_id: str) -> dict[str, Any]:
-    """Select existing canonical authority without creating or adopting a plot."""
-    project = canonical_path(Path(project))
-    root = document_root(project, figure_id)
-    if (root / "head.json").exists():
-        document = load_head(root)["document"]
+def _project_reference(project: Path, figure_id: str, authority: tuple[Path, dict[str, Any]] | None) -> dict[str, Any]:
+    if authority is not None:
+        root, head = authority
+        document = head["document"]
         if document.get("plot_type") == "ManagedPlot":
             return {"kind": "managed", "project": str(root), "plot_id": document["plot_id"]}
     return {"kind": "project", "project": str(project), "figure_id": figure_id}
 
 
+def project_reference(project: str | Path, figure_id: str) -> dict[str, Any]:
+    """Select existing canonical authority without creating or adopting a plot."""
+    project = canonical_path(Path(project))
+    return _project_reference(project, figure_id, observe_project_figure_heads(project, (figure_id,)).get(figure_id))
+
+
 def project_references(project: str | Path) -> list[tuple[str, dict[str, Any]]]:
     """Read catalogue titles with authority-correct references for selection UIs."""
-    from sciplot_core.studio_core.project_query_paths import project_snapshot, resolve_project_path
-
-    root = resolve_project_path(Path(project))
-    _, _, figures = project_snapshot(root)
-    return [(f"{root.name} / {item['title']} ({item['figure_id']})", project_reference(root, item["figure_id"]))
-            for item in figures]
-
+    observation = observe_legacy_project(Path(project))
+    root = observation.project
+    heads = observe_project_figure_heads(root, [item["figure_id"] for item in observation.figures])
+    rows = [(f"{root.name} / {item['title']} ({item['figure_id']})",
+             _project_reference(root, item["figure_id"], heads.get(item["figure_id"]))) for item in observation.figures]
+    observation.require_current()
+    return rows
 
 def _require_legacy_authority(project: Path, figure_id: str) -> None:
     reference = project_reference(project, figure_id)
@@ -105,7 +112,8 @@ def _image(path: Path, *, snapshot: dict[str, Any] | None = None) -> dict[str, A
 
 
 def managed_head(root: Path, plot_id: str) -> dict[str, Any]:
-    head = load_head(root)
+    head = observe_plot_head(root)
+    assert head is not None
     document, binding = head["document"], head["binding"]
     if document.get("plot_type") != "ManagedPlot" or document["plot_id"] != plot_id:
         raise AssemblyError("assembly_managed_authority", "Select the current ManagedPlot document root and its exact plot ID.")

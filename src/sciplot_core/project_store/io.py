@@ -25,6 +25,21 @@ from .read_directories import DirectoryReads, read_stored_file
 
 STORE = ".sciplot_store"
 _ACTIVE: ContextVar[tuple[StoreIO, int, int] | None] = ContextVar("project_store_owned_io", default=None)
+_OBSERVING: ContextVar[bool] = ContextVar("project_store_observing", default=False)
+
+
+@contextmanager
+def observe_existing_store() -> Iterator[None]:
+    """Inspect established Store state without allocating control files."""
+    token = _OBSERVING.set(True)
+    try:
+        yield
+    finally:
+        _OBSERVING.reset(token)
+
+
+def observing_existing_store() -> bool:
+    return _OBSERVING.get()
 
 
 def owned_io(root: Path) -> StoreIO | None:
@@ -39,11 +54,15 @@ def owned_io(root: Path) -> StoreIO | None:
 
 
 @contextmanager
-def _leases(root: Path, locations: Mapping[str, Path], *, blocking: bool) -> Iterator[dict[Path, DirectoryWriterLease]]:
+def _leases(root: Path, locations: Mapping[str, Path], *, blocking: bool,
+            observing: bool) -> Iterator[dict[Path, DirectoryWriterLease]]:
     while True:
         stack = ExitStack()
         try:
-            stack.enter_context(external_project_session(root))
+            # The directory inode still serializes Store writers. A saved-state
+            # read does not create a native editing session or its lock file.
+            if not observing:
+                stack.enter_context(external_project_session(root))
             leases = {path: stack.enter_context(exclusive_directory_lease(path))
                       for path in sorted({root, *locations.values()}, key=str)}
             break
@@ -193,7 +212,10 @@ class StoreIO:
                 return
             if process != os.getpid() or thread != get_ident():
                 _ACTIVE.set(None)
-        with _leases(self.root, self.locations, blocking=blocking) as leases:
+        observing = observing_existing_store()
+        if observing and before_create is not None:
+            raise ProjectStoreError("A saved-state observation cannot admit a new store.")
+        with _leases(self.root, self.locations, blocking=blocking, observing=observing) as leases:
             self.advance_epoch()
             self.lease_epoch += 1
             lease = leases[self.root]
@@ -205,15 +227,19 @@ class StoreIO:
                     self.root_fds[key] = os.dup(leases[path].fd)
                 try:
                     os.stat(STORE, dir_fd=lease.fd, follow_symlinks=False)
-                except FileNotFoundError:
+                except FileNotFoundError as exc:
+                    if observing:
+                        raise ProjectRecoveryRequired("A saved-state observation requires an existing project store.") from exc
                     if before_create is not None:
                         before_create()
-                try:
-                    os.mkdir(STORE, mode=0o700, dir_fd=lease.fd)
-                except FileExistsError:
-                    created_store = False
-                else:
-                    created_store = True
+                created_store = False
+                if not observing:
+                    try:
+                        os.mkdir(STORE, mode=0o700, dir_fd=lease.fd)
+                    except FileExistsError:
+                        pass
+                    else:
+                        created_store = True
                 with directory(lease.fd, (STORE,)) as store_fd:
                     self.fd = store_fd
                     self.created_store = created_store

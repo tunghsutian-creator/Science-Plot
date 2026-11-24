@@ -17,7 +17,7 @@ import sciplot_core.project_store.publication as publication
 import sciplot_core.project_store.state as state
 import sciplot_core.project_store.native_work as native_work
 from .errors import ProjectConflict, ProjectRecoveryRequired, ProjectStoreError
-from .io import STORE, StoreIO, directory, install, owned_io, parts, read_file, sha
+from .io import STORE, StoreIO, directory, install, observing_existing_store, owned_io, parts, read_file, sha
 from .resources import ResourceRoot
 from .member_observation import MemberObservation, observe
 
@@ -78,6 +78,8 @@ class FileProjectStore:
                         allow_pending: bool = False) -> Iterator[tuple[StoreIO, dict[str, Any], state.CheckedHead]]:
         from .namespace_transfers import augment_controls
 
+        if observing_existing_store() and (import_legacy or repair):
+            raise ProjectStoreError("A saved-state observation cannot import or repair project state.")
         # Admission-local proof; capability evolution starts a fresh window.
         with ExitStack() as proofs:
             active = owned_io(self.root)

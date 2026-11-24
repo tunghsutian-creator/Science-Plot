@@ -12,7 +12,8 @@ from sciplot_core.studio_core.annotation_operations import inspect_annotation_st
 from sciplot_core.studio_core.document_edit import apply_document_edit
 from sciplot_core.studio_core.document_edit_state import audit_edited_document, edit_state
 from sciplot_core.studio_core.peak_analysis import inspect_peak_candidates
-from sciplot_core.studio_core.project_query import inspect_project, resolve_project_figure
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
+from sciplot_core.studio_core.project_query import inspect_project
 from sciplot_core.studio_core.annotation_schema import AnnotationOperationError
 
 

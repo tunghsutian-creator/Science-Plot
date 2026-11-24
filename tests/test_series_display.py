@@ -365,7 +365,7 @@ def test_saved_native_mutation_refuses_unbound_baselines_without_registering(tmp
     from sciplot_core.studio_core import native_scientific_audit
     from sciplot_core.studio_core.native_adoption import adopt_saved_native
     from sciplot_core.studio_core.project_command_scope import figure_read_state
-    from sciplot_core.studio_core.project_query import resolve_project_figure
+    from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
     import json
 
     project, store, before, document, _audits = _saved_native_baseline(tmp_path, monkeypatch)
@@ -489,7 +489,7 @@ def test_explicit_preview_rejects_unregistered_reads_before_any_native_worker(tm
     import json
     from sciplot_core.foundation.file_hashing import file_sha256
     from sciplot_core.studio_core import document_edit_commands as commands
-    from sciplot_core.studio_core.project_query import resolve_project_figure
+    from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
 
     project, store, before, document, audits = _saved_native_baseline(tmp_path, monkeypatch)
     selected = resolve_project_figure(project, "first")
@@ -532,7 +532,7 @@ def test_saved_native_audit_keeps_selected_read_witness_across_generation_change
     from sciplot_core.project_commands import ProjectCommand, ProjectCommands, ProjectMutation
     from sciplot_core.studio_core import native_scientific_audit
     from sciplot_core.studio_core.native_adoption import adopt_saved_native
-    from sciplot_core.studio_core.project_query import resolve_project_figure
+    from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
 
     project, store, before, document, _audits = _saved_native_baseline(tmp_path, monkeypatch)
     selected = resolve_project_figure(project, "first")

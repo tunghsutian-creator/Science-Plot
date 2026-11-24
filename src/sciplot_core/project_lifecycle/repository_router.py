@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.project_store.io import STORE
+from sciplot_core.project_store.io import STORE, observe_existing_store
 from sciplot_core.project_store.repository import FileProjectStore
 from sciplot_core.project_store.runtime import selected_project_store
 from .attached_repository import AttachedProjectRepository
@@ -196,10 +196,11 @@ class ComposedProjectRepository(FileProjectRepository):
         queries: list[NamespaceQueryRepository] = []
         token = self._queries.set(queries)
         try:
-            owner = self._owner(root)
-            store = (owner.attachment.store if isinstance(owner, AttachedProjectRepository)
-                     else owner.store if isinstance(owner, NamespaceQueryRepository) else None)
             with ExitStack() as stack:
+                stack.enter_context(observe_existing_store())
+                owner = self._owner(root)
+                store = (owner.attachment.store if isinstance(owner, AttachedProjectRepository)
+                         else owner.store if isinstance(owner, NamespaceQueryRepository) else None)
                 if store is not None:
                     sources = owner.load_head(root)["document"]["scientific"]["data_sources"] if isinstance(owner, NamespaceQueryRepository) else ()
                     roots = ((root, owner.origin, owner.physical) if isinstance(owner, NamespaceQueryRepository)

@@ -26,9 +26,10 @@ from sciplot_core.studio_core.project_command_scope import (
     command_for_binding, command_result, figure_binding, project_command_runtime,
     project_read_runtime, project_store,
 )
-from sciplot_core.studio_core.project_query import inspect_project, resolve_project_figure
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
+from sciplot_core.studio_core.project_query import inspect_project
 from sciplot_core.studio_core.project_query_evidence import latest_run
-from sciplot_core.studio_core.project_query_paths import resolve_project_path
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_path
 
 from .pdf_review_content import annotation_frame, review_content
 from .pdf_review_files import capture_pdf, review_directory_binding, write_review_copy

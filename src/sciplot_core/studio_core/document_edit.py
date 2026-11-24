@@ -32,10 +32,7 @@ from sciplot_core.studio_core.document_edit_state import (
     preview_identity,
     run_document_worker,
 )
-from sciplot_core.studio_core.project_query import (
-    resolve_project_figure,
-    resolve_project_path,
-)
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure, resolve_project_path
 
 
 @project_read_runtime
