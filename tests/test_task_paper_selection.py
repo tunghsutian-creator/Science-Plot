@@ -112,7 +112,7 @@ def test_group_change_during_capture_blocks_before_start(group, tmp_path, monkey
 
     checkpoint, out = tmp_path / "paper", tmp_path / "out"
     for key in _REGISTERED_VERSION:
-        monkeypatch.setattr(paper, "capture_selection", lambda project, figure_id: {
+        monkeypatch.setattr(paper, "capture_selection", lambda project, figure_id, key=key: {
             "project": str(project), "figure_id": figure_id, "version": {**_REGISTERED_VERSION, key: "c" * 64},
         })
         with pytest.raises(TaskControlError) as changed:

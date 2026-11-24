@@ -261,9 +261,9 @@ def test_public_completed_group_freezes_once_and_reuses_current_native_publicati
         original = changed.read_bytes()
         original_stat = changed.stat()
 
-        def mutate_after_capture(selection):
+        def mutate_after_capture(selection, path=changed, content=original):
             publication = capture_publication(selection)
-            changed.write_bytes(original + b" ")
+            path.write_bytes(content + b" ")
             return publication
 
         checkpoint = tmp_path / f"drift-paper-{index}"
