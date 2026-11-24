@@ -12,6 +12,7 @@ from uuid import uuid4
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.plot_engine.managed_delivery_contract import normalize_request as normalize_managed_delivery
+from sciplot_core.source_coverage.file_snapshots import _assert_snapshot_current
 from sciplot_core.source_coverage.managed_documents import verify_managed_document_sources, source_records
 from sciplot_core.studio_core.document_edit_state import run_document_worker
 from sciplot_core.studio_core.project_query_paths import canonical_path
@@ -196,8 +197,9 @@ def _run(root: Path, state: dict[str, Any]) -> None:
 
 
 def start_paper(request: object, *, paper_dir: Path, base_dir: Path | None = None,
-                selection_origin: dict[str, Any] | None = None) -> dict[str, Any]:
-    normalized = normalize_paper_request(request, base_dir=base_dir)
+                selection_origin: dict[str, Any] | None = None,
+                group_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
+    normalized = normalize_paper_request(request, base_dir=base_dir, current_group=group_snapshot is not None)
     root = _path(paper_dir)
     _validate_locations(root, normalized)
     if not root.exists():
@@ -208,7 +210,9 @@ def start_paper(request: object, *, paper_dir: Path, base_dir: Path | None = Non
     with external_project_session(root):
         if root.exists():
             state = _load(root)
-            if state["kind"] != "sciplot_task_paper" or state["request"] != normalized or (selection_origin is not None and state.get("selection_origin") != selection_origin):
+            same_selection = (state.get("selection_origin") == selection_origin if group_snapshot is not None
+                              else state["request"] == normalized)
+            if state["kind"] != "sciplot_task_paper" or not same_selection:
                 raise TaskControlError("paper_already_exists", "This paper task already owns a different ordered selection.")
             return _current_summary(root, state)
         else:
@@ -218,11 +222,20 @@ def start_paper(request: object, *, paper_dir: Path, base_dir: Path | None = Non
             identities = [(item["project"], item["figure_id"]) for item in selections]
             if len(identities) != len(set(identities)):
                 raise TaskControlError("duplicate_paper_figure", "Project path aliases cannot select the same exact figure twice.")
-            if any(source["version"] != item["expected_version"] for source, item in zip(selections, normalized["items"], strict=True)):
+            if group_snapshot is not None:
+                _assert_snapshot_current(group_snapshot, label="paper current group selection", expected_sha256=group_snapshot["sha256"])
+                for source, item in zip(selections, normalized["items"], strict=True):
+                    if any(source["version"][key] != expected for key, expected in item["expected_version"].items()):
+                        raise TaskControlError("paper_selection_changed", "A registered group figure changed during selection. Start again from the current group.")
+                    item["expected_version"] = source["version"]
+            elif any(source["version"] != item["expected_version"] for source, item in zip(selections, normalized["items"], strict=True)):
                 raise TaskControlError("paper_selection_changed", "Use each selected figure's exact current version from paper capabilities.")
             _validate_source_locations(root, Path(normalized["out"]), selections)
             for selection in selections:
                 selection["publication"] = capture_publication(selection)
+            if group_snapshot is not None:
+                for selection in selections:
+                    assert_selection_current(selection)
             root.mkdir(mode=0o700)
             state = {"kind": "sciplot_task_paper", "version": 1, "paper_dir": str(root), "request": normalized,
                      "status": "pending", "selections": selections, "selection_origin": selection_origin,

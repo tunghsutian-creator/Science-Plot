@@ -14,11 +14,15 @@ from sciplot_core.task_contract import TaskControlError
 
 
 def paper_request_schema() -> dict[str, Any]:
+    return _paper_request_schema(current_group=False)
+
+
+def _paper_request_schema(*, current_group: bool) -> dict[str, Any]:
     text = {"type": "string", "minLength": 1, "maxLength": 200}
     digest = {"type": "string", "pattern": "^[a-f0-9]{64}$"}
-    version = object_schema({name: digest for name in (
-        "request_sha256", "document_sha256", "spec_sha256", "source_sha256",
-    )}, ["request_sha256", "document_sha256", "spec_sha256", "source_sha256"])
+    fields = (["document_sha256", "spec_sha256"] if current_group else
+              ["request_sha256", "document_sha256", "spec_sha256", "source_sha256"])
+    version = object_schema(dict.fromkeys(fields, digest), fields)
     return object_schema({
         "version": {"type": "integer", "const": 1}, "title": text,
         "out": {"type": "string", "minLength": 1},
@@ -30,10 +34,11 @@ def paper_request_schema() -> dict[str, Any]:
     }, ["version", "title", "out", "items"])
 
 
-def normalize_paper_request(value: object, *, base_dir: Path | None = None) -> dict[str, Any]:
+def normalize_paper_request(value: object, *, base_dir: Path | None = None,
+                            current_group: bool = False) -> dict[str, Any]:
     try:
         json.dumps(value, allow_nan=False)
-        error = next(Draft202012Validator(paper_request_schema()).iter_errors(value), None)
+        error = next(Draft202012Validator(_paper_request_schema(current_group=current_group)).iter_errors(value), None)
         if error is not None:
             raise ValueError(f"{'/'.join(map(str, error.absolute_path))}: {error.message[:400]}")
     except (ValueError, TypeError) as exc:

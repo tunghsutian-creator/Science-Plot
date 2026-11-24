@@ -173,7 +173,10 @@ def test_native_second_capture_failure_and_exact_retry_only_captures_unsealed_fi
 
 
 @pytest.mark.comprehensive
-def test_public_completed_group_freezes_once_and_reuses_current_native_publications(tmp_path):
+def test_public_completed_group_freezes_once_and_reuses_current_native_publications(tmp_path, capsys, monkeypatch):
+    from sciplot_core import task_papers as owner, task_paper_sources as sources_owner
+    from sciplot_core.cli import main
+    from sciplot_core.studio_core.project_session import ProjectSessionBusy, external_project_session
     from sciplot_core.task_group_storage import save_group
 
     sources, projects = _projects(tmp_path)
@@ -191,13 +194,36 @@ def test_public_completed_group_freezes_once_and_reuses_current_native_publicati
                                    'task_dir': str(tmp_path / ('create-' + entry['id']))}]} for entry in entries]}
     save_group(root, group)
     originals = {path: file_inventory(path) for path in [*sources, *projects, root]}
-    forward = _public('start', '--group', root, '--out', tmp_path / 'forward-publication', '--paper-dir', tmp_path / 'forward-paper')
+    captures = []
+    native_links = sources_owner.native_link_sources
+
+    def inspect_links(document):
+        with pytest.raises(ProjectSessionBusy):
+            with external_project_session(checkpoint):
+                pytest.fail("Native inventory must run under the paper owner lease.")
+        captures.append(document)
+        return native_links(document)
+
+    def cli(*args, expected=0):
+        code = main(["task", "paper", *map(str, args), "--json"])
+        payload = json.loads(capsys.readouterr().out)
+        assert code == expected, payload
+        return payload
+
+    monkeypatch.setattr(sources_owner, "native_link_sources", inspect_links)
+    documents = [project / "studio/document.vsz" for project in projects]
+    checkpoint = tmp_path / "forward-paper"
+    forward = cli('start', '--group', root, '--out', tmp_path / 'forward-publication', '--paper-dir', checkpoint)
+    assert captures == documents
     assert forward['ready_to_use'] is True and forward['readiness_evaluated'] is True
     assert forward['source_versions_current'] is True and forward['delivery_current'] is True
     assert 'no fresh native audit' in forward['readiness_scope']
     assert [item['stem'] for item in forward['items']] == ['001_P0_3_0_7_log', '002_P0_5_0_5_linear']
     out, paper = tmp_path / 'group-publication', tmp_path / 'group-paper'
-    result = _public('start', '--group', root, '--out', out, '--paper-dir', paper, '--item-id', 'FTIR', '--item-id', 'UVvis')
+    checkpoint = paper
+    captures.clear()
+    result = cli('start', '--group', root, '--out', out, '--paper-dir', paper, '--item-id', 'FTIR', '--item-id', 'UVvis')
+    assert captures == list(reversed(documents))
     assert result['status'] == 'complete' and result['ready_to_use'] is True, result
     assert [Path(item['project']) for item in result['items']] == list(reversed(projects))
     assert [item['stem'] for item in result['items']] == ['001_P0_5_0_5_linear', '002_P0_3_0_7_log']
@@ -206,7 +232,9 @@ def test_public_completed_group_freezes_once_and_reuses_current_native_publicati
     assert [item['label'] for item in manifest['items']] == ['P0_5_0_5_linear', 'P0_3_0_7_log']
     state = json.loads((paper / 'paper.json').read_text())
     assert state['selection_origin']['group_state_sha256'] == group['state_sha256']
-    for source, item in zip(state['selections'], state['items'], strict=True):
+    for source, item, requested in zip(state['selections'], state['items'], state['request']['items'], strict=True):
+        assert requested["expected_version"] == source["version"]
+        assert set(source["version"]) == {"request_sha256", "document_sha256", "spec_sha256", "source_sha256"}
         assert item['exports']['mode'] == 'copied_current_sealed_publication'
         for exported in item['exports']['exports']:
             original = next(record for record in source['publication']['exports'] if record['format'] == exported['format'])
@@ -216,9 +244,42 @@ def test_public_completed_group_freezes_once_and_reuses_current_native_publicati
     # A changed group cannot select a new revision during same-checkpoint replay.
     group['request']['title'] = 'New later group title'
     save_group(root, group)
-    repeated = _public('start', '--group', root, '--out', out, '--paper-dir', paper, '--item-id', 'FTIR', '--item-id', 'UVvis')
+    captures.clear()
+    repeated = cli('start', '--group', root, '--out', out, '--paper-dir', paper, '--item-id', 'FTIR', '--item-id', 'UVvis')
+    assert cli("inspect", paper)["ready_to_use"] is True
+    assert cli("resume", paper)["ready_to_use"] is True
+    assert not captures
     assert repeated['ready_to_use'] is True and repeated['title'] == result['title']
     assert (paper / 'paper.json').read_bytes() == frozen
+
+    # Modify a selected source after its publication receipt has been captured
+    # but before the owner can write the frozen paper checkpoint or any outputs.
+    capture_publication = owner.capture_publication
+    uv_selection = state["selections"][-1]
+    captured_source = Path(next(iter(uv_selection["source_files"])))
+    for index, changed in enumerate((captured_source, Path(uv_selection["document"]), Path(uv_selection["spec"]))):
+        original = changed.read_bytes()
+        original_stat = changed.stat()
+
+        def mutate_after_capture(selection):
+            publication = capture_publication(selection)
+            changed.write_bytes(original + b" ")
+            return publication
+
+        checkpoint = tmp_path / f"drift-paper-{index}"
+        drift_out = tmp_path / f"drift-out-{index}"
+        captures.clear()
+        with monkeypatch.context() as patch:
+            patch.setattr(owner, "capture_publication", mutate_after_capture)
+            try:
+                blocked = cli("start", "--group", root, "--out", drift_out, "--paper-dir", checkpoint,
+                              "--item-id", "UVvis", expected=1)
+            finally:
+                changed.write_bytes(original)
+                os.utime(changed, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
+        assert blocked["reason_code"] == "paper_selection_changed"
+        assert captures == documents[:1]
+        assert not checkpoint.exists() and not drift_out.exists()
 
 
 def _never_rebuild(*_args, **_kwargs):

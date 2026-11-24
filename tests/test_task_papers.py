@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from sciplot_core.cli import main
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.studio_core.source_update_commit import file_inventory
 from sciplot_core.task_contract import TaskControlError
@@ -79,13 +80,24 @@ def test_duplicate_labels_and_exact_figures_fail_before_allocation(case):
     assert caught.value.reason_code == "duplicate_paper_figure"
 
 
-def test_exact_version_prevents_stale_native_selection(case):
+def test_exact_version_prevents_stale_native_selection(case, capsys):
     tmp, request, projects, _, _ = case
     (projects[0] / "studio/document.vsz").write_text("new manual save")
-    with pytest.raises(TaskControlError) as caught:
-        paper.start_paper(request, paper_dir=tmp / "task")
-    assert caught.value.reason_code == "paper_selection_changed"
-    assert not (tmp / "task").exists()
+    request_path = tmp / "request.json"
+    command = ["task", "paper", "start", "--request", str(request_path), "--paper-dir", str(tmp / "task"), "--json"]
+    item = request["items"][0]
+    exact = item["expected_version"]
+    for version, reason in ((exact, "paper_selection_changed"),
+                            ({key: exact[key] for key in ("document_sha256", "spec_sha256")}, "invalid_paper_request"),
+                            (None, "invalid_paper_request")):
+        if version is None:
+            del item["expected_version"]
+        else:
+            item["expected_version"] = version
+        request_path.write_text(json.dumps(request))
+        assert main(command) == 1
+        assert json.loads(capsys.readouterr().out)["reason_code"] == reason
+        assert not (tmp / "task").exists() and not Path(request["out"]).exists()
 
 
 @pytest.mark.parametrize("target", ["existing", "project", "source", "task"])

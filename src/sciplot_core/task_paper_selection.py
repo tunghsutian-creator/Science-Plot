@@ -8,7 +8,6 @@ from sciplot_core.studio_core.project_query_paths import canonical_path, project
 from sciplot_core.studio_core.project_session import external_project_session
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_group_storage import group_path, load_group, step_state
-from sciplot_core.task_paper_sources import capture_selection
 from sciplot_core.task_papers import _path, _load, _inspect, start_paper, inspect_paper, start_managed_group_paper
 from sciplot_core.task_semantic_owner import describe_managed
 from sciplot_core.task_storage import task_location
@@ -103,14 +102,13 @@ def start_group_paper(group: Path, *, paper_dir: Path, out: Path, title: str | N
         else:
             if figure["status"] != "ready":
                 raise TaskControlError("paper_group_figure_pending", "Every selected registered figure must have a saved native document.")
-            captured = capture_selection(Path(item["project"]), figure["figure_id"])
-            selected.append({"project": captured["project"], "figure_id": figure["figure_id"],
-                             "label": item["label"], "expected_version": captured["version"]})
-    _assert_snapshot_current(snapshot, label="paper current group selection", expected_sha256=snapshot["sha256"])
+            selected.append({"project": item["project"], "figure_id": figure["figure_id"], "label": item["label"],
+                             "expected_version": {key: figure[key] for key in ("document_sha256", "spec_sha256")}})
     resolved_title = title if title is not None else state["request"]["title"]
     selection_origin = {"request": origin, "group_state_sha256": state["state_sha256"],
                         "scope": "Frozen ordered registered figures, not a cross-plot edit."}
     if managed:
+        _assert_snapshot_current(snapshot, label="paper current group selection", expected_sha256=snapshot["sha256"])
         if any(target == group or target.is_relative_to(group) or group.is_relative_to(target) for target in (root, out)):
             raise TaskControlError("paper_path_overlap", "Keep the paper package and checkpoint outside the original group.")
         # Protect the group's input tree, workspace and original visible output
@@ -121,5 +119,5 @@ def start_group_paper(group: Path, *, paper_dir: Path, out: Path, title: str | N
             task_location(requests[identifier], out)
         return start_managed_group_paper(root, out=out, title=resolved_title, items=selected, selection_origin=selection_origin)
     result = start_paper({"version": 1, "title": resolved_title, "out": str(out), "items": selected},
-                         paper_dir=root, selection_origin=selection_origin)
+                         paper_dir=root, selection_origin=selection_origin, group_snapshot=snapshot)
     return inspect_paper(root) if result.get("status") == "complete" else result

@@ -5,11 +5,14 @@ import json
 
 import pytest
 
-from sciplot_core import task_paper_selection as selection
+from sciplot_core import task_paper_selection as selection, task_papers as paper
 from sciplot_core.cli.parsers import build_parser
 from sciplot_core.cli.task_paper import dispatch_paper
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_group_storage import save_group
+
+
+_REGISTERED_VERSION = {"document_sha256": "a" * 64, "spec_sha256": "b" * 64}
 
 
 @pytest.fixture
@@ -29,35 +32,27 @@ def group(tmp_path, monkeypatch):
                         "steps": [{"task_dir": str(root / "tasks" / item["id"])}]} for item in sources]}
     save_group(root, state)
     monkeypatch.setattr(selection, "step_state", lambda step: children[step["task_dir"]])
-    monkeypatch.setattr(selection, "project_snapshot", lambda project: ({}, "primary", [{"figure_id": "primary", "status": "ready"}]))
-    captures = []
-
-    def capture(project, figure_id):
-        captures.append(str(project))
-        return {"project": str(project), "version": {"document_sha256": "a" * 64}}
-
-    monkeypatch.setattr(selection, "capture_selection", capture)
+    monkeypatch.setattr(selection, "project_snapshot", lambda project: ({}, "primary", [{"figure_id": "primary", "status": "ready", **_REGISTERED_VERSION}]))
     saved = []
     monkeypatch.setattr(selection, "start_paper", lambda request, **options: saved.append((request, options)) or {"status": "complete"})
     monkeypatch.setattr(selection, "inspect_paper", lambda _: {"status": "complete", "ready_to_use": True})
-    return root, state, children, captures, saved
+    return root, state, children, saved
 
 
 def test_default_order_and_explicit_item_order_capture_versions_once(group, tmp_path):
-    root, _, _, captures, saved = group
+    root, _, _, saved = group
     assert selection.start_group_paper(root, out=tmp_path / "out", paper_dir=tmp_path / "paper")["status"] == "complete"
     assert [Path(item["project"]).name for item in saved[0][0]["items"]] == ["project-A", "project-B"]
-    assert all("expected_version" in item for item in saved[0][0]["items"])
+    assert all(item["expected_version"] == _REGISTERED_VERSION for item in saved[0][0]["items"])
     assert [item["label"] for item in saved[0][0]["items"]] == ["P0_3_0_7_log", "P0_5_0_5_linear"]
     selection.start_group_paper(root, out=tmp_path / "out2", paper_dir=tmp_path / "paper2", item_ids=["B", "A"])
     assert [Path(item["project"]).name for item in saved[-1][0]["items"]] == ["project-B", "project-A"]
     assert [item["label"] for item in saved[-1][0]["items"]] == ["P0_5_0_5_linear", "P0_3_0_7_log"]
-    assert len(captures) == 4
 
 
 @pytest.mark.parametrize("change", ["not_finished", "pending_child", "duplicate", "unknown"])
 def test_incomplete_or_ambiguous_selection_never_reaches_paper(group, tmp_path, change):
-    root, state, children, _, saved = group
+    root, state, children, saved = group
     ids = None
     if change == "not_finished":
         state["items"][0]["finished"] = False
@@ -72,7 +67,7 @@ def test_incomplete_or_ambiguous_selection_never_reaches_paper(group, tmp_path, 
 
 
 def test_existing_checkpoint_reads_frozen_selection_without_group_recapture(group, tmp_path, monkeypatch):
-    root, _, _, captures, saved = group
+    root, _, _, saved = group
     paper = tmp_path / "paper"
     paper.mkdir()
     out = tmp_path / "out"
@@ -81,7 +76,7 @@ def test_existing_checkpoint_reads_frozen_selection_without_group_recapture(grou
     monkeypatch.setattr(selection, "_inspect", lambda *_: {"status": "blocked", "recorded_status": "complete"})
     monkeypatch.setattr(selection, "load_group", lambda *_: pytest.fail("Retry must not recapture changed group"))
     assert selection.start_group_paper(root, out=out, paper_dir=paper)["recorded_status"] == "complete"
-    assert not saved and not captures
+    assert not saved
     with pytest.raises(TaskControlError):
         selection.start_group_paper(root, out=out, paper_dir=paper, item_ids=["B"])
 
@@ -102,7 +97,7 @@ def test_shared_public_cli_routes_group_and_rejects_mixed_request_options(tmp_pa
 
 
 def test_group_read_is_stable_and_creates_no_original_metadata(group, tmp_path):
-    root, _, _, _, _ = group
+    root, _, _, _ = group
     before = {str(path): path.read_bytes() for path in root.rglob('*') if path.is_file()}
     selection.start_group_paper(root, out=tmp_path / 'out', paper_dir=tmp_path / 'paper')
     assert before == {str(path): path.read_bytes() for path in root.rglob('*') if path.is_file()}
@@ -110,26 +105,37 @@ def test_group_read_is_stable_and_creates_no_original_metadata(group, tmp_path):
 
 
 def test_group_change_during_capture_blocks_before_start(group, tmp_path, monkeypatch):
-    root, _, _, _, saved = group
-    capture = selection.capture_selection
+    root, _, _, saved = group
+    monkeypatch.setattr(selection, "start_paper", paper.start_paper)
+    monkeypatch.setattr(paper, "_validate_locations", lambda *_: None)
+    monkeypatch.setattr(paper, "capture_publication", lambda *_: pytest.fail("A changed group cannot capture publication"))
 
-    def concurrent_change(*args):
-        value = json.loads((root / 'group.json').read_text())
-        value['request']['title'] = 'concurrent external revision'
-        (root / 'group.json').write_text(json.dumps(value))
-        return capture(*args)
+    checkpoint, out = tmp_path / "paper", tmp_path / "out"
+    for key in _REGISTERED_VERSION:
+        monkeypatch.setattr(paper, "capture_selection", lambda project, figure_id: {
+            "project": str(project), "figure_id": figure_id, "version": {**_REGISTERED_VERSION, key: "c" * 64},
+        })
+        with pytest.raises(TaskControlError) as changed:
+            selection.start_group_paper(root, out=out, paper_dir=checkpoint)
+        assert changed.value.reason_code == "paper_selection_changed"
+        assert not checkpoint.exists() and not out.exists()
 
-    monkeypatch.setattr(selection, 'capture_selection', concurrent_change)
-    with pytest.raises(ValueError):
-        selection.start_group_paper(root, out=tmp_path / 'out', paper_dir=tmp_path / 'paper')
-    assert not saved
+    def concurrent_change(project, figure_id):
+        value = json.loads((root / "group.json").read_text())
+        value["request"]["title"] = "concurrent external revision"
+        (root / "group.json").write_text(json.dumps(value))
+        return {"project": str(project), "figure_id": figure_id}
 
+    monkeypatch.setattr(paper, "capture_selection", concurrent_change)
+    with pytest.raises(ValueError, match="paper current group selection changed"):
+        selection.start_group_paper(root, out=out, paper_dir=checkpoint)
+    assert not saved and not checkpoint.exists() and not out.exists()
 
 
 def test_only_multi_figure_projects_add_titles_or_necessary_stable_identity(group, tmp_path, monkeypatch):
-    root, _, _, _, saved = group
-    figures = [{"figure_id": "internal-A", "title": "Observed curve", "status": "ready"},
-               {"figure_id": "internal-B", "title": "Reference", "status": "ready"}]
+    root, _, _, saved = group
+    figures = [{"figure_id": "internal-A", "title": "Observed curve", "status": "ready", **_REGISTERED_VERSION},
+               {"figure_id": "internal-B", "title": "Reference", "status": "ready", **_REGISTERED_VERSION}]
     monkeypatch.setattr(selection, "project_snapshot", lambda _: ({}, "internal-A", figures))
     selection.start_group_paper(root, out=tmp_path / "out", paper_dir=tmp_path / "paper", item_ids=["A"])
     assert [item["label"] for item in saved[-1][0]["items"]] == ["P0_3_0_7_log_Observed_curve", "P0_3_0_7_log_Reference"]
@@ -140,7 +146,7 @@ def test_only_multi_figure_projects_add_titles_or_necessary_stable_identity(grou
 
 
 def test_first_group_completion_returns_fresh_owner_result_and_never_promotes_blocked(group, tmp_path, monkeypatch):
-    root, _, _, _, _ = group
+    root, _, _, _ = group
     checked = []
     current = {"status": "blocked", "recorded_status": "complete", "ready_to_use": False,
                "readiness_evaluated": True, "delivery_current": False,
@@ -171,7 +177,7 @@ def _saved_handle(child):
 
 
 def test_mixed_authority_lists_exact_members_before_any_publisher(group, tmp_path, monkeypatch):
-    root, _, children, captures, saved = group
+    root, _, children, saved = group
     first = next(iter(children.values()))
     handle = _saved_handle(first)
     monkeypatch.setattr(selection, "start_managed_group_paper", lambda *a, **k: pytest.fail("Mixed selection cannot package"))
@@ -182,13 +188,13 @@ def test_mixed_authority_lists_exact_members_before_any_publisher(group, tmp_pat
     assert broken.value.reason_code == "paper_group_mixed_authority"
     assert [item["authority"] for item in broken.value.repair["items"]] == ["ManagedPlot", "LegacyPlot"]
     assert broken.value.repair["items"][0]["plot"] == handle["plot"]
-    assert not saved and not captures and not paper.exists() and not out.exists()
+    assert not saved and not paper.exists() and not out.exists()
 
 
 def test_managed_path_alias_cannot_duplicate_saved_figure(group, tmp_path, monkeypatch):
     from sciplot_core.plot_engine.errors import EngineError
 
-    root, _, children, captures, saved = group
+    root, _, children, saved = group
     first, second = children.values()
     handle = _saved_handle(first)
     _saved_handle(second)["plot"] = str(Path(handle["plot"]).parent / "alias" / ".." / Path(handle["plot"]).name)
@@ -197,4 +203,4 @@ def test_managed_path_alias_cannot_duplicate_saved_figure(group, tmp_path, monke
     with pytest.raises(EngineError) as broken:
         selection.start_group_paper(root, out=out, paper_dir=paper)
     assert broken.value.reason_code == "managed_delivery_duplicate_plot"
-    assert not saved and not captures and not paper.exists() and not out.exists()
+    assert not saved and not paper.exists() and not out.exists()
