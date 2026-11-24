@@ -50,6 +50,8 @@ def validate_index(value: Any, project_id: str) -> dict[str, Any]:
                 or not isinstance(item.get("origin_root"), str) or not Path(item["origin_root"]).is_absolute()
                 or not isinstance(item.get("project_origin"), str) or not Path(item["project_origin"]).is_absolute()
                 or not isinstance(item.get("plot_id"), str) or not isinstance(item.get("figure_id"), str)
+                or item.get("publication_output") is not None and (
+                    not isinstance(item["publication_output"], str) or not Path(item["publication_output"]).is_absolute())
                 or item.get("history_root") is not None and not Path(item["history_root"]).is_absolute()):
             raise EngineError("semantic_attachment_index_invalid", "A semantic namespace has an invalid stable identity.")
     return value

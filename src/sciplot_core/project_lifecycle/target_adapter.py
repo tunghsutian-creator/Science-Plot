@@ -14,8 +14,10 @@ from .targets import (DecisionKind, DecisionTarget, ImportTarget, ManagedCreatio
 
 class FilesystemProjectTargets:
     def __init__(self, repository: ProjectRepository, *,
-                 resolve_figure: Callable[..., dict[str, Any]] | None = None) -> None:
+                 resolve_figure: Callable[..., dict[str, Any]] | None = None,
+                 publish_fresh_managed_output: bool = False) -> None:
         self.repository, self.resolve_figure = repository, resolve_figure
+        self.publish_fresh_managed_output = publish_fresh_managed_output
 
     def resolve_open(self, target: Path, figure_id: str | None = None) -> OpenTarget:
         target = canonical_path(target)
@@ -150,14 +152,22 @@ class FilesystemProjectTargets:
         control = _source_control_parent(source) / ".sciplot_documents"
         root = legacy if self.repository.exists(legacy / "managed-creation.json") else control / "managed" / digest(request["idempotency_key"])
         old_attempt = self.repository.exists(root / "managed-creation.json")
-        if not old_attempt and request.get("storage") == "project_store_v2":
+        # Public expert output is a publication destination, not a backend
+        # workspace. Leave registered external-executor creation on its
+        # original route until it has equivalent Store host grants.
+        public_output = (self.publish_fresh_managed_output and "out" in request
+                         and not request.get("scientific_executors")
+                         and not any(node.get("kind") == "external"
+                                     for node in request["data_binding"].get("transforms", [])))
+        if not old_attempt and (request.get("storage") == "project_store_v2" or public_output):
             if not isinstance(self.repository, ComposedProjectRepository):
                 raise EngineError("managed_store_required", "The versioned Managed task requires the Project Store repository.")
             from .attachment_targets import attached_managed_creation
-            from .managed_store_target import open_managed_store
+            from .managed_store_target import managed_publication_target, open_managed_store
 
+            publication = managed_publication_target(root, request) if public_output else None
             store = open_managed_store(canonical_path(root), request)
-            attached = attached_managed_creation(self.repository, request, store=store)
+            attached = attached_managed_creation(self.repository, request, store=store, publication=publication)
             assert attached is not None
             return attached
         output = canonical_path(Path(request["out"])) if "out" in request else source.parent / (source.stem + "_SciPlot") / identifier.replace(":", "_")

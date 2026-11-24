@@ -35,6 +35,12 @@ class RepositoryBackendPaths:
             result: dict[str, Any] = (self.backend.fingerprint(binding, input_document=input_document)
                 if input_document is not None and binding.get("kind") == "sciplot_managed_binding"
                 else self.backend.fingerprint(binding))
+            output = self.repository.managed_publication_output(binding)
+            if output is not None:
+                from .managed_artifact_projection import visible_native_changed
+
+                if visible_native_changed(binding, output):
+                    result = {**result, "artifacts": {**result["artifacts"], binding["document"]: "external_native_mutation"}}
             return result
 
     def preview(self, document: dict[str, Any], binding: dict[str, Any], new_document: dict[str, Any],
@@ -76,6 +82,11 @@ class RepositoryBackendPaths:
     def export(self, binding: dict[str, Any]) -> dict[str, Any]:
         with self.repository.binding_scope(binding):
             result: dict[str, Any] = self.backend.export(binding)
+            output = self.repository.managed_publication_output(binding)
+            if output is not None and result.get("ready_to_use") is True:
+                from .managed_artifact_projection import publish_managed_artifacts
+
+                return publish_managed_artifacts(binding, output, result)
             return result
 
     def apply(self, binding: dict[str, Any], review: dict[str, Any]) -> dict[str, Any]:

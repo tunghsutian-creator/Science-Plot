@@ -8,10 +8,17 @@ from sciplot_core.cli import main
 from sciplot_core.plan_preview import build_plan_preview
 from sciplot_core.plot_backends.managed import ManagedVeuszCompiler
 from sciplot_core.plot_backends.figure_marks import coordinates
-from sciplot_core.plot_engine.storage import load_head
+from sciplot_core.project_lifecycle.context import repository_scope
+from sciplot_core.project_lifecycle.repository_router import ComposedProjectRepository
 from sciplot_core.plot_protocol.server import make_service
 from sciplot_core.studio_core.project_creation import create_project
 from sciplot_core.task_semantic_owner import local_managed_actions
+
+
+def _load_head(plot: Path) -> dict:
+    repository = ComposedProjectRepository()
+    with repository_scope(repository), repository.query_scope(plot):
+        return repository.load_head(plot)
 
 
 @pytest.mark.comprehensive
@@ -43,7 +50,10 @@ def test_verified_curve_project_creates_managed_and_recovers_existing_delivery(t
         blocked = json.loads(capsys.readouterr().out)
         assert blocked["document_authority"] == "managed_plot" and not out.exists()
         plot = Path(blocked["project_dir"])
-        head = load_head(plot)
+        head = _load_head(plot)
+        assert plot.parent.name == ".sciplot_semantic"
+        assert (plot.parent.parent / ".sciplot_store" / "head.json").is_file()
+        assert not (plot.parent.parent / "managed-creation.json").exists()
         assert head["document"]["plot_type"] == "ManagedPlot" and head["document"]["revision"] == 0
         ir = json.loads(Path(head["binding"]["ir_path"]).read_bytes())
         layer, = ir["views"][0]["layers"]
@@ -79,7 +89,7 @@ def test_verified_curve_project_creates_managed_and_recovers_existing_delivery(t
             assert main(cmd) != 0
             assert json.loads(capsys.readouterr().out)["status"] == "blocked"
             assert document.read_bytes() == edited
-        assert load_head(plot)["document"]["revision"] == 0
+        assert _load_head(plot)["document"]["revision"] == 0
         assert raw.read_bytes() == original
     finally:
         service.close()
@@ -187,7 +197,7 @@ def test_source_only_uvvis_single_and_group_keep_managed_authority_through_retry
     assert single_handle["plot_id"] != group_handle["plot_id"]
     for handle in (single_handle, group_handle):
         assert handle["plot_type"] == "ManagedPlot" and handle["revision"] == 0
-        head = load_head(Path(handle["plot"]))
+        head = _load_head(Path(handle["plot"]))
         ir = json.loads(Path(head["binding"]["ir_path"]).read_bytes())
         layer, = ir["views"][0]["layers"]
         xy = coordinates(ir, layer)
@@ -213,7 +223,7 @@ def test_source_only_uvvis_single_and_group_keep_managed_authority_through_retry
         assert (reopened["plot_id"], reopened["revision"]) == (before["plot_id"], 1)
         assert reopened["scientific_hash"] == before["scientific_hash"]
         assert reopened["presentation_hash"] != before["presentation_hash"]
-        after_head = load_head(Path(handle["plot"]))
+        after_head = _load_head(Path(handle["plot"]))
         after_ir = json.loads(Path(after_head["binding"]["ir_path"]).read_bytes())
         after_layer, = after_ir["views"][0]["layers"]
         assert after_layer["marks"][0]["style"]["line_color"] == "#2277aa"

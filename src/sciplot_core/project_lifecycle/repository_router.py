@@ -90,6 +90,14 @@ class ComposedProjectRepository(FileProjectRepository):
             with scope:
                 yield
 
+    def managed_publication_output(self, binding: dict[str, Any]) -> Path | None:
+        root = binding.get("root")
+        if binding.get("kind") != "sciplot_managed_binding" or not isinstance(root, str):
+            return None
+        selected = self._discover(Path(root))
+        output = selected.attachment.entry.get("publication_output") if selected is not None else None
+        return Path(output) if output is not None else None
+
     def selected_store(self) -> FileProjectStore | None:
         return selected_project_store()
 

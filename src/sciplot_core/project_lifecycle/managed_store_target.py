@@ -19,6 +19,19 @@ from .repository import digest
 MANAGED_STORE_CLAIM = "managed-store-claim.json"
 
 
+
+def managed_publication_target(root: Path, request: dict[str, Any]) -> Path:
+    """Admit a user destination separately from the canonical Store claim."""
+    output = canonical_path(Path(request["out"]))
+    require_data_destination(output)
+    originals = [canonical_path(Path(source["path"])) for source in request["data_binding"]["data_sources"]]
+    if any(output.is_relative_to(path) or path.is_relative_to(output) for path in [root, *originals]):
+        raise EngineError("managed_output_conflict", "The visible output cannot overlap the Managed store or an original source.")
+    if output.exists() and (not output.is_dir() or
+            not (root / MANAGED_STORE_CLAIM).is_file() and any(output.iterdir())):
+        raise EngineError("managed_output_conflict", "The selected output directory already contains files.")
+    return output
+
 def open_managed_store(root: Path, request: dict[str, Any]) -> FileProjectStore:
     """Recover one exact root claim, then use the normal selected Store writer."""
     require_data_destination(root)

@@ -115,3 +115,51 @@ def test_public_cli_create_and_mcp_rebuild_from_canonical_document(tmp_path, fig
                 engine_pid = read_owner(socket)["pid"]
             if engine_pid is not None:
                 os.kill(engine_pid, signal.SIGTERM)
+
+
+@pytest.mark.comprehensive
+def test_public_expert_output_is_projection_for_create_patch_and_export(tmp_path):
+    from managed_plot_helpers import patch
+    from sciplot_core.plot_protocol.rpc import RemoteError
+    from sciplot_core.project_lifecycle.context import repository_scope
+    from sciplot_core.project_lifecycle.repository_router import ComposedProjectRepository
+    from sciplot_core.studio_core.source_update_files import file_inventory
+
+    originals = tmp_path / "originals"
+    originals.mkdir()
+    out = tmp_path / "deliveries" / "experiment"
+    request = {**request_for_source(originals), "out": str(out)}
+    created = call("plot.create", {"request": request}, direct=True)
+    assert created["ready_to_use"] and created["revision"] == 0, created
+    root = Path(created["plot"])
+    assert root.parent.name == ".sciplot_semantic"
+    assert (root.parent.parent / ".sciplot_store/head.json").is_file()
+    assert root.is_relative_to(originals) and not root.is_relative_to(out)
+    repository = ComposedProjectRepository()
+    with repository_scope(repository), repository.query_scope(root):
+        binding = repository.load_head(root)["binding"]
+    assert Path(binding["document"]).is_relative_to(root.parent.parent / ".sciplot_store")
+    first = out / "artifacts" / created["ir_hash"]
+    original_members = file_inventory(first)
+    assert {"document.vsz", "exports/document.pdf", "exports/document_300dpi.tiff"} <= set(original_members)
+    assert not (out / "index.json").exists()  # This is not a task or paper package.
+
+    changed = call("plot.patch", {"plot": str(root), "request": patch(
+        created, "wider-line", "style.line.width", "1.2pt", "series:A")}, direct=True)
+    assert changed["ready_to_use"] and changed["revision"] == 1, changed
+    second = out / "artifacts" / changed["ir_hash"]
+    assert first != second and file_inventory(first) == original_members
+    assert all(Path(item["path"]).is_relative_to(second) for item in changed["exports"])
+
+    lost = next(Path(item["path"]) for item in changed["exports"] if item["format"] == "pdf")
+    lost.unlink()
+    exported = call("plot.export", {"plot": str(root)}, direct=True)
+    assert exported["ready_to_use"] and exported["revision"] == 1 and lost.is_file()
+    assert file_inventory(first) == original_members
+
+    visible = second / "document.vsz"
+    edited = visible.read_bytes() + b"\n# user edit\n"
+    visible.write_bytes(edited)
+    with pytest.raises(RemoteError):
+        call("plot.export", {"plot": str(root)}, direct=True)
+    assert visible.read_bytes() == edited
