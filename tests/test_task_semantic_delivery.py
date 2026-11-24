@@ -1,5 +1,6 @@
 """Final task delivery reuses the sealed native-snapshot owner without recreating science."""
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -12,13 +13,12 @@ def _timed_semantic_backend(tmp_path, monkeypatch, *, decisions, fail_delivery=F
     """Account for known owner work without native runtime or wall-clock sleeps."""
     from sciplot_core import task_timing
     from sciplot_core import task_semantic_plan
-    from types import SimpleNamespace
-
     from sciplot_core.plot_engine import service
     from sciplot_core.plot_protocol import socket_client
     from sciplot_core.task_semantic_owner import create_managed
 
     now, calls = [0.0], {"create": 0, "delivery": 0, "describe": 0}
+    owner_calls = []
     monkeypatch.setattr(task_timing, "perf_counter", lambda: now[0])
     def work(seconds):
         now[0] += seconds
@@ -59,22 +59,24 @@ def _timed_semantic_backend(tmp_path, monkeypatch, *, decisions, fail_delivery=F
     monkeypatch.setattr(semantic, "execute_managed", lambda _state, wire: create_managed(wire))
     monkeypatch.setattr(delivery, "delivery_current", lambda state: True)
     monkeypatch.setattr(delivery, "handoff_paths", lambda state: {"images": ["/delivery/figure.tiff"]})
+
     def no_nested_transport(*_args, **_kwargs):
         pytest.fail("Task operations belong to the already-local application, not a nested transport.")
 
     def new_owner():
-        opened, closed = [], []
+        methods = []
+        owner_calls.append(methods)
 
         def invoke(operation, *args, **kwargs):
-            assert not closed
-            opened.append(operation)
+            assert "closed" not in methods
+            methods.append(operation.__name__)
             return operation(*args, **kwargs)
 
         return SimpleNamespace(
             create=lambda wire: invoke(create, wire),
             deliver=lambda wire: invoke(package, wire),
             describe=lambda plot, **options: invoke(describe, plot, **options),
-            close=lambda: closed.append(tuple(opened)),
+            close=lambda: methods.append("closed"),
         )
 
     monkeypatch.setattr(service, "public_plot_service", new_owner)
@@ -83,7 +85,7 @@ def _timed_semantic_backend(tmp_path, monkeypatch, *, decisions, fail_delivery=F
     source.write_text("Time,Mass\ns,%\n0,100\n1,99\n")
     request = {"version": 1, "action": "create", "sources": [str(source)],
                "intent": {"x": {"quantity": "time"}, "y": {"quantity": "mass"}}}
-    return request, work, calls
+    return request, work, calls, owner_calls
 
 
 def _assert_timing_receipt(task, result, *, calls, total, last):
@@ -102,7 +104,7 @@ def _assert_timing_receipt(task, result, *, calls, total, last):
 @pytest.mark.parametrize("needs_choice", [False, True], ids=["explicit-create", "question-resume"])
 def test_semantic_call_timing_matches_saved_receipt_after_current_evidence(tmp_path, monkeypatch, needs_choice):
     decisions = [{"field": "time_boundary", "options": ["preserve_endpoint", "next_sample"]}] if needs_choice else []
-    request, work, calls = _timed_semantic_backend(tmp_path, monkeypatch, decisions=decisions)
+    request, work, calls, owner_calls = _timed_semantic_backend(tmp_path, monkeypatch, decisions=decisions)
     task = tmp_path / "task"
     result = start_task(request, task_dir=task)
     if needs_choice:
@@ -116,10 +118,11 @@ def test_semantic_call_timing_matches_saved_receipt_after_current_evidence(tmp_p
     _assert_timing_receipt(task, result, calls=2 if needs_choice else 1, total=28, last=26 if needs_choice else 28)
     assert result["local_timing"]["last_call_phases_seconds"]["checking_current_project"] == 11
     assert calls == {"create": 1, "delivery": 1, "describe": 1}
+    assert owner_calls == [["create", "package", "describe", "closed"]]
 
 
 def test_semantic_delivery_retry_timing_excludes_wait_and_inspect_is_read_only(tmp_path, monkeypatch):
-    request, work, calls = _timed_semantic_backend(tmp_path, monkeypatch, decisions=[], fail_delivery=True)
+    request, work, calls, owner_calls = _timed_semantic_backend(tmp_path, monkeypatch, decisions=[], fail_delivery=True)
     task = tmp_path / "task"
     failed = start_task(request, task_dir=task)
     assert failed["status"] == "blocked" and failed["phase"] == "delivering"
@@ -140,6 +143,12 @@ def test_semantic_delivery_retry_timing_excludes_wait_and_inspect_is_read_only(t
     assert replay["ready_to_use"] is True and replay["local_timing"] == done["local_timing"]
     assert (task / "task.json").read_bytes() == before
     assert calls == {"create": 1, "delivery": 2, "describe": 3}
+    assert owner_calls == [
+        ["create", "package", "closed"],
+        ["package", "describe", "closed"],
+        ["describe", "closed"],
+        ["describe", "closed"],
+    ]
 
 
 def test_delivery_failure_resumes_same_frozen_request_without_create_or_retransform(tmp_path, monkeypatch):
