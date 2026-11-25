@@ -113,12 +113,16 @@ def test_mapping_does_not_allow_rule_override_or_a_foreign_task_source(tmp_path)
 
 
 def test_mapped_creation_enters_existing_canonical_request_studio_route(tmp_path, monkeypatch):
-    source, selection, _execution = _mapped_case(tmp_path)
+    source, selection, execution = _mapped_case(tmp_path)
     plan = build_plan_preview(source, request=selection)
     calls = []
 
-    def prepare(target, *, _new_creation=False):
+    def prepare(target, *, _new_creation=False, _scientific_source):
         assert _new_creation is True
+        effective = Path(execution['effective_input'])
+        assert _scientific_source.source == effective
+        assert _scientific_source.source_sha256 == source_tree_sha256(effective)
+        assert _scientific_source.rule_id == "uvvis_spectrum"
         request = json.loads(target.read_text())
         calls.append(request)
         return {"project_dir": str(target.parent), "request": str(target),
@@ -246,10 +250,13 @@ def test_stress_scale_expected_plan_reaches_canonical_studio_request(tmp_path, m
     plan = build_plan_preview(source, request={'rule_id': 'rheology_stress_relaxation', 'xscale': 'linear'})
     assert plan['status'] == 'planned', plan['blocker']
     calls = []
-    def prepare(target, **options):
+    def prepare(target, *, _scientific_source, **options):
         request = json.loads(target.read_text())
         calls.append(request)
         assert options == {'rule_id': 'rheology_stress_relaxation', 'template': 'curve'}
+        assert _scientific_source.source == source
+        assert _scientific_source.rule_id == options['rule_id']
+        assert _scientific_source.figure_plan.plan_sha256 == plan['resolved_figure_plan']['plan_sha256']
         return {'project_dir': str(target.parent), 'request': str(target), 'document': str(target.parent / 'studio/document.vsz')}
     monkeypatch.setattr(project_creation, 'prepare_studio_document', prepare)
     monkeypatch.setattr(project_creation, '_publish', lambda payload: payload)

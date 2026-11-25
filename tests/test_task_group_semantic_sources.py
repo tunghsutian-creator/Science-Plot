@@ -12,7 +12,7 @@ from test_task_semantic_delivery import _timed_semantic_backend
 
 
 def semantic_group(tmp_path, monkeypatch, *, decisions=()):
-    task, _, calls = _timed_semantic_backend(tmp_path, monkeypatch, decisions=list(decisions))
+    task, _, calls, _ = _timed_semantic_backend(tmp_path, monkeypatch, decisions=list(decisions))
     second = tmp_path / 'second.csv'
     second.write_text('Time,Mass\ns,%\n0,80\n1,79\n')
     task['sources'] = ['original.csv', 'second.csv']

@@ -18,7 +18,10 @@ from sciplot_core.output_contract import resolve_user_output_layout
 
 def _source(tmp_path):
     path = tmp_path / 'UVvis.csv'
-    path.write_text('Wavelength,Absorbance\nnm,a.u.\nE3,E3\n400,1\n450,4\n500,1\n')
+    # This two-series UV-vis plan uses the native compatibility route. Keep
+    # the fixture on that real route to exercise its recovery and write fence.
+    path.write_text('Wavelength,Absorbance,Wavelength,Absorbance\n'
+                    'nm,a.u.,nm,a.u.\nE3,E3,E4,E4\n400,1,400,3\n450,4,450,5\n500,1,500,3\n')
     return path
 
 
