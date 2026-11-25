@@ -16,14 +16,16 @@ import sys
 import tempfile
 from typing import Any, cast, overload
 
-from sciplot_core.verification.public_stage_selection import (
-    COMPREHENSIVE_SHARDS,
+from sciplot_core.verification.public_stage_reports import (
     PLATFORM_SKIPS as PLATFORM_SKIPS,
-    TARGETED_SCOPES,
+    publish_reports as pytest_sessionfinish,  # noqa: F401 (pytest hook)
     record_report as pytest_runtest_logreport,  # noqa: F401 (pytest hook)
-    take_reports,
     reset_reports as pytest_sessionstart,  # noqa: F401 (pytest hook)
     review_stage_reports as review_stage_reports,
+)
+from sciplot_core.verification.public_stage_selection import (
+    COMPREHENSIVE_SHARDS,
+    TARGETED_SCOPES,
     selected_public_nodes as _selected_public_nodes,
     target_modules, validate_profile_selectors,
 )
@@ -367,15 +369,6 @@ def _run_public_stage(
               "scientific_acceptance": False, "access_capture_complete": False}
     (output / "result.json").write_text(json.dumps(result, sort_keys=True, indent=2) + "\n")
     return result
-
-
-def pytest_sessionfinish(session: Any, exitstatus: Any) -> None:
-    from sciplot_core.verification.evidence import atomic_json
-
-    destination = os.environ.get("SCIPLOT_PUBLIC_STAGE_REPORT")
-    if destination:
-        atomic_json(Path(destination), {"selected_tests": [item.nodeid for item in session.items],
-                                       "exit_code": int(exitstatus), "reports": take_reports()})
 
 
 def main() -> int:
