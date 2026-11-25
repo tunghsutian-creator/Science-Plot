@@ -11,7 +11,7 @@ from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.plot_backends.managed import compiler_identity
 from sciplot_core.project_lifecycle.context import exists, read, write
-from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot
+from sciplot_core.source_coverage.file_snapshots import _physical_file_snapshot
 
 from .errors import EngineError
 
@@ -37,8 +37,9 @@ def adopt(binding: dict[str, Any], ir: dict[str, Any], output: Path,
     if renderer != selected["compiler_identity"]:
         raise EngineError("comparison_compiler_changed", "Restore the renderer that produced the selected review before committing.")
     try:
-        observed = stable_file_snapshot(canonical_path(folder / ir_name), label="Reviewed comparison PlotIR",
-                                        expected_sha256=checks[ir_name])
+        reviewed_ir = canonical_path(folder / ir_name)
+        observed = _physical_file_snapshot(reviewed_ir, literal=reviewed_ir, label="Reviewed comparison PlotIR",
+                                           expected_sha256=checks[ir_name])
         if json.loads(observed["bytes"]) != ir:
             raise _changed()
         native = canonical_path(Path(binding["document"]))
