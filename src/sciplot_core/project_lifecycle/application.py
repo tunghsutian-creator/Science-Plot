@@ -6,8 +6,8 @@ from pathlib import Path
 from .admission import usecase, admitted
 from .ports import ProjectRepository, ProjectTargets
 from .targets import StoredTarget, ManagedDeliveryTarget, DecisionKind
-from .contracts import RevisionToken
 from .command_dispatch import CommandDispatch
+from .managed_application import ManagedPlotApplication
 from typing import Any
 
 from sciplot_core.plot_document import (
@@ -19,15 +19,13 @@ from sciplot_core.project_lifecycle.context import external_project_session, pro
 
 from sciplot_core.plot_engine.backend import PlotBackend
 from sciplot_core.plot_engine.content_store import intern_document, referenced_files, verify_document_content
-from sciplot_core.plot_engine.current import changed_inputs, dependency_state, require_current
-from sciplot_core.plot_engine.export_status import current_export
+from sciplot_core.plot_engine.current import require_current
 from sciplot_core.plot_engine.description_scope import require_selector
 from sciplot_core.project_lifecycle.errors import EngineError
 from sciplot_core.project_lifecycle.execution import advance, replay
 from sciplot_core.project_lifecycle.legacy_rollback import rollback_legacy
 from sciplot_core.project_lifecycle.managed_rollback import rollback_managed
-from sciplot_core.plot_engine.object_operations import attach_object_operations
-from sciplot_core.project_lifecycle.recovery import project_recovery, resume_transaction
+from sciplot_core.project_lifecycle.recovery import resume_transaction
 from sciplot_core.project_lifecycle.recovery import pending_edit_error as _pending_edit_error
 from sciplot_core.project_lifecycle.context import (
     active,
@@ -37,20 +35,15 @@ from sciplot_core.project_lifecycle.context import (
 )
 
 
-class ProjectApplication(CommandDispatch):
+class ProjectApplication(ManagedPlotApplication, CommandDispatch):
     def __init__(self, backend: PlotBackend, repository: ProjectRepository, *,
                  targets: ProjectTargets, capabilities: dict[str, Any] | None = None) -> None:
-        self.backend, self.repository = backend, repository
-        self.targets, self.capabilities = targets, capabilities
+        super().__init__(backend, repository, managed_target=targets.managed_creation, capabilities=capabilities)
+        self.targets = targets
 
     @usecase
     def resume(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
         return resume_transaction(plot, request, self.backend, self._patch)
-
-    def close(self) -> None:
-        close = getattr(self.backend, "close", None)
-        if close is not None:
-            close()
 
     @usecase
     def open(self, target: Path, figure_id: str | None = None, *,
@@ -116,50 +109,6 @@ class ProjectApplication(CommandDispatch):
             return self._describe(root, description=description)
 
     @usecase
-    def describe(self, plot: Path, *, description: dict[str, Any] | None = None) -> dict[str, Any]:
-        description = require_selector(description)
-        root = canonical_path(plot)
-        with project_query(root):
-            return self._describe(root, description=description)
-
-    def _describe(self, root: Path, *, description: dict[str, Any] | None = None) -> dict[str, Any]:
-        head = load_head(root)
-        document, binding = head["document"], head["binding"]
-        changed = changed_inputs(self.backend, binding)
-        pending = active(root)
-        result = {"kind": "sciplot_plot_description", "version": 1, "status": "stale" if changed else "current",
-                "plot_type": document.get("plot_type", "LegacyPlot"),
-                "revision_token": RevisionToken.of(document).to_payload(),
-                "plot": str(root), "plot_id": document["plot_id"], "revision": document["revision"],
-                "scientific_hash": document["scientific_hash"], "presentation_hash": document["presentation_hash"],
-                "objects": document["presentation"]["objects"], "coverage": document["coverage"],
-                "changed_inputs": changed, "dependencies": ({}
-                    if description is not None and document.get("plot_type") == "ManagedPlot"
-                    else dependency_state(document, binding, changed)),
-                "pending": ({"idempotency_key": pending["request"]["idempotency_key"], "phase": pending["phase"]}
-                            if pending and pending["phase"] not in {"complete", "rejected"} else None),
-                "document": str(root / "revisions" / f'{document["revision"]:08d}.json')}
-        project_recovery(result, root, pending)
-        if document.get("plot_type") == "ManagedPlot":
-            from sciplot_core.plot_engine.managed_description import describe_managed
-
-            result["export_current"] = current_export(root, head, eligible=not changed and result["pending"] is None)
-            return attach_object_operations(describe_managed(root, head, result, self.backend, description=description), document)
-        from sciplot_core.plot_engine.external_mutation import authority_status
-
-        if description is not None and description["scope"] == "edit":
-            raise EngineError("description_scope_unavailable", "Scoped edit contracts are available for ManagedPlot; use the full LegacyPlot description.",
-                              action="plot.describe")
-        result["authority"] = authority_status("LegacyPlot")
-        if changed and not result["pending"]:
-            from sciplot_core.project_lifecycle.reimport import offer
-
-            next_step = offer(self.backend, head, changed)
-            if next_step is not None:
-                result["next_step"] = next_step
-        return attach_object_operations(result, document)
-
-    @usecase
     def patch(self, plot: Path, request: RequestInput) -> dict[str, Any]:
         request = admit_patch(request)
         root = canonical_path(plot)
@@ -167,23 +116,6 @@ class ProjectApplication(CommandDispatch):
 
         with external_project_session(root), admitted(root, "patch", request), scientific_source_scope(root, request.to_payload()):
             return self._patch(root, request)
-
-    @usecase
-    def deliver(self, request: dict[str, Any]) -> dict[str, Any]:
-        """Package exact managed revisions; each export retains its own transaction."""
-        from sciplot_core.plot_engine.managed_delivery import deliver
-
-        return deliver(self, request)
-
-    @usecase
-    def inspect_delivery(self, request: dict[str, Any], *, paper_dir: Path | None = None) -> dict[str, Any]:
-        """Read the Managed delivery owner, or validate its separate paper receipt location."""
-        from sciplot_core.plot_engine.managed_delivery import inspect, require_paper_location
-
-        if paper_dir is not None:
-            require_paper_location(request, paper_dir)
-            return {}
-        return inspect(self, request)
 
     @usecase
     def intent(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
@@ -333,9 +265,7 @@ class ProjectApplication(CommandDispatch):
 
         request = validate_create(request)
         if "template_definition" in request and request.get("mode") != "legacy":
-            from sciplot_core.project_lifecycle.managed_creation import create_managed
-
-            return create_managed(request, self.backend, location=self.targets.managed_creation(request))
+            return self._create_managed(request)
 
         with self._managed_task_scope():
             owner = self._template_creation_owner() if "template_definition" in request else self

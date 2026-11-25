@@ -14,7 +14,9 @@ from sciplot_core.workflow.frequency_managed_workflow import check_visible_frequ
 from sciplot_core.workflow.request_io import _managed_output_transaction
 from sciplot_core.workflow.request_run import _run_request_in_managed_output
 
-from .managed_frequency_query import frequency_roots, frequency_receipt, inspect_frequency_creation
+from sciplot_core.workflow.frequency_locations import frequency_roots
+
+from .managed_frequency_query import frequency_receipt, inspect_frequency_creation
 
 
 _RULE = "rheology_frequency_sweep"

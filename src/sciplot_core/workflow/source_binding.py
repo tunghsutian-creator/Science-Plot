@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
+
+from sciplot_core.publication import build_transform_step
 from typing import TYPE_CHECKING, Any
 
 from sciplot_core.figure_plan import (
@@ -61,3 +64,40 @@ def verify_workflow_figure_plan_source_binding(
 
 
 __all__ = ["verify_workflow_figure_plan_source_binding"]
+
+
+def initial_transform_steps(
+    *,
+    mapping_application: dict[str, Any] | None,
+    cleanup_application: dict[str, Any] | None,
+    original_input_path: Path,
+    input_path: Path,
+) -> list[dict[str, Any]]:
+    steps = [
+        deepcopy(step)
+        for step in (
+            mapping_application.get("transform_steps", [])
+            if mapping_application is not None
+            else []
+        )
+        if isinstance(step, dict)
+    ]
+    if cleanup_application is not None:
+        steps.append(
+            build_transform_step(
+                step_id="assisted_cleanup",
+                operation="confirmed_cleanup",
+                input_path=original_input_path,
+                output_path=input_path,
+                implementation_ref=(
+                    "sciplot_core.assisted_cleanup.consume_ready_cleanup_result"
+                ),
+                parameters={
+                    "cleanup_result": cleanup_application["cleanup_result"],
+                    "mapping_proposal": cleanup_application["mapping_proposal"],
+                    "request_patch": cleanup_application["request_patch"],
+                    "human_confirmed": True,
+                },
+            )
+        )
+    return steps

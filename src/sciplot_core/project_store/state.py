@@ -249,7 +249,9 @@ def publish_head(io: StoreIO, value: dict[str, Any], *, expected: dict[str, Any]
 
 
 def import_legacy(io: StoreIO) -> dict[str, Any]:
-    files = io.scan()
+    from .legacy_scan import scan_legacy
+
+    files = scan_legacy(io)
     for item in files.values():
         item["file_id"] = uuid4().hex
     project_id = uuid4().hex

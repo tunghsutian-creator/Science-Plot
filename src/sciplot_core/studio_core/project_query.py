@@ -19,8 +19,8 @@ from sciplot_core.studio_core.project_query_evidence import (
 from sciplot_core.project_lifecycle.figure_observation import (
     LegacyFigureObservation,
     observe_legacy_project,
-    observe_managed_curve,
 )
+from sciplot_core.studio_core.managed_curve_observation import observe_managed_curve
 from sciplot_core.veusz_runtime import veusz_worker_environment
 from sciplot_core.native_process import run_worker
 from sciplot_core.project_host_factory import project_store

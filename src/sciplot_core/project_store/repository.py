@@ -12,12 +12,13 @@ from typing import Any
 from sciplot_core.project_commands.resources import PreparedFile
 from sciplot_core.project_commands.errors import ProjectCommandUnknown
 import sciplot_core.project_store.commands as commands
+import sciplot_core.project_store.locators as locators
 import sciplot_core.project_store.projection as projection
 import sciplot_core.project_store.publication as publication
 import sciplot_core.project_store.state as state
 import sciplot_core.project_store.native_work as native_work
 from .errors import ProjectConflict, ProjectRecoveryRequired, ProjectStoreError
-from .io import STORE, StoreIO, directory, install, observing_existing_store, owned_io, parts, read_file, sha
+from .io import STORE, StoreIO, directory, install, observing_existing_store, owned_io, parts, read_file
 from .resources import ResourceRoot
 from .member_observation import MemberObservation, observe
 
@@ -307,31 +308,11 @@ class FileProjectStore:
         return member.data
 
     def logical_path(self, path: Path) -> str:
-        candidate = Path(path).expanduser().absolute()
-        roots = {"": self.root, **self.locations}
-        for key, root in sorted(roots.items(), key=lambda item: len(str(item[1])), reverse=True):
-            if candidate.is_relative_to(root):
-                relative = candidate.relative_to(root).as_posix()
-                parts(relative)
-                allowed = self.location_members.get(key)
-                if allowed is not None and relative not in allowed:
-                    continue
-                if not key and relative.split("/", 1)[0] == ".sciplot_resources":
-                    continue
-                return f"@{key}/{relative}" if key else relative
-        raise ProjectStoreError("This path is outside all explicitly trusted resource roots.")
+        return locators.logical_path(self.root, self.locations, self.location_members, path)
 
     def projection_path(self, logical: str) -> Path:
         with self._locked() as (io, current):
-            expected = current["files"].get(logical)
-            physical = io.physical(logical)
-            if (expected is None or physical is None or sha(physical[0]) != expected["sha256"]
-                    or physical[1] != expected["mode"]):
-                raise ProjectConflict("The derived path has unregistered outside bytes or is absent.")
-            components = parts(logical)
-            if components[0].startswith("@"):
-                return self.locations[components[0][1:]] / Path(*components[1:])
-            return self.root / Path(*components)
+            return locators.projection_path(io, current, logical)
 
     def resolve_source(self, source_id: str, version: str, *, generation: str | None = None) -> Path:
         if not re.fullmatch(r"[0-9a-f]{32}", source_id) or not re.fullmatch(r"[0-9a-f]{64}", version):

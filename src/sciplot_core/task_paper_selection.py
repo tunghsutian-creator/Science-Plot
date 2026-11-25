@@ -5,8 +5,9 @@ import re
 from typing import Any
 
 from sciplot_core.foundation.canonical_paths import canonical_path
-from sciplot_core.project_lifecycle.figure_observation import (
-    observe_frequency_figures, observe_legacy_project, observe_plot_head,
+from sciplot_core.project_lifecycle.figure_observation import observe_legacy_project
+from sciplot_core.project_lifecycle.managed_figure_observation import (
+    observe_frequency_figures, observe_saved_plot_head as observe_plot_head,
 )
 from sciplot_core.studio_core.project_session import external_project_session
 from sciplot_core.task_contract import TaskControlError

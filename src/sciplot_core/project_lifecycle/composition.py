@@ -1,7 +1,7 @@
 """Concrete application composition and explicitly separate native authorities."""
 from typing import Any
 
-from .repository_router import ComposedProjectRepository
+from .backend_paths import compose_project_repository
 from .ports import ProjectRepository
 
 
@@ -17,16 +17,6 @@ def components(backend: Any, repository: ProjectRepository | None, capabilities:
 
         backend = BackendRouter(VeuszBackend())
         capabilities = capability_profile() if capabilities is None else capabilities
-    if repository is None:
-        from sciplot_core.studio_core.project_session import external_project_session
-
-        from .attachment_preflight import preflight
-
-        original_backend = backend
-        profile = COMPATIBILITY_CAPABILITIES if capabilities is None else capabilities
-        repository = ComposedProjectRepository(lease=external_project_session,
-            attachment_admission=lambda namespace, head, attachment: preflight(original_backend, profile, namespace, head, attachment))
-        from .backend_paths import RepositoryBackendPaths
-
-        backend = RepositoryBackendPaths(backend, repository)
-    return backend, repository, COMPATIBILITY_CAPABILITIES if capabilities is None else capabilities, resolve_figure
+    profile = COMPATIBILITY_CAPABILITIES if capabilities is None else capabilities
+    backend, repository = compose_project_repository(backend, repository, profile)
+    return backend, repository, profile, resolve_figure

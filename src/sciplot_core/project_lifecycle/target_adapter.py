@@ -7,7 +7,8 @@ from sciplot_core.foundation.json_io import read_json_object
 from .errors import EngineError
 from .paths import canonical_path
 from .ports import ProjectRepository
-from .repository import digest, document_root, transaction_path
+from .managed_creation_targets import managed_creation_target, source_control_parent
+from .repository import document_root, transaction_path
 from .targets import (DecisionKind, DecisionTarget, ImportTarget, ManagedCreationLocation,
                       ManagedDeliveryTarget, OpenTarget, StoredTarget)
 
@@ -49,7 +50,7 @@ class FilesystemProjectTargets:
     def read_legacy_saved(self, target: Path, figure_id: str | None) -> tuple[Path, Path] | None:
         """Resolve read-only authority by selection, before any attach or import."""
         from .attachment_index import read_index
-        from .figure_observation import observe_plot_head
+        from .head_observation import observe_plot_head
         from .store_composition import existing_store
         from sciplot_core.project_store.io import STORE
         from sciplot_core.studio_core.legacy_saved_plot import _saved_plot
@@ -135,63 +136,11 @@ class FilesystemProjectTargets:
         legacy = transaction_path(source.parent / ".sciplot_documents" / "creations", key).parent
         if self.repository.exists(legacy / "creation.json"):
             return legacy
-        return transaction_path(_source_control_parent(source) / ".sciplot_documents" / "creations", key).parent
+        return transaction_path(source_control_parent(source) / ".sciplot_documents" / "creations", key).parent
 
     def managed_creation(self, request: dict[str, Any]) -> ManagedCreationLocation:
-        from .repository_router import ComposedProjectRepository
-        if isinstance(self.repository, ComposedProjectRepository):
-            from .attachment_targets import attached_managed_creation
-
-            attached = attached_managed_creation(self.repository, request)
-            if attached is not None:
-                return attached
-        sources = request["data_binding"]["data_sources"]
-        if not sources:
-            raise EngineError("managed_source_required", "Managed creation requires explicit original data sources.")
-        source = canonical_path(Path(sources[0]["path"]))
-        identifier = "plot:" + digest([str(source.parent), request["idempotency_key"]])[:24]
-        legacy = source.parent / ".sciplot_documents" / "managed" / digest(request["idempotency_key"])
-        control = _source_control_parent(source) / ".sciplot_documents"
-        root = legacy if self.repository.exists(legacy / "managed-creation.json") else control / "managed" / digest(request["idempotency_key"])
-        old_attempt = self.repository.exists(root / "managed-creation.json")
-        versioned_task = request.get("storage") == "project_store_v2"
-        # Keep the historical expert output locator without adding it to the
-        # request. A versioned task publishes through its own delivery owner.
-        output = (Path(request["out"]) if "out" in request else
-                  source.parent / (source.stem + "_SciPlot") / identifier.replace(":", "_"))
-        public_output = self.publish_fresh_managed_output and not versioned_task
-        if not old_attempt and (versioned_task or public_output):
-            if not isinstance(self.repository, ComposedProjectRepository):
-                raise EngineError("managed_store_required", "The versioned Managed task requires the Project Store repository.")
-            from .attachment_targets import attached_managed_creation
-            from .managed_store_target import managed_publication_target, open_managed_store
-
-            publication = managed_publication_target(root, output, sources) if public_output else None
-            declares_host_execution = bool(request.get("scientific_executors")) or any(
-                node.get("kind") == "external" for node in request["data_binding"].get("transforms", []))
-
-            def admit_host_execution() -> None:
-                # Prove the exact current host registration before creating a
-                # Store claim. The actual member is admitted by the same owner
-                # under the writer lease, with its allocated stable plot ID.
-                from .managed_creation import new_managed_member
-
-                new_managed_member(request, identifier)
-
-            store = open_managed_store(canonical_path(root), request,
-                                       authorize_new=admit_host_execution if declares_host_execution else None)
-            attached = attached_managed_creation(self.repository, request, store=store, publication=publication)
-            assert attached is not None
-            return attached
-        if "out" in request:
-            output = canonical_path(output)
-        if output == source or output == source.parent or output in source.parents or output == root:
-            raise EngineError("managed_output_conflict", "Select a distinct managed output directory beside the source.")
-        if not old_attempt:
-            from sciplot_core.foundation.research_destination import require_data_destination
-            require_data_destination(root)
-            require_data_destination(output)
-        return ManagedCreationLocation(root, output, identifier)
+        return managed_creation_target(self.repository, request,
+                                       publish_fresh_managed_output=self.publish_fresh_managed_output)
 
 
 def _prepared_native_figure(store: Any, document: Path) -> bool:
@@ -207,10 +156,3 @@ def _prepared_native_figure(store: Any, document: Path) -> bool:
                 and request.get("prepared_files", {}).get(relative)):
             return True
     return False
-
-
-def _source_control_parent(source: Path) -> Path:
-    from platformdirs import user_state_path
-    from sciplot_core.foundation.research_destination import software_root
-    return (user_state_path("SciPlot") / "source-projects" / digest(str(source.parent))
-            if software_root(source.parent) is not None else source.parent)

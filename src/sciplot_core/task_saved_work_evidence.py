@@ -19,9 +19,9 @@ from sciplot_core.project_store.source_resolver import query_sources
 from sciplot_core.plot_backends.veusz import VeuszBackend
 from sciplot_core.studio_core.project_query import inspect_project
 from sciplot_core.foundation.canonical_paths import canonical_path
-from sciplot_core.project_lifecycle.figure_observation import (
-    attachments_by_figure, bound_delivery_project, observe_plot_head, read_object,
-)
+from sciplot_core.project_lifecycle.figure_observation import bound_delivery_project, read_object
+from sciplot_core.project_lifecycle.head_observation import observe_plot_head
+from sciplot_core.project_lifecycle.managed_figure_observation import attachments_by_figure
 from sciplot_core.studio_core.delivery_target import resolve_delivery_target
 
 

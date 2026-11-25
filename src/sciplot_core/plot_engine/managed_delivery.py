@@ -19,7 +19,7 @@ from sciplot_core.plot_engine.storage import digest, load_head, read, write
 from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot, _assert_snapshot_current
 from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.project_lifecycle.context import active, external_project_session, exists, prepare_namespace, create_namespace, project_query
-from sciplot_core.studio_core.source_update_commit import file_inventory
+from sciplot_core.studio_core.source_update_files import file_inventory
 
 class DeliveryService(Protocol):
     backend: Any

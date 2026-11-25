@@ -12,7 +12,7 @@ import zipfile
 from sciplot_core.delivery import native_snapshot
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.storage import digest
-from sciplot_core.studio_core.source_update_commit import file_inventory
+from sciplot_core.studio_core.source_update_files import file_inventory
 from sciplot_core.veusz_runtime import veusz_worker_environment
 
 

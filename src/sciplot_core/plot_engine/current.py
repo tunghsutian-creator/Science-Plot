@@ -6,7 +6,7 @@ from typing import Any
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.delivery.filesystem_metadata import is_delivery_finder_metadata
 from sciplot_core.plot_document import build_keys, invalidated_nodes
-from sciplot_core.studio_core.source_update_commit import file_inventory
+from sciplot_core.studio_core.source_update_files import file_inventory
 
 from .backend import PlotBackend
 from .errors import EngineError

@@ -351,7 +351,7 @@ def test_public_paper_group_and_explicit_secondary_use_current_saved_figures(tmp
     from sciplot_core.plot_backends.managed import ManagedVeuszCompiler
     from sciplot_core.plot_engine.storage import load_head
     from sciplot_core.plot_protocol.server import make_service
-    from sciplot_core.project_lifecycle.figure_observation import observe_frequency_figures
+    from sciplot_core.project_lifecycle.managed_figure_observation import observe_frequency_figures
     from sciplot_core.task_semantic_owner import local_managed_actions
     from test_rheology_mean_suite_publication import _mean_input
 

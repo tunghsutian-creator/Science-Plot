@@ -34,8 +34,8 @@ def _roots(source: Path, search_roots: list[Path] | None, tasks_root: Path | Non
         values = [layout.workspace_root, layout.delivery_root,
                   layout.workspace_root.parent / "tasks",
                   source.parent / ".sciplot_documents"]
-        from sciplot_core.project_lifecycle.target_adapter import _source_control_parent
-        control = _source_control_parent(source) / ".sciplot_documents"
+        from sciplot_core.project_lifecycle.managed_creation_targets import source_control_parent
+        control = source_control_parent(source) / ".sciplot_documents"
         if control not in values:
             values.append(control)
     else:

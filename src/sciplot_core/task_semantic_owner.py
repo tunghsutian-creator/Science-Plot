@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple, ParamSpec, TypeVar
 
 if TYPE_CHECKING:
-    from sciplot_core.plot_engine.service import PlotService
+    from sciplot_core.project_lifecycle.managed_application import ManagedPlotApplication
 
 _ManagedRequest = Callable[[dict[str, Any]], dict[str, Any]]
 _ManagedDescribe = Callable[[Path], dict[str, Any]]
@@ -26,13 +26,13 @@ class _Actions(NamedTuple):
 
 @dataclass
 class _Invocation:
-    owner: "PlotService | None" = None
+    owner: "ManagedPlotApplication | None" = None
 
-    def service(self) -> "PlotService":
+    def service(self) -> "ManagedPlotApplication":
         if self.owner is None:
-            from sciplot_core.plot_engine.service import public_plot_service
+            from sciplot_core.project_lifecycle.managed_application import managed_task_application
 
-            self.owner = public_plot_service()
+            self.owner = managed_task_application()
         return self.owner
 
 

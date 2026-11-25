@@ -6,6 +6,7 @@ from typing import Any
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.canonical_paths import canonical_path
 from .errors import EngineError
+from .ports import ProjectRepository
 
 
 def _retain_preview(result: dict[str, Any], workspace: Path, destination: Path) -> None:
@@ -100,3 +101,18 @@ class RepositoryBackendPaths:
                 review = {**rebind_document_edit_review(Path(binding["project"]), original), **fields}
             result: dict[str, Any] = self.backend.apply(binding, review)
             return result
+
+
+def compose_project_repository(backend: Any, repository: ProjectRepository | None,
+                               capabilities: dict[str, Any]) -> tuple[Any, ProjectRepository]:
+    """Use the same attached repository and binding guard for either backend."""
+    if repository is not None:
+        return backend, repository
+    from sciplot_core.studio_core.project_session import external_project_session
+
+    from .attachment_preflight import preflight
+    from .repository_router import ComposedProjectRepository
+
+    selected = ComposedProjectRepository(lease=external_project_session,
+        attachment_admission=lambda namespace, head, attachment: preflight(backend, capabilities, namespace, head, attachment))
+    return RepositoryBackendPaths(backend, selected), selected

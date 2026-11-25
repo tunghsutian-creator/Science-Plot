@@ -10,8 +10,9 @@ from typing import Any
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_engine.managed_state import input_files, require_inputs
 from sciplot_core.plot_engine.storage import digest, read
-from sciplot_core.project_lifecycle.figure_observation import (
-    observe_legacy_project, observe_plot_head, observe_project_figure_heads,
+from sciplot_core.project_lifecycle.figure_observation import observe_legacy_project
+from sciplot_core.project_lifecycle.managed_figure_observation import (
+    observe_project_figure_heads, observe_saved_plot_head,
 )
 from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot, _assert_snapshot_current
 from sciplot_core.foundation.canonical_paths import canonical_path
@@ -112,7 +113,7 @@ def _image(path: Path, *, snapshot: dict[str, Any] | None = None) -> dict[str, A
 
 
 def managed_head(root: Path, plot_id: str) -> dict[str, Any]:
-    head = observe_plot_head(root)
+    head = observe_saved_plot_head(root)
     assert head is not None
     document, binding = head["document"], head["binding"]
     if document.get("plot_type") != "ManagedPlot" or document["plot_id"] != plot_id:

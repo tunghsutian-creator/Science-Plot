@@ -9,7 +9,7 @@ from sciplot_core.foundation.json_io import read_json_object
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.storage import digest
 from sciplot_core.project_lifecycle.context import repository
-from sciplot_core.project_lifecycle.figure_observation import observe_plot_head
+from sciplot_core.project_lifecycle.head_observation import observe_plot_head
 from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.studio_core.source_update_files import file_inventory
 
