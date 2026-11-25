@@ -221,32 +221,37 @@ replace completion/access evidence. Keep `PYTEST_ADDOPTS` unset for known suites
 
 ### Feedback, diagnostic repetition and claim-specific reuse
 
-Push and pull-request CI now distinguish limited affected feedback from complete
-public verification. The affected layer admits only the two explicitly reviewed
-design-prose leaves while they still map solely to the documentation owner, or
-exactly `task_timing.py` when the shared `task_timing_feedback_eligible` owner proves
-its finite metadata-only contract. Mixed paths, shared/scientific/native/guard/CI
-changes, unknown owners, unavailable bases and failed/missing planner outputs retain
-the complete path. Manual dispatch always retains the complete path. A new leaf
-is not eligible merely because it looks small or disjoint from native targets.
+Push and pull-request CI distinguish limited affected feedback from complete
+public verification. The planner admits only its explicitly reviewed owner paths:
+selected documentation, table parsing, intake, assembly, frequency sweep and
+managed curve leaves, raw analysis, reviewed scope-manifest deltas, or the finite
+metadata-only `task_timing.py` change. An unreviewed path, deleted or aliased file,
+unavailable base, failed/missing planner output or unproven scope change retains
+the complete path. Manual, integration and release verification also stay
+complete. A small diff or a known owner alone is not enough to admit a new leaf.
 
-The affected layer runs the current owner assertions and shared architecture,
-type-scope, timestamp-owner and public process/API-guard controls through the real
-private-absent `public-affected` source stage. It replans at execution; drift after
-an earlier eligibility decision is a failure, not an invented limited PASS.
-Configured Ruff, both complete static type targets, distribution/wheel,
-Qt/font/toolchain and native helper build/import checks still execute. Only this
-closed layer omits the twelve-node native preflight, the two canonical public
-profiles, Doctor and lifecycle smoke. Its result and job summary explicitly say
-these bodies, real private inputs and access capture were NOT_EXECUTED; it cannot
-claim current native lifecycle
-acceptance. The selected stage is development/merge feedback, not release proof.
+The affected layer replans at execution, then runs exact owner assertions and the
+shared controls selected by that plan in a private-absent source stage. It imports
+only the selected test modules, checks the complete declared collection and tier
+of those modules (including private and non-selected siblings), then executes
+only the selected public bodies. An unexpected or missing node in a selected
+module blocks the run before any test body; this path does not freshly collect
+or certify unrelated modules. Targeted native assertions remain in a separate
+comprehensive-tier stage when the owner needs them. The same source/runtime
+binding, public input guard and exact test completion checks still apply.
 
-The complete path preserves both original public profiles, all native assertions
-and predecessor order, runtime/build gates, Doctor and smoke. The twelve historical
-regressions remain in comprehensive and retain their early diagnostic on relevant
-or unknown changes. Both public profiles execute fresh in this layer unless the
-separate main source-commit admission below references their completed check.
+Affected CI retains changed Python lint, both complete static type targets,
+distribution/wheel and Qt/font/toolchain/native helper build/import checks.
+Its result explicitly distinguishes unexecuted canonical public profiles,
+historical native diagnostics, Doctor, lifecycle smoke, real private inputs and
+access capture. Affected feedback is not release or scientific proof.
+
+The complete path still checks the complete collection against the manifest in
+both original public profiles, retaining their order and the runtime/build,
+Doctor and smoke gates. The twelve native regressions still execute in the
+comprehensive profile; only an explicitly requested manual early diagnostic
+repeats them. Both public profiles execute fresh unless the main source-commit
+admission below references their completed check.
 Release/frozen full, scientific result checks, required supported OSs and
 real-input/private-access capture remain separate required responsibilities.
 Changing CI execution policy itself follows the complete path. Preserve active

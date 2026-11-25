@@ -65,9 +65,10 @@ assert callable(validate_stage)
 @pytest.mark.parametrize("partial_collection", (False, True))
 def test_affected_selector_runs_after_exhaustive_scope_validation(tmp_path: Path, partial_collection: bool) -> None:
     nodes = ["test_generated.py::test_one", "test_generated.py::test_one_extra"]
-    tier = "focused" if partial_collection else "comprehensive"
-    manifest = {"scopes": {"public": nodes, "private": []},
-                "tiers": {item: nodes if item == tier else [] for item in ("focused", "comprehensive")}}
+    private = "test_generated.py::test_private"
+    outside = "test_outside.py::test_unrelated"
+    manifest = {"scopes": {"public": [*nodes, outside], "private": [private]},
+                "tiers": {"focused": [*nodes, outside, private], "comprehensive": []}}
     (tmp_path / "conftest.py").write_text(f'''import json
 from pathlib import Path
 import pytest
@@ -79,34 +80,46 @@ def pytest_collection_modifyitems(config, items):
     collected = [item.nodeid for item in items]
     Path("collected.json").write_text(json.dumps(collected))
     try:
-        select_scope(config.getoption("input_scope"), manifest={manifest!r}, collected=collected,
-                     tiers={{node: {tier!r} for node in collected}}, private_nodes=set())
+        selected = set(select_scope(config.getoption("input_scope"), manifest={manifest!r}, collected=collected,
+                                    tiers={{node: "focused" for node in collected}}, private_nodes={{{private!r}}},
+                                    targets=config.getoption("sciplot_public_target")))
     except ValueError as error:
         raise pytest.UsageError(str(error)) from error
+    config.hook.pytest_deselected(items=[item for item in items if item.nodeid not in selected])
+    items[:] = [item for item in items if item.nodeid in selected]
 ''')
     (tmp_path / "test_generated.py").write_text('''from pathlib import Path
 def test_one():
     Path("executed.txt").write_text("exact selected body")
 def test_one_extra():
     raise AssertionError("a prefix neighbour must not execute")
+def test_private():
+    raise AssertionError("a private sibling must not execute")
 ''')
+    (tmp_path / "test_outside.py").write_text('raise AssertionError("an unrelated module must not be imported")')
     # cwd alone does not stop pytest discovering a parent project's root.
     command = [sys.executable, "-m", "pytest", "-q", f"--rootdir={tmp_path}", "-p", "sciplot_core.verification.public_stage_selection",
-               "--input-scope", f"public-{tier}", "--sciplot-public-target", nodes[0]]
-    if partial_collection:
-        command.append(nodes[0])
+               "--input-scope", "public-focused", "--sciplot-public-target", nodes[0],
+               nodes[0] if partial_collection else "test_generated.py"]
     environment = dict(os.environ)
     environment["PYTHONPATH"] = os.pathsep.join(str(Path(entry).absolute()) for entry in environment.get("PYTHONPATH", "").split(os.pathsep))
     result = subprocess.run(command, cwd=tmp_path, env=environment, capture_output=True, text=True, check=False)
     assert (tmp_path / "collected.json").is_file(), result.stdout + result.stderr
-    assert json.loads((tmp_path / "collected.json").read_text()) == (nodes[:1] if partial_collection else nodes)
+    assert json.loads((tmp_path / "collected.json").read_text()) == (nodes[:1] if partial_collection else [*nodes, private])
     if partial_collection:
         assert result.returncode != 0 and "Input scope drift" in result.stderr
         assert not (tmp_path / "executed.txt").exists()
     else:
         assert result.returncode == 0, result.stdout + result.stderr
-        assert "1 passed, 1 deselected" in result.stdout
+        assert "1 passed, 2 deselected" in result.stdout
         assert (tmp_path / "executed.txt").read_text() == "exact selected body"
+        (tmp_path / "executed.txt").unlink()
+        with (tmp_path / "test_generated.py").open("a") as stream:
+            stream.write("\ndef test_unreviewed(): pass\n")
+        result = subprocess.run(command, cwd=tmp_path, env=environment, capture_output=True, text=True, check=False)
+        assert result.returncode != 0 and "Input scope drift" in result.stderr
+        assert "test_unreviewed" in result.stderr
+        assert not (tmp_path / "executed.txt").exists()
 
 
 def test_affected_stage_reports_limited_claim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -130,6 +143,7 @@ def test_affected_stage_reports_limited_claim(tmp_path: Path, monkeypatch: pytes
     monkeypatch.setattr(public_stage, "runtime_binding", lambda *_args: {"runtime": "bound"})
     monkeypatch.setattr(public_stage, "assert_stage_helpers", lambda *_args: None)
     def run(command, **_kwargs):
+        assert command[-3:] == ["--sciplot-public-target", node, "tests/test_generated.py"]
         marker = {"complete": True, "exit_code": 0, "selected_tests": [node], "executed_tests": [node]}
         reports = {"exit_code": 0, "selected_tests": [node], "reports": [
             {"nodeid": node, "when": phase, "outcome": "passed"} for phase in ("setup", "call", "teardown")]}
@@ -141,6 +155,7 @@ def test_affected_stage_reports_limited_claim(tmp_path: Path, monkeypatch: pytes
     assert result["status"] == "PASS"
     assert result["claim"] == "limited_affected_public_behavior_not_canonical_profile"
     assert result["canonical_profile_executed"] is False
+    assert result["collection_scope"] == "affected_modules"
     assert result["scientific_acceptance"] is False and result["access_capture_complete"] is False
     assert all(value is True for value in result["binding_checks"].values())
 

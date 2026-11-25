@@ -1,10 +1,13 @@
 """Exact reviewed input scope, orthogonal to focused/comprehensive test tiers."""
 from __future__ import annotations
 
-import json
 import hashlib
+import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
+
+from sciplot_core.verification.public_stage_selection import match_targets, target_modules
 
 MANIFEST = Path(__file__).with_name("input_scope_manifest.json")
 PROFILES = ("public-focused", "public-comprehensive", "public-all", "private-science")
@@ -59,24 +62,32 @@ def load_manifest(path: Path = MANIFEST) -> dict[str, Any]:
 
 
 def select_scope(profile: str, *, manifest: dict[str, Any], collected: list[str],
-                 tiers: dict[str, str], private_nodes: set[str]) -> list[str]:
-    """Refuse unknown/stale/intersecting scope before selecting any test bodies."""
+                 tiers: dict[str, str], private_nodes: set[str],
+                 targets: Sequence[str] = ()) -> list[str]:
+    """Admit a canonical full collection or every node in affected modules."""
     if profile not in PROFILES:
         raise ValueError("Unknown named input scope.")
-    if len(collected) != len(set(collected)):
+    if targets and profile not in {"public-focused", "public-comprehensive"}:
+        raise ValueError("Affected selectors require a focused or comprehensive public tier.")
+    actual = set(collected)
+    if len(collected) != len(actual):
         raise ValueError("Duplicate node IDs in fresh collection.")
     declared = set(manifest["scopes"]["public"]) | set(manifest["scopes"]["private"])
-    actual = set(collected)
+    if targets:
+        modules = target_modules(targets)
+        declared = {node for node in declared if node.split("::", 1)[0] in modules}
     unknown, stale = actual - declared, declared - actual
     if unknown or stale:
         raise ValueError(f"Input scope drift: unknown={sorted(unknown)[:8]}, stale={sorted(stale)[:8]}")
     if set(manifest["scopes"]["private"]) != private_nodes:
         raise ValueError("Private input classification differs from the dependency inventory.")
     for tier, nodes in manifest["tiers"].items():
-        if any(tiers.get(node) != tier for node in nodes):
+        if any(tiers.get(node) != tier for node in nodes if node in declared):
             raise ValueError("Lifecycle tier drift; input scope cannot reclassify lifecycle tiers.")
     scope = "private" if profile == "private-science" else "public"
-    selected = set(manifest["scopes"][scope])
+    selected = declared.intersection(manifest["scopes"][scope])
     if profile in {"public-focused", "public-comprehensive"}:
         selected.intersection_update(manifest["tiers"][profile.removeprefix("public-")])
+    if targets:
+        selected = match_targets(selected, targets)
     return [node for node in collected if node in selected]

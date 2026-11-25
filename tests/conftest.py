@@ -89,7 +89,10 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         if comprehensive_marker is None and focused_marker is None:
             item.add_marker(focused)
     profile = config.getoption("input_scope")
+    targets = config.getoption("sciplot_public_target", default=[])
     if profile is None:
+        if targets:
+            raise pytest.UsageError("Affected selectors require a focused or comprehensive public tier.")
         return
     from pathlib import Path
 
@@ -103,7 +106,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         private = {row["nodeid"] for row in json.loads(INVENTORY.read_text())["cases"]}
         selected = set(select_scope(profile, manifest=load_manifest(), collected=collected,
                                     tiers={item.nodeid: "comprehensive" if item.get_closest_marker("comprehensive") else "focused"
-                                           for item in items}, private_nodes=private))
+                                           for item in items}, private_nodes=private, targets=targets))
         if profile == "private-science":
             availability = declared_input_availability(repo_root=root, selected_nodeids=sorted(selected),
                                                        collected_nodeids=set(collected))
