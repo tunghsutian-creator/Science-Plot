@@ -36,7 +36,7 @@ def store_for_project(project: Path, *, locations: Mapping[str, Path | ResourceR
 @contextmanager
 def project_storage_scope(project: Path, *, locations: Mapping[str, Path | ResourceRoot] | None = None) -> Iterator[FileProjectStore]:
     store = store_for_project(project, locations=locations)
-    with StoreIO(store.root, store.locations, store.location_members, store.namespace_backups).locked(blocking=True) as io:
+    with StoreIO(store.root, store.locations, store.location_members, store.namespace_backups).locked(blocking=True, writer=True) as io:
         current = state.head(io)
         if current is None:
             current = state.import_legacy(io)

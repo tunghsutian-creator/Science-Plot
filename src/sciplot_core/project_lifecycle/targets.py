@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from .contracts import RevisionToken
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,7 @@ class ManagedDeliveryTarget:
     root: Path
     item_id: str
     native_snapshot: str
+    revision: RevisionToken
 
 
 OpenTarget = StoredTarget | ImportTarget | ManagedDeliveryTarget

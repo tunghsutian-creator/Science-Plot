@@ -45,6 +45,10 @@ def _publication(cache: dict[str, Any], head: dict[str, Any]) -> dict[str, Any] 
             "scientific_audit": {"status": audit.get("status")},
             "ready_to_use": exported.get("ready_to_use") is True
                 and qa.get("status") == audit.get("status") == "passed",
+            # Earlier Managed IR has a scientific audit and a valid native
+            # export, but never issued a deterministic publication QA claim.
+            **({"native_export_ready": exported.get("ready_to_use") is True and audit.get("status") == "passed"}
+                if qa.get("status") is None and "figure_spec" not in head["document"]["scientific"]["provenance"] else {}),
             "exports": [{key: record[key] for key in ("format", "path", "sha256")}
                         for record in records]}
 

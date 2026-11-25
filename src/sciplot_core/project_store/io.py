@@ -196,9 +196,10 @@ class StoreIO:
         # Only this live owned IO can attest that it created its metadata root.
         # It is not persisted and never survives release/reacquisition.
         self.created_store = False
+        self._read_existing = False
 
     @contextmanager
-    def locked(self, *, blocking: bool = False,
+    def locked(self, *, blocking: bool = False, writer: bool = False,
                before_create: Callable[[], object] | None = None) -> Iterator[StoreIO]:
         active = _ACTIVE.get()
         if active is not None:
@@ -207,12 +208,14 @@ class StoreIO:
                 if (owned.locations != self.locations or owned.location_members != self.location_members
                         or owned.namespace_backups != self.namespace_backups):
                     raise ProjectStoreError("An owned project transaction cannot expand its resource roots.")
+                if writer and owned._read_existing:
+                    raise ProjectStoreError("A held Store observation cannot be upgraded to a writer.")
                 owned.verify_roots()
                 yield owned
                 return
             if process != os.getpid() or thread != get_ident():
                 _ACTIVE.set(None)
-        observing = observing_existing_store()
+        observing = not writer and observing_existing_store()
         if observing and before_create is not None:
             raise ProjectStoreError("A saved-state observation cannot admit a new store.")
         with _leases(self.root, self.locations, blocking=blocking, observing=observing) as leases:
@@ -243,6 +246,7 @@ class StoreIO:
                 with directory(lease.fd, (STORE,)) as store_fd:
                     self.fd = store_fd
                     self.created_store = created_store
+                    self._read_existing = observing
                     token = _ACTIVE.set((self, os.getpid(), get_ident()))
                     try:
                         yield self
@@ -257,6 +261,7 @@ class StoreIO:
                 self.root_fds.clear()
                 self.fd = -1
                 self.created_store = False
+                self._read_existing = False
                 self.advance_epoch()
                 self.lease_epoch += 1
 

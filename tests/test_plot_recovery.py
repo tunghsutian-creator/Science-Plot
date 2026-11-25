@@ -171,3 +171,33 @@ def test_resume_of_historical_key_does_not_claim_current_delivery(tmp_path):
     assert result["historical"] and result["ready_to_use"] is False and result["exports"] == []
     assert result["revision"] == 1 and result["current_revision"] == 2
     assert backend.native_writes == writes
+
+
+def test_completed_export_offers_delivery_not_an_unsupported_resume(tmp_path):
+    service, root, _, _ = _legacy(tmp_path)
+    completed = service.export(root)
+    assert completed["status"] == "complete"
+    recovery = service.describe(root)["recovery"]
+    assert recovery["next_step"] == {**completed["next_step"], "plot": str(root)}
+    assert "resume" not in recovery
+
+
+def test_deferred_comparison_recovery_preserves_the_export_action(tmp_path):
+    from sciplot_core.plot_engine.storage import active, persist
+    from sciplot_core.project_lifecycle.receipts import receipt
+
+    service, root, backend, _ = _legacy(tmp_path)
+    # The accepted comparison uses this same receipt form without starting
+    # publication. Record it at the journal boundary, not in a mock describe.
+    assert service.patch(root, request())["revision"] == 1
+    transaction = active(root)
+    transaction["export_deferred"] = True
+    persist(root, transaction)
+
+    recovery = service.describe(root)["recovery"]
+    assert recovery["next_step"] == receipt(root, transaction)["next_step"] == {
+        "action": "plot.export", "plot": str(root)}
+    assert "resume" not in recovery
+    writes = backend.native_writes
+    assert service.export(root)["revision"] == 1
+    assert backend.native_writes == writes

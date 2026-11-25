@@ -63,6 +63,9 @@ class ProjectApplication(ManagedPlotApplication, CommandDispatch):
             head = load_head(destination.root)
             require_current(self.backend, head["binding"])
             result = self.describe(destination.root, description=description)
+            if result["revision_token"] != destination.revision.to_payload():
+                raise EngineError("managed_delivery_original_changed", "The exact original advanced during delivery selection; open it explicitly to review the new revision.",
+                                  action="plot.describe", plot=str(destination.root))
             result["delivery_continuation"] = {"mode": "original_local_managed", "item_id": destination.item_id,
                                                "independent_native_snapshot": destination.native_snapshot,
                                                "portable_managed_project": False}

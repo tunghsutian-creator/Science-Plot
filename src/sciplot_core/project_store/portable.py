@@ -120,7 +120,7 @@ def import_bundle(bundle: Path, destination: Path, *,
     finally:
         os.close(source_fd)
     store = factory(target, locations)
-    with StoreIO(store.root, store.locations, store.location_members).locked() as io:
+    with StoreIO(store.root, store.locations, store.location_members).locked(writer=True) as io:
         current = state.head(io)
         if current is None or (current["project_id"], current["generation"]) != (header["project_id"], header["generation"]):
             raise ProjectConflict("The portable head differs from its complete bundle binding.")

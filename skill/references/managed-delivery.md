@@ -74,6 +74,11 @@ Use the exact item ID returned by an ambiguous package open:
 skill/scripts/sciplot plot open /absolute/new-delivery --figure 001_P0_3_0_7 --scope summary --json
 ```
 
+The package directory or its `index.json` accepts an exact item ID with
+`--figure`. A registered VSZ under the package's `project` directory also
+identifies that exact member. If both are supplied they must agree; neither
+selector can fall through to another member.
+
 This verifies the exact snapshot file inventory (with only standalone regular
 Finder `.DS_Store` metadata excluded), index, original native byte seal, plot identity and revision,
 scientific/presentation hashes and current source/native bindings, then opens

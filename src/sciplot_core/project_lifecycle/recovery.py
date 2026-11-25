@@ -37,11 +37,12 @@ def project_recovery(result: dict[str, Any], root: Path, transaction: dict[str, 
     resume = {"action": "plot.resume", "plot": str(root), "request": {
         "plot_id": transaction["document"]["plot_id"], "base_revision": request["base_revision"],
         "idempotency_key": request["idempotency_key"]}}
+    resumable = "changes" in request and transaction.get("mode") != "reimport"
     phase = transaction["phase"]
     step = {**saved["next_step"], "plot": str(root)}
-    if phase in {"committed", "exporting", "export_pending"} and not transaction.get("error"):
-        step = {"action": "plot.export", "plot": str(root)}
-    elif step["action"] == "retry_same_request" or phase == "complete":
+    # A completed ordinary edit can replay a lost reply by key. Do not turn
+    # a deferred export, an export-only receipt, or a successor into that edit.
+    if resumable and step["action"] in {"retry_same_request", "deliver"}:
         step = resume
     recovery: dict[str, Any] = {"idempotency_key": request["idempotency_key"], "base_revision": request["base_revision"],
                 "transaction_revision": transaction["document"]["revision"], "current_revision": result["revision"],
@@ -54,10 +55,10 @@ def project_recovery(result: dict[str, Any], root: Path, transaction: dict[str, 
                                  "changed_inputs": result["changed_inputs"]}
         if (result["status"] == "stale" and phase == "applying"
                 and transaction["document"].get("plot_type", "LegacyPlot") == "LegacyPlot"
-                and "changes" in request and transaction.get("mode") != "reimport"):
+                and resumable):
             recovery["guarded_resume"] = {**resume, "automatic_retry": False, "owner_validation_required": True,
                 "message": "Optional original-key recovery: the native apply owner must verify its saved receipt and source/native/revision guards, and may refuse. This summary remains stale."}
-    else:
+    elif resumable and not transaction.get("export_deferred"):
         recovery["resume"] = resume
     result["recovery"] = recovery
     if result["pending"] is not None and result["status"] == "current":
