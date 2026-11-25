@@ -113,8 +113,9 @@ The expert MCP tools are `sciplot_project_bundle_export` and
 `sciplot_project_bundle_import`. They use the same Store owner as the CLI.
 Compare returned `project_id` and `generation` before continuing at the new
 location. Import preserves the project and admitted history, without granting
-executor permissions from another host. An installed paper snapshot still
-cannot be used to recover the original Store.
+executor permissions or external export destinations from another host. New
+exports stay with the moved Store; use a new delivery destination for a visible
+package. An installed paper snapshot still cannot recover the original Store.
 
 Keep using one active location for the project. This operation does not give
 two independently writable identities and does not remove the previous

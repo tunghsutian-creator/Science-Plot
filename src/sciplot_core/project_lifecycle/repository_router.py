@@ -95,7 +95,16 @@ class ComposedProjectRepository(FileProjectRepository):
         if binding.get("kind") != "sciplot_managed_binding" or not isinstance(root, str):
             return None
         selected = self._discover(Path(root))
-        output = selected.attachment.entry.get("publication_output") if selected is not None else None
+        if selected is None:
+            return None
+        attachment = selected.attachment
+        # The sealed entry is history, not a host grant. The portable
+        # importer always installs local_locations.json (even with no roots),
+        # so importing back at the old path cannot silently restore it.
+        project = attachment.store.root
+        if project != Path(attachment.entry["project_origin"]) or (project / STORE / "local_locations.json").exists():
+            return None
+        output = attachment.entry.get("publication_output")
         return Path(output) if output is not None else None
 
     def selected_store(self) -> FileProjectStore | None:
