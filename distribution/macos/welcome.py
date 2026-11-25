@@ -15,6 +15,16 @@ from urllib.parse import quote
 
 
 DAILY_MCP_ARGS = ("mcp", "--profile", "daily")
+FIRST_FIGURE_NAME = "SciPlot-first-figure.csv"
+FIRST_FIGURE_CSV = """Time,Mass,Weight,Time,Mass,Weight
+s,%,%,s,%,%
+Sample A,Sample A,Sample A,Sample B,Sample B,Sample B
+0,100,99,0,100,98
+10,98,96,10,97,95
+20,95,93,20,92,89
+30,91,89,30,86,83
+40,90,87,40,82,78
+"""
 
 
 def feedback_report(doctor: dict, build: dict, mcp_available: bool) -> dict:
@@ -88,6 +98,7 @@ def render_page(command: Path, doctor: dict, mcp_available: bool, status_path: P
     configurations = connection_files(command)
     codex_download = "data:text/plain;charset=utf-8," + quote(configurations["codex-mcp.toml"], safe="")
     mcp_download = "data:application/json;charset=utf-8," + quote(configurations["mcp-server.json"], safe="")
+    example_download = "data:text/csv;charset=utf-8," + quote(FIRST_FIGURE_CSV, safe="")
     feedback_download = "data:application/json;charset=utf-8," + quote(
         json.dumps(feedback_report(doctor, build, mcp_available), ensure_ascii=False, indent=2) + "\n", safe="",
     )
@@ -95,7 +106,7 @@ def render_page(command: Path, doctor: dict, mcp_available: bool, status_path: P
     platform_note = html.escape(f"版本 {build.get('app_version', '未知')} · macOS {build.get('build_macos', '当前版本')} · {architecture}")
     mcp_setup = (
         f'''<p>在支持本地 STDIO MCP 的 AI 客户端添加名为 <b>sciplot</b> 的服务。命令填上方路径，三个参数分别是 <code>{"</code>、<code>".join(DAILY_MCP_ARGS)}</code>。<code>daily</code> 包含日常建图、找回、编辑与导出；需要完整工具目录时，把 <code>daily</code> 改成 <code>expert</code> 后重新连接。</p>
-<p>在客户端确认已经看到 SciPlot 工具，再开始绘图。这里不改客户端设置，也不会自动连接。</p>
+<p><b>本机检测到 MCP 入口；你的 AI 客户端尚未验证。</b> 添加配置后，在实际客户端发送「请调用 SciPlot 的 <code>sciplot_capabilities</code>，告诉我调用是否成功。」看到实际工具调用和返回的 <code>mcp_stdio</code> 才算连通；仅看到工具名称或 AI 说「已连接」不算。这里不会自动连接或修改设置。</p>
 <p><a href="{codex_download}" download="codex-mcp.toml">下载 Codex 配置片段</a> · <a href="{mcp_download}" download="mcp-server.json">下载通用 MCP JSON</a> · <a href="https://learn.chatgpt.com/docs/extend/mcp?surface=cli">官方连接说明</a></p>'''
         if mcp_available else
         "<p>当前构建尚未提供 MCP 入口。若本地环境已就绪，可用下方命令行；也可向维护者取得支持 MCP 的构建。</p>"
@@ -111,10 +122,11 @@ def render_page(command: Path, doctor: dict, mcp_available: bool, status_path: P
 <p>把整个 SciPlot.app 放在固定位置（例如“应用程序”），双击即可回到本页。移动应用后，重新打开本页，并用新路径更新客户端连接。</p>
 <div class="card"><code id="command">{command_text}</code><p><button onclick="copyCommand()">复制命令路径</button> <span id="copyStatus" role="status"></span></p></div>
 {mcp_setup}
-<h2>2. 用原始数据出第一张图</h2>
-<div class="card">用 SciPlot 绘制这个 UV–Vis 文件。保留样品名和单位；有不确定的列或单位先问我。给我 PDF、300 dpi TIFF，并告诉我下次继续编辑用的项目路径。</div>
-<p>连接后，把原始文件交给 AI，由它使用 <code>sciplot_task_start</code>；SciPlot 在本机处理数据并绘图。需要确认时，按原实验信息选工作表、样品、数据列或单位。看图后检查样品、单位和范围；只有实际导出完成后才取用最终文件。</p>
-<p>以任务返回的路径为准。默认交付目录在原数据旁，通常名为 <b>文件名_SciPlot</b>，包含本次实际导出的 PDF、TIFF、绘图 CSV 和 VSZ。请一并保留原始文件、返回的项目路径和同级隐藏的 <b>.sciplot</b> 工作区。</p>
+<h2>2. 先用安全示例画第一张图</h2>
+<p><a href="{example_download}" download="{FIRST_FIGURE_NAME}">下载双样品练习 CSV</a>。这是合成数据，不含任何实验记录。将它保存在你愿意保留的文件夹，连接后把本机文件路径交给 AI，再发送下面这段话。</p>
+<div class="card">用 SciPlot 把这个 CSV 的 Sample A 和 Sample B 画在同一张质量–时间图上。按原始数据叠画，不做归一化；先向我确认选哪一列作为纵轴，不要代我选。完成后给我看图，给我 PDF、300 dpi TIFF 和可继续编辑的项目路径。</div>
+<p>两列都以百分比记录，但数值不同。客户端应先让你在 <code>Mass</code> 和 <code>Weight</code> 之间选，再继续同一次任务。练习可答「用 Mass」；不用填写任何内部编号。检查图中有两个样品、横轴为秒、纵轴为百分比，再打开实际导出的文件。</p>
+<p>换成自己的原始文件时，只有影响结果的样品、工作表、列或单位不明确才需要确认。以任务返回的路径为准：交付目录通常在原数据旁，包含 PDF、TIFF、绘图 CSV 和 VSZ。保留原始文件和返回的<strong>可续编项目路径</strong>；交付文件和项目各自保留，不要把导出的 VSZ 当成原项目。</p>
 <h2>3. 下次找回原图，再预览修改</h2>
 <div class="card">继续这个 SciPlot 项目，不要重新建图。把图例字号改成 8 pt，先给我看候选图，确认后再保存和更新交付。</div>
 <p>把原项目路径或原位置的已登记交付目录交给 AI。它用 <code>sciplot_project_open</code> 识别图；只记得原始文件时，先用 <code>sciplot_task_continue</code> 查找已有项目，有多个候选时由你选择。不要用原输入再建一份来代替编辑。</p>
