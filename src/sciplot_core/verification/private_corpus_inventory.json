@@ -7,9 +7,9 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 10427,
-    "nodeids_sha256": "087c7b59fcc01e29a5350394fe13931344897df8ae9ea99b29bb7952c992ce58",
-    "test_sources_sha256": "f013b9979b225a6cae319cdd2828f76ec91bb68eeca59fab82b0ad87d9080b44",
+    "nodeid_count": 10428,
+    "nodeids_sha256": "e2fcd4c5f2954a30b47c8619efaeeb1f63b4baae9c76c70a7372ee22ba914fe4",
+    "test_sources_sha256": "cb16986f55070d41b6c8a5e8f1c0074dc624178538fcfeaf4be66fb8cbb1db81",
     "test_source_count": 661,
     "candidate_nodeids": [
       "tests/test_plot_template_native.py::test_legacy_paired_template_reauthored_as_managed_preserves_data_and_styles",
@@ -5851,6 +5851,7 @@
       "tests/test_plot_recovery.py::test_deferred_comparison_recovery_preserves_the_export_action",
       "tests/test_project_store.py::test_bundle_copies_reachable_history_and_installs_only_after_projection",
       "tests/test_task_comparisons_native.py::test_managed_comparison_reuses_exact_winner_on_cold_apply",
+      "tests/test_macos_release.py::test_synthetic_first_figure_runs_through_daily_stdio",
       "tests/test_managed_delivery_native.py::test_managed_delivery_uses_store_sealed_source_after_original_disappears"
     ],
     "synthetic_candidates": [
@@ -28545,6 +28546,10 @@
       {
         "nodeid": "tests/test_project_store.py::test_bundle_copies_reachable_history_and_installs_only_after_projection",
         "reason": "Generated store, historic generations and simulated projection interruption."
+      },
+      {
+        "nodeid": "tests/test_macos_release.py::test_synthetic_first_figure_runs_through_daily_stdio",
+        "reason": "Official local daily MCP STDIO and native export of an inline generated CSV; no model or private corpus."
       },
       {
         "nodeid": "tests/test_task_comparisons_native.py::test_managed_comparison_reuses_exact_winner_on_cold_apply",
