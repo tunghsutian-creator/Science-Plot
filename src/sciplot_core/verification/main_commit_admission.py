@@ -22,8 +22,7 @@ REQUIRED_STEPS = (
     "Verify Qt build and runtime identity", "Verify Chinese glyph fallback in the system Qt runtime",
     "Run lint gate", "Run shared source contracts", "Run scoped static type gate", "Build vendored Veusz helpers",
     "Verify vendored Veusz helpers", "Verify minimal wheel surface",
-    NATIVE_DIAGNOSTIC_STEP, "Run reviewed public focused behavior",
-    "Run reviewed public comprehensive behavior", "Verify source-checkout wrapper bootstrap",
+    NATIVE_DIAGNOSTIC_STEP, "Run reviewed complete public behavior", "Verify source-checkout wrapper bootstrap",
     "Run readiness check", "Run fixture-free lifecycle smoke",
 )
 PLATFORM_STEPS = {"Set up job", "Complete job", "Post Run actions/checkout@v4"}

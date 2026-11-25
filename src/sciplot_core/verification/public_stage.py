@@ -13,10 +13,17 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
 from typing import Any, cast, overload
 
 from sciplot_core.verification.public_stage_selection import (
-    TARGETED_SCOPES, selected_public_nodes as _selected_public_nodes, target_modules,
+    TARGETED_SCOPES,
+    record_report as pytest_runtest_logreport,  # noqa: F401 (pytest hook)
+    write_reports as pytest_sessionfinish,  # noqa: F401 (pytest hook)
+    reset_reports as pytest_sessionstart,  # noqa: F401 (pytest hook)
+    review_stage_reports as review_stage_reports,
+    selected_public_nodes as _selected_public_nodes,
+    target_modules,
 )
 
 PRIVATE_NAMES = ("real_world", "polymer_corpus", "archived_output_raw_data", "rendering_profiles")
@@ -25,28 +32,6 @@ HELPERS = ("_nc_cntr", "qtmml", "qtloops", "recordpaint", "threed")
 BINDING_CHECKS = ("private_namespace_absent", "stage_source_equal", "origin_source_equal",
                   "stage_head_equal", "origin_head_equal", "runtime_equal", "stage_runtime_equal")
 CLAIM = "private-absent generated behavior; no OS isolation, scientific acceptance or complete private access capture"
-PLATFORM_SKIPS = {
-    "tests/test_macos_distribution.py::test_build_refuses_existing_output_before_copying": ("call", "Skipped: macOS builder"),
-    "tests/test_verification_evidence_runtime.py::test_runtime_keeps_logical_roots_and_missing_enabled_usersite": ("setup", "Skipped: default runtime policy binds the actual macOS build"),
-    "tests/test_verification_evidence_runtime.py::test_relative_runtime_environment_binds_real_child_inputs": ("setup", "Skipped: default runtime policy binds the actual macOS build"),
-    "tests/test_private_observer_native.py::test_actual_mac_qt_reexec_is_sealed_and_continued": ("call", "Skipped: The actual Qt framework reexec path belongs to macOS."),
-    "tests/test_native_probe_boundary.py::test_actual_clt_inspector_uses_closed_environment_and_bound_native_target": ("setup", "Skipped: finite CLT inspector is macOS-specific"),
-    'tests/test_process_private_exclusion_generated.py::test_actual_close_fds_and_devnull_do_not_inherit_generated_raw_descriptor': ("setup", "Skipped: Actual Mac process boundary control"),
-    'tests/test_process_private_exclusion_generated.py::test_actual_nonzero_and_signal_outcomes_are_retained[import os,signal;os.kill(os.getpid(),signal.SIGTERM)--15]': ("setup", "Skipped: Actual Mac process boundary control"),
-    'tests/test_process_private_exclusion_generated.py::test_actual_nonzero_and_signal_outcomes_are_retained[import os;os._exit(79)-79]': ("setup", "Skipped: Actual Mac process boundary control"),
-    'tests/test_process_private_exclusion_generated.py::test_actual_pipe_protocol_and_post_kernel_environment_projection': ("setup", "Skipped: Actual Mac process boundary control"),
-    'tests/test_process_private_exclusion_generated.py::test_actual_strong_boundary_blocks_namespace_alias_and_evidence_mutations': ("setup", "Skipped: Actual Mac process boundary control"),
-    'tests/test_process_private_exclusion_generated.py::test_pinned_interpreter_loader_environment_is_preserved': ("setup", "Skipped: Actual Mac process boundary control"),
-    "tests/test_process_private_exclusion_generated.py::test_actual_same_launch_composition_preserves_two_finite_socket_endpoints": ("setup", "Skipped: Actual Mac process boundary control"),
-    "tests/test_native_exit_boundary.py::test_late_and_wrong_identity_do_not_register": ("setup", "Skipped: Darwin public kqueue/libproc capability"),
-    "tests/test_native_exit_boundary.py::test_missing_event_and_closed_watcher_remain_unknown": ("setup", "Skipped: Darwin public kqueue/libproc capability"),
-    "tests/test_native_exit_boundary.py::test_real_nonparent_status_matches_original_parent_wait[0-0-0]": ("setup", "Skipped: Darwin public kqueue/libproc capability"),
-    "tests/test_native_exit_boundary.py::test_real_nonparent_status_matches_original_parent_wait[79-20224-79]": ("setup", "Skipped: Darwin public kqueue/libproc capability"),
-    "tests/test_native_exit_boundary.py::test_real_nonparent_status_matches_original_parent_wait[sigterm-15--15]": ("setup", "Skipped: Darwin public kqueue/libproc capability"),
-}
-_reports: list[dict[str, Any]] = []
-
-
 def _hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -255,11 +240,35 @@ def create_stage(root: Path, output: Path, environment: dict[str, str]) -> tuple
 
 
 def run_public_stage(root: Path, output: Path, profile: str, *, targets: list[str] | None = None) -> dict[str, Any]:
+    """Run one existing public profile with its own fresh source stage."""
+    _require_selector(profile, targets)
+    return _run_public_profiles(root, output, [(profile, targets)], grouped=False)[0]
+
+
+def _require_selector(profile: str, targets: list[str] | None) -> None:
     affected = profile in TARGETED_SCOPES
     if profile not in {"public-focused", "public-comprehensive", "public-all", *TARGETED_SCOPES}:
         raise ValueError("Only exact public profiles may execute in a source stage.")
     if affected != bool(targets) or (targets is not None and not affected):
         raise ValueError("Only an affected public profile requires explicit nonempty test selectors.")
+
+
+def run_public_profiles(
+    root: Path, output: Path, profiles: list[tuple[str, list[str] | None]],
+) -> list[dict[str, Any]]:
+    """Share the source copy, never the pytest process, order or phase evidence."""
+    if tuple(profile for profile, _ in profiles) not in {
+        ("public-focused", "public-comprehensive"), ("public-affected", "public-affected-native"),
+    }:
+        raise ValueError("Grouped public stages require the reviewed profile order.")
+    for profile, targets in profiles:
+        _require_selector(profile, targets)
+    return _run_public_profiles(root, output, profiles, grouped=True)
+
+
+def _run_public_profiles(
+    root: Path, output: Path, profiles: list[tuple[str, list[str] | None]], *, grouped: bool,
+) -> list[dict[str, Any]]:
     root = root.expanduser().resolve()
     output = output.expanduser()
     output = output if output.is_absolute() else root / output
@@ -267,6 +276,46 @@ def run_public_stage(root: Path, output: Path, profile: str, *, targets: list[st
     if environment.get("PYTEST_ADDOPTS", "").strip():
         raise ValueError("Controlled public profiles reject PYTEST_ADDOPTS filters/options.")
     stage, child_environment, before = create_stage(root, output, environment)
+    if grouped:
+        from sciplot_core.foundation.research_destination import require_data_destination
+
+        # Keep generated project data outside the source and separate between tiers.
+        scratch = require_data_destination(Path(tempfile.gettempdir()))
+    results = []
+    for profile, targets in profiles:
+        destination = output / profile if grouped else output
+        if grouped:
+            destination.mkdir()
+            pytest_root = str(Path(tempfile.mkdtemp(prefix="sciplot-public-", dir=scratch)))
+        else:
+            pytest_root = None
+        result = _run_public_stage(root, destination, profile, targets, stage, environment,
+                                   dict(child_environment), before, pytest_root=pytest_root)
+        results.append(result)
+        if result["status"] != "PASS":
+            break
+        if grouped and len(results) < len(profiles):
+            # Reset generated stage outputs between processes, as distinct
+            # stages did. Retain the earlier tier's diagnostics, never promote
+            # its outputs to inputs for the next tier.
+            scratch_path = (stage / RECEIPT).parent
+            receipt = stage / RECEIPT
+            _no_alias(receipt, stage)
+            receipt_bytes = receipt.read_bytes()
+            if json.loads(receipt_bytes) != before:
+                raise ValueError("Controlled stage receipt changed during a public profile.")
+            scratch_path.rename(destination / "stage-diagnostics")
+            scratch_path.mkdir()
+            receipt.write_bytes(receipt_bytes)
+    return results
+
+
+def _run_public_stage(
+    root: Path, output: Path, profile: str, targets: list[str] | None, stage: Path,
+    environment: dict[str, str], child_environment: dict[str, str], before: dict[str, Any],
+    *, pytest_root: str | None,
+) -> dict[str, Any]:
+    affected = profile in TARGETED_SCOPES
     from sciplot_core.verification.input_scope import load_manifest
     manifest = load_manifest(stage / "src/sciplot_core/verification/input_scope_manifest.json")
     scope = TARGETED_SCOPES.get(profile, profile)
@@ -275,6 +324,8 @@ def run_public_stage(root: Path, output: Path, profile: str, *, targets: list[st
     command = [sys.executable, "-m", "pytest", "-vv", "-p", "sciplot_core.verification.pytest_finish",
                "-p", "sciplot_core.verification.public_stage", "-p", "sciplot_core.verification.public_stage_selection",
                "--input-scope", scope]
+    if pytest_root is not None:
+        command.extend(("--basetemp", pytest_root))
     if targets:
         # Collect complete modules, not leaf node IDs: the manifest still
         # catches added, removed and reclassified siblings before any body.
@@ -320,76 +371,22 @@ def run_public_stage(root: Path, output: Path, profile: str, *, targets: list[st
     return result
 
 
-def review_stage_reports(marker: dict[str, Any], reports: dict[str, Any], *, platform: str) -> list[str]:
-    """Every selected node needs actual successful reports or an exact OS skip."""
-    selected = marker.get("selected_tests")
-    if (marker.get("complete") is not True or marker.get("exit_code") != 0 or not isinstance(selected, list)
-            or not selected or not all(isinstance(node, str) for node in selected)
-            or len(selected) != len(set(selected)) or reports.get("selected_tests") != selected
-            or reports.get("exit_code") != 0):
-        return ["Actual public stage session finish is absent, incomplete or mismatched."]
-    rows = reports.get("reports")
-    if not isinstance(rows, list):
-        return ["Unknown public stage report scope."]
-    by_node: dict[str, list[dict[str, Any]]] = {node: [] for node in selected}
-    passed: list[str] = []
-    for row in rows:
-        if not isinstance(row, dict) or row.get("when") not in ("setup", "call", "teardown"):
-            return ["Unknown public stage report scope."]
-        node = row.get("nodeid")
-        if not isinstance(node, str) or node not in by_node:
-            return ["Unknown public stage report scope."]
-        by_node[node].append(row)
-        if row["when"] == "call" and row.get("outcome") == "passed":
-            passed.append(node)
-    passed_nodes = set(passed)
-    if passed != marker.get("executed_tests") or len(passed) != len(passed_nodes):
-        return ["Actual public call reports differ from successful body finish."]
-    for node, actual in by_node.items():
-        setup = [row for row in actual if row.get("when") == "setup"]
-        call = [row for row in actual if row.get("when") == "call"]
-        teardown = [row for row in actual if row.get("when") == "teardown"]
-        skips = [row for row in actual if row.get("outcome") == "skipped"]
-        if (len(setup) != 1 or len(teardown) != 1 or teardown[0].get("outcome") != "passed"
-                or any(row.get("outcome") not in {"passed", "skipped"} for row in actual)):
-            return ["Public stage setup/teardown/failure reports are incomplete."]
-        if skips:
-            expected = PLATFORM_SKIPS.get(node) if platform != "darwin" else None
-            if (len(skips) != 1 or expected != (skips[0].get("when"), skips[0].get("skip_reason"))
-                    or len(call) != (1 if skips[0].get("when") == "call" else 0)):
-                return ["Unexpected public stage skip or omitted body."]
-        elif len(call) != 1 or node not in passed_nodes or setup[0].get("outcome") != "passed":
-            return ["A selected public body did not execute successfully."]
-    return []
-
-
-def pytest_sessionstart(session: Any) -> None:
-    _reports.clear()
-
-
-def pytest_runtest_logreport(report: Any) -> None:
-    reason = str(report.longrepr[2]) if report.skipped and isinstance(report.longrepr, tuple) else None
-    _reports.append({"nodeid": report.nodeid, "when": report.when, "outcome": report.outcome, "skip_reason": reason})
-
-
-def pytest_sessionfinish(session: Any, exitstatus: Any) -> None:
-    from sciplot_core.verification.evidence import atomic_json
-
-    destination = os.environ.get("SCIPLOT_PUBLIC_STAGE_REPORT")
-    if destination:
-        atomic_json(Path(destination), {"selected_tests": [item.nodeid for item in session.items],
-                                        "exit_code": int(exitstatus), "reports": list(_reports)})
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", required=True, type=Path)
-    parser.add_argument("--profile", choices=("public-focused", "public-comprehensive", "public-all", *TARGETED_SCOPES), default="public-comprehensive")
+    parser.add_argument("--profile", choices=("public-focused", "public-comprehensive", "public-all", "public-ci-full", *TARGETED_SCOPES), default="public-comprehensive")
     parser.add_argument("--target", action="append", dest="targets")
     arguments = parser.parse_args()
     root = Path(__file__).resolve().parents[3]
     try:
-        result = run_public_stage(root, arguments.out, arguments.profile, targets=arguments.targets)
+        if arguments.profile == "public-ci-full":
+            if arguments.targets:
+                raise ValueError("Full public CI does not take target selectors.")
+            results = run_public_profiles(root, arguments.out, [
+                ("public-focused", None), ("public-comprehensive", None)])
+            result = {"status": results[-1]["status"], "profiles": results}
+        else:
+            result = run_public_stage(root, arguments.out, arguments.profile, targets=arguments.targets)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         result = {"kind": "sciplot_public_source_stage_execution", "status": "BLOCKED", "error": str(error), "executed_test_count": 0}
     print(json.dumps(result, sort_keys=True))

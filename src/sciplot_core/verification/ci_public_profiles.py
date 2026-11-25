@@ -16,15 +16,18 @@ def run_profile(root: Path, profile: str) -> int:
     if (root / ".tmp_verify").is_symlink() or directory.is_symlink():
         raise ValueError("CI evidence roots cannot follow aliases.")
     environment = dict(os.environ)
-    command = [sys.executable, "-m", "sciplot_core.verification.public_stage", "--profile", "public-" + profile,
-               "--out", ".tmp_verify/ci_public_" + profile]
+    output = ".tmp_verify/ci_public_" + profile
+    command = [sys.executable, "-m", "sciplot_core.verification.public_stage",
+               "--profile", "public-ci-full" if profile == "full" else "public-" + profile, "--out", output]
+    result_directories = ([root / output / ("public-" + tier) for tier in ("focused", "comprehensive")]
+                          if profile == "full" else [root / output])
     directory.mkdir(parents=True, exist_ok=True)
     log = directory / f"{profile}.log"
     with log.open("x") as stream:
         # Same owned command.log stream previously used by comprehensive in Actions.
         # It is progress only; the original stage exit/finish/reports own completion.
         progress = subprocess.Popen(["tail", "-n", "+1", "--follow=name", "--retry",
-                                     str(root / f".tmp_verify/ci_public_{profile}/command.log")],
+                                     *(str(path / "command.log") for path in result_directories)],
                                     env=environment, stderr=subprocess.DEVNULL)
         try:
             child = subprocess.Popen(command, cwd=root, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -41,15 +44,16 @@ def run_profile(root: Path, profile: str) -> int:
     if code == 0 and expected_head:
         # The existing stage already validates its phases/source/runtime. Bind
         # that owner's actual execution head to the official push check identity.
-        result = json.loads((root / f".tmp_verify/ci_public_{profile}/result.json").read_bytes())
-        if result["origin_head"] != expected_head:
-            raise ValueError("Actual public stage source differs from GITHUB_SHA.")
+        for path in result_directories:
+            result = json.loads((path / "result.json").read_bytes())
+            if result["origin_head"] != expected_head:
+                raise ValueError("Actual public stage source differs from GITHUB_SHA.")
     return code
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("profile", choices=("focused", "comprehensive"))
+    parser.add_argument("profile", choices=("focused", "comprehensive", "full"))
     args = parser.parse_args()
     return run_profile(Path(__file__).resolve().parents[3], args.profile)
 

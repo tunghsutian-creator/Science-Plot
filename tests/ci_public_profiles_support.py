@@ -228,8 +228,7 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
     steps = workflow.split("      - name: ")
     conditional = {step.splitlines()[0]: re.search(r"        if: \$\{\{ (.*?) \}\}", step).group(1)
                    for step in steps if "        if: ${{ " in step}
-    full_names = ("Run reviewed public focused behavior",
-                  "Run reviewed public comprehensive behavior", "Run readiness check",
+    full_names = ("Run reviewed complete public behavior", "Run readiness check",
                   "Run fixture-free lifecycle smoke")
     def enabled(expression, outcome, layer, event, admission_outcome="success", referenced="false", diagnostic=False):
         values = {"steps.native-feedback.outcome": outcome, "steps.native-feedback.outputs.layer": layer,

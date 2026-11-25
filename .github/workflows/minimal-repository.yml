@@ -328,14 +328,9 @@ jobs:
           SCIPLOT_EVENT_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           SCIPLOT_EVENT_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref && format('refs/heads/{0}', github.event.pull_request.base.ref) || github.ref }}
         run: python3 -m sciplot_core.verification.ci_feedback --base "$SCIPLOT_EVENT_BASE" --run-affected
-      - name: Run reviewed public focused behavior
+      - name: Run reviewed complete public behavior
         if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && ((steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch')) }}
-        run: python3 -m sciplot_core.verification.ci_public_profiles focused
-      - name: Run reviewed public comprehensive behavior
-        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && ((steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch')) }}
-        # Both profiles use the existing private-absent source-stage owner.
-        # The wrapper streams its owned command.log without changing completion.
-        run: python3 -m sciplot_core.verification.ci_public_profiles comprehensive
+        run: python3 -m sciplot_core.verification.ci_public_profiles full
       - name: Verify source-checkout wrapper bootstrap
         if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}
         run: env -u PYTHONPATH SCIPLOT_PYTHON=python3 skill/scripts/sciplot --help >/dev/null

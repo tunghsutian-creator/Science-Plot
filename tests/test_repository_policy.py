@@ -71,15 +71,14 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
     assert "native_regression_preflight:" in dispatch
     assert "type: boolean" in dispatch and "default: false" in dispatch
     for name, command in (
-        ("Run reviewed public focused behavior", "ci_public_profiles focused"),
-        ("Run reviewed public comprehensive behavior", "ci_public_profiles comprehensive"),
+        ("Run reviewed complete public behavior", "ci_public_profiles full"),
         ("Run scoped static type gate", "python3 -m mypy --platform darwin"),
         ("Run readiness check", "skill/scripts/sciplot doctor --json"),
         ("Run fixture-free lifecycle smoke", "skill/scripts/sciplot smoke --out"),
     ):
         step = next(step for step in steps if step.startswith(name))
         assert command in step
-        if name.startswith("Run reviewed public "):
+        if name == "Run reviewed complete public behavior":
             assert "public-reference" not in step
         if name == "Run scoped static type gate":
             assert "steps.main-admission.outcome != 'success'" in step

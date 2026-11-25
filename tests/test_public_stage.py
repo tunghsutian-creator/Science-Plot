@@ -159,6 +159,32 @@ def test_affected_stage_reports_limited_claim(tmp_path: Path, monkeypatch: pytes
     assert result["scientific_acceptance"] is False and result["access_capture_complete"] is False
     assert all(value is True for value in result["binding_checks"].values())
 
+    # Two pytest loops share one verified source copy, but never generated
+    # inputs, process options, logs or selected/completed node evidence.
+    monkeypatch.setattr(public_stage.tempfile, "gettempdir", lambda: str(tmp_path))
+    group = tmp_path / "group"
+    group.mkdir()
+    stage_scratch = stage / ".tmp_verify"
+    stage_scratch.mkdir()
+    (stage / public_stage.RECEIPT).write_text(json.dumps(before))
+    copies, passes = [], []
+    monkeypatch.setattr(public_stage, "create_stage", lambda *_args: (copies.append("copy") or stage, {}, before))
+
+    def execute(_root, destination, profile, targets, actual_stage, _env, child, binding, *, pytest_root):
+        assert actual_stage == stage and binding is before and child == {}
+        assert not (stage_scratch / "first-only.json").exists()
+        passes.append((destination.name, profile, targets, pytest_root))
+        (stage_scratch / "first-only.json").write_text("{}")
+        return {"status": "PASS"}
+
+    monkeypatch.setattr(public_stage, "_run_public_stage", execute)
+    result = public_stage.run_public_profiles(tmp_path, group, [("public-focused", None), ("public-comprehensive", None)])
+    assert len(result) == 2 and copies == ["copy"]
+    assert [row[:3] for row in passes] == [
+        ("public-focused", "public-focused", None), ("public-comprehensive", "public-comprehensive", None)]
+    assert passes[0][3] != passes[1][3]
+    assert (group / "public-focused/stage-diagnostics/first-only.json").is_file()
+
 
 def _origin(tmp_path: Path) -> Path:
     root = tmp_path / "origin"

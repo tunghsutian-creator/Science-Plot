@@ -67,8 +67,7 @@ def future_origin():
         "Verify vendored Veusz helpers",
         "Verify minimal wheel surface",
         "Check known native CI regressions before the public suites",
-        "Run reviewed public focused behavior",
-        "Run reviewed public comprehensive behavior",
+        "Run reviewed complete public behavior",
         "Verify source-checkout wrapper bootstrap",
         "Run readiness check",
         "Run fixture-free lifecycle smoke",
@@ -120,7 +119,7 @@ def test_complete_source_check_is_referenced_without_current_execution():
     diagnostic = next(step for step in steps if step["name"] == gate.NATIVE_DIAGNOSTIC_STEP)
     diagnostic["conclusion"] = "skipped"
     assert gate.admit(context(), reader(runs, jobs)[0])["referenced"] is True
-    comprehensive = next(step for step in steps if step["name"] == "Run reviewed public comprehensive behavior")
+    comprehensive = next(step for step in steps if step["name"] == "Run reviewed complete public behavior")
     comprehensive["conclusion"] = "skipped"
     assert gate.admit(context(), reader(runs, jobs)[0])["referenced"] is False
     comprehensive["conclusion"] = "success"
