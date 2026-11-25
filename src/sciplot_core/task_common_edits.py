@@ -346,10 +346,14 @@ def edit_task(target: Path, *, intent: str | None = None, figure_id: str | None 
                  load_head(resolved_target)["document"].get("plot_type") == "ManagedPlot" else None)
         description = owner.open(resolved_target, figure_id=figure_id, description=scope)
         if description["status"] != "current":
+            next_step = description.get("next_step", {"action": "plot.describe", "plot": description.get("plot")})
+            # An edit needs the conditional conversion route; view-only redraw stays available.
+            conversion = description.get("conversion") if description.get("read_only") else None
             return {**description, "current_status": description["status"], "status": "blocked",
                     "reason_code": ("legacy_conversion_required" if description.get("read_only")
                                     else "common_edit_currentness_required"), "doctor": doctor,
-                    "next_step": description.get("next_step", {"action": "plot.describe", "plot": description.get("plot")})}
+                    "next_step": conversion or next_step,
+                    **({"redraw": next_step} if conversion and next_step.get("action") == "redraw_legacy" else {})}
         if description.get("pending"):
             from sciplot_core.project_lifecycle.receipts import receipt
 
