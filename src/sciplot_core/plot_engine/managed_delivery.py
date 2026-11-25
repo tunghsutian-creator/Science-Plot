@@ -1,7 +1,6 @@
 """Resumable ordered ManagedPlot export snapshots; never a cross-plot edit."""
 
 from pathlib import Path
-import json
 import re
 import subprocess
 from typing import Any, Protocol
@@ -9,17 +8,19 @@ from uuid import uuid4
 
 from sciplot_core.delivery import native_snapshot
 from sciplot_core.plot_engine.managed_delivery_contract import normalize_request
-from sciplot_core.plot_engine.managed_delivery_data import project_data
+from sciplot_core.plot_engine.managed_delivery_data import capture_plot_data, project_data
 from sciplot_core.plot_engine.managed_delivery_continuation import delivery_inventory, require_native_seal
-from sciplot_core.plot_engine.managed_delivery_publication import inspect_managed_native, publish
+from sciplot_core.plot_engine.managed_delivery_publication import cached_native_audit, inspect_managed_native, publish
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.plot_engine.current import require_current
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.storage import digest, load_head, read, write
-from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot, _assert_snapshot_current
+from sciplot_core.source_coverage.file_snapshots import _assert_snapshot_current
+from sciplot_core.plot_engine.managed_delivery_sources import stage_originals, require_originals
 from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.project_lifecycle.context import active, external_project_session, exists, prepare_namespace, create_namespace, project_query
-from sciplot_core.studio_core.source_update_commit import file_inventory
+from sciplot_core.studio_core.source_update_files import file_inventory
 
 class DeliveryService(Protocol):
     backend: Any
@@ -39,8 +40,10 @@ def _selected_head(item: dict[str, Any], *targets: Path) -> dict[str, Any]:
     if (document["plot_id"], document["revision"]) != (item["plot_id"], item["revision"]):
         raise EngineError("managed_delivery_revision_conflict", "This exact selection has advanced. Read its current revision and use a new destination.",
                           action="plot.describe", plot=str(plot), new_destination_required=True)
-    paths = [plot, Path(head["binding"]["output"]),
-             *[Path(source["path"]) for source in document["scientific"]["data_sources"]]]
+    paths = [plot, Path(head["binding"]["output"])]
+    for source in document["scientific"]["data_sources"]:
+        literal = Path(source["path"])
+        paths.extend((literal, resolve_source_path(literal, expected_sha256=source["sha256"], source_id=source["source_id"])))
     for selected_path in paths:
         path = canonical_path(selected_path)
         if any(target == path or target.is_relative_to(path) or path.is_relative_to(target) for target in targets):
@@ -49,13 +52,14 @@ def _selected_head(item: dict[str, Any], *targets: Path) -> dict[str, Any]:
 
 
 def _selection(service: DeliveryService, item: dict[str, Any], *targets: Path) -> dict[str, Any]:
-    head = _selected_head(item, *targets)
-    require_current(service.backend, head["binding"])
-    pending = active(Path(item["plot"]))
-    if pending and pending["phase"] not in {"complete", "rejected"}:
-        raise EngineError("managed_delivery_review_pending", "Resolve the current plot transaction before packaging its saved export.",
-                          action="resolve_pending_plot_transaction", plot=item["plot"], phase=pending["phase"])
-    return head
+    with project_query(Path(item["plot"])):
+        head = _selected_head(item, *targets)
+        require_current(service.backend, head["binding"])
+        pending = active(Path(item["plot"]))
+        if pending and pending["phase"] not in {"complete", "rejected"}:
+            raise EngineError("managed_delivery_review_pending", "Resolve the current plot transaction before packaging its saved export.",
+                              action="resolve_pending_plot_transaction", plot=item["plot"], phase=pending["phase"])
+        return head
 
 
 def _failure(exc: Exception, code: str, selection: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -108,24 +112,24 @@ def _seal(service: DeliveryService, root: Path, state: dict[str, Any], selection
     files = record.get("artifact_files", {})
     if str(native) not in files:
         raise EngineError("managed_delivery_native_unsealed", "The export cache lacks the exact original native byte seal.")
-    if not files or any(not Path(name).is_file() or file_sha256(Path(name)) != expected for name, expected in files.items()):
+    ir_path = head["binding"]["ir_path"]
+    if not files or any(not Path(name).is_file() or file_sha256(Path(name)) != expected
+                        for name, expected in files.items() if name != ir_path):
         raise EngineError("managed_delivery_export_changed", "A sealed original artifact is missing or changed; it was not regenerated or overwritten.")
     if exported.get("ir_hash") != head["binding"]["ir_hash"]:
         raise EngineError("managed_delivery_cache_stale", "The export cache does not identify this selected revision's exact PlotIR.")
-    ir_snapshot = stable_file_snapshot(Path(head["binding"]["ir_path"]), label="Managed delivery audited PlotIR",
-                                       expected_sha256=files.get(head["binding"]["ir_path"]))
-    ir = json.loads(ir_snapshot["bytes"])
     document = head["document"]
-    if (ir["ir_hash"], ir["scientific_hash"], ir["presentation_hash"]) != (
-            head["binding"]["ir_hash"], document["scientific_hash"], document["presentation_hash"]):
-        raise EngineError("managed_delivery_cache_stale", "The export cache is not bound to the selected scientific/presentation/export configuration.")
+    plot_data = capture_plot_data(Path(ir_path), sha256=files.get(ir_path), expected={
+        "ir_hash": head["binding"]["ir_hash"], "scientific_hash": document["scientific_hash"],
+        "presentation_hash": document["presentation_hash"]})
     if exported.get("publication_qa", {}).get("status") != "passed":
         raise EngineError("managed_delivery_qa_unverified", "The sealed export lacks its original passed publication QA.")
     # Packaging does not refresh compiler identity or mutate the original plot.
     # Use the existing scientific/publication owner on these exact saved bytes.
-    inspected = inspect_managed_native(head["binding"])
-    _assert_snapshot_current(ir_snapshot, label="Managed delivery audited PlotIR", expected_sha256=ir_snapshot["sha256"])
     native_sha256 = files[str(native)]
+    inspected = cached_native_audit(record, head, native_sha256, plot_data.snapshot["sha256"])
+    if inspected is None:
+        inspected = inspect_managed_native(head["binding"])
     if inspected["document_sha256"] != native_sha256:
         raise EngineError("managed_delivery_native_changed", "The audited native bytes changed during delivery capture.")
     result = {**exported, "publication_qa": inspected.get("publication_qa", {})}
@@ -134,34 +138,15 @@ def _seal(service: DeliveryService, root: Path, state: dict[str, Any], selection
                           result=result)
     if result.get("publication_qa", {}).get("status") != "passed":
         raise EngineError("managed_delivery_qa_unverified", "The selected export lacks passed publication QA.")
-    head = _selection(service, selection, root, out)
     attempt = root / "attempts" / item["stem"] / uuid4().hex
     item.update(status="preparing", attempt=str(attempt))
     _save(root, state)
-    for directory in ("project", "pdf", "tiff", "data/originals"):
+    for directory in ("project", "pdf", "tiff"):
         (attempt / directory).mkdir(parents=True)
-    sources = []
-    for source in head["document"]["scientific"]["data_sources"]:
-        path = canonical_path(Path(source["path"]))
-        try:
-            snapshot = stable_file_snapshot(path, label="Managed delivery original source", expected_sha256=source["sha256"])
-        except (ValueError, OSError) as exc:
-            raise EngineError("managed_delivery_source_changed", "An original source changed during delivery.") from exc
-        if snapshot["sha256"] != source["sha256"]:
-            raise EngineError("managed_delivery_source_changed", "An original source changed during delivery.")
-        name = snapshot["sha256"] + path.suffix.lower()
-        target = attempt / "data/originals" / name
-        if not target.exists():
-            target.write_bytes(snapshot["bytes"])
-        _assert_snapshot_current(snapshot, label="Managed delivery original source", expected_sha256=source["sha256"])
-        sources.append({"source_id": source["source_id"], "original_name": path.name, "sha256": snapshot["sha256"],
-                        "path": "data/originals/" + name})
-    plotted_data = project_data(Path(head["binding"]["ir_path"]), attempt, item["stem"],
-                                expected={"ir_hash": head["binding"]["ir_hash"], "scientific_hash": document["scientific_hash"],
-                                          "presentation_hash": document["presentation_hash"]})
-    if plotted_data["ir"]["sha256"] != ir_snapshot["sha256"]:
-        raise EngineError("managed_delivery_ir_changed", "The PlotIR changed between native audit and data serialization.")
-    _assert_snapshot_current(ir_snapshot, label="Managed delivery audited PlotIR", expected_sha256=ir_snapshot["sha256"])
+    with project_query(Path(selection["plot"])):
+        current = _selection(service, selection, root, out)
+        sources = stage_originals(root, current["document"]["scientific"]["data_sources"])
+    plotted_data = project_data(plot_data, attempt, item["stem"])
     exports = result["exports"]
     for fmt, directory, suffix in (("pdf", "pdf", ".pdf"), ("tiff_300", "tiff", "_300dpi.tiff")):
         matches = [export for export in exports if export.get("format") == fmt]
@@ -184,6 +169,8 @@ def _seal(service: DeliveryService, root: Path, state: dict[str, Any], selection
         raise EngineError("managed_delivery_native_changed", str(exc)) from exc
     except native_snapshot.NativeSnapshotError as exc:
         raise EngineError("managed_delivery_native_failed", str(exc)) from exc
+    _assert_snapshot_current(plot_data.snapshot, label="Managed delivery audited PlotIR",
+                             expected_sha256=plot_data.snapshot["sha256"])
     _selection(service, selection, root, out)
     item.update(status="sealed", sources=sources, plotted_data=plotted_data, portable=portable, files=file_inventory(attempt),
                 scientific_hash=head["document"]["scientific_hash"], presentation_hash=head["document"]["presentation_hash"],
@@ -233,7 +220,7 @@ def inspect(service: DeliveryService, request: dict[str, Any]) -> dict[str, Any]
                 if item["status"] == "sealed":
                     require_native_seal(head, item["audit"]["native_sha256"])
                     if state["status"] != "complete" and not out.exists():
-                        _require_sealed_attempt(item)
+                        _require_sealed_attempt(root, item)
         except (OSError, ValueError, RuntimeError) as exc:
             row.update(status="blocked", error=_failure(exc, "managed_delivery_currentness_failed", selection))
             summary.update(status="blocked", ready_to_use=False)
@@ -248,9 +235,10 @@ def inspect(service: DeliveryService, request: dict[str, Any]) -> dict[str, Any]
     return summary
 
 
-def _require_sealed_attempt(item: dict[str, Any]) -> None:
+def _require_sealed_attempt(root: Path, item: dict[str, Any]) -> None:
     try:
         native_snapshot.require_inventory(Path(item["attempt"]), item["files"])
+        require_originals(root, item)
     except native_snapshot.SnapshotSealChanged as exc:
         raise EngineError("managed_delivery_staging_changed", str(exc)) from exc
 
@@ -311,7 +299,7 @@ def deliver(service: DeliveryService, value: Any) -> dict[str, Any]:
                         if item["status"] == "conflict":
                             raise EngineError("managed_delivery_staging_changed", "Previously edited staging remains preserved; select a new delivery destination.")
                         if item["status"] == "sealed":
-                            _require_sealed_attempt(item)
+                            _require_sealed_attempt(root, item)
                         else:
                             _seal(service, root, state, selection, item)
                     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:

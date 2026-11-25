@@ -257,9 +257,36 @@ class ManagedBackend:
                 "before_scientific_audit": before["scientific_audit"]}
         return review
 
+    def preview_comparison(self, binding: dict[str, Any], document: dict[str, Any],
+                           output: Path, selected: dict[str, Any]) -> dict[str, Any]:
+        from .managed_comparison_assets import adopt
+
+        prepared = prepare_binding(Path(binding["root"]), document, output=Path(binding["output"]))
+        canonical = read_canonical(prepared.binding)
+        verify_document_content(Path(prepared.binding["root"]), canonical)
+        require_inputs(canonical)
+        return adopt(prepared.binding, prepared.ir, output, selected)
+
     def apply(self, binding: dict[str, Any], review: dict[str, Any]) -> dict[str, Any]:
         candidate = review["_managed_binding"]
-        self._ensure(candidate)
+        if "_selected_native_sha256" in review:
+            # The winner has already compiled. Reopen and audit its exact
+            # committed candidate bytes; never regenerate an altered/missing one.
+            native = Path(candidate["document"])
+            canonical = read_canonical(candidate)
+            require_inputs(canonical)
+            ir = resolved_ir(Path(candidate["root"]), canonical)
+            if (existing_file_sha256(native) != review["_selected_native_sha256"]
+                    or compiler_identity() != review["compiler_identity"] or ir["ir_hash"] != candidate["ir_hash"]):
+                raise EngineError("comparison_candidate_changed", "The selected native artifact no longer matches its exact review.")
+            observed = self.compiler.inspect_ir(ir, native)
+            if (observed["status"] != "unchanged" or observed["scientific_audit"]["status"] != "passed"
+                    or observed["document_sha256"] != review["_selected_native_sha256"]
+                    or observed["native_state_hash"] != review["native_state_hash"]
+                    or compiler_identity() != review["compiler_identity"]):
+                raise EngineError("comparison_candidate_changed", "The selected native artifact failed its exact reopen audit.")
+        else:
+            self._ensure(candidate)
         return {"status": "adopted_managed_artifact", "_managed_binding": deepcopy(candidate)}
 
     def refresh_binding(self, binding: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
@@ -268,6 +295,16 @@ class ManagedBackend:
     def export(self, binding: dict[str, Any]) -> dict[str, Any]:
         ir, native = self._ensure(binding, verify_existing=False)
         result = self.compiler.export_ir(ir, native, native.parent / "exports")
+        if "native_export_audit" in result:
+            from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot
+            import json
+
+            ir_path = Path(binding["ir_path"])
+            snapshot = stable_file_snapshot(ir_path, label="Managed published PlotIR")
+            if json.loads(snapshot["bytes"]) != ir:
+                raise EngineError("managed_ir_conflict", "The saved PlotIR differs from the audited export.")
+            result["native_export_audit"].update(canonical_sha256=binding["canonical_sha256"], ir_sha256=snapshot["sha256"])
+            result["evidence_files"][str(ir_path)] = snapshot["sha256"]
         result["exports"].append({"path": str(native), "format": "vsz", "sha256": file_sha256(native)})
         return result
 

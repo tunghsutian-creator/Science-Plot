@@ -129,6 +129,7 @@ class ManagedVeuszCompiler:
         return dict(self._require_exact(ir, document)["scientific_audit"])
 
     def export_ir(self, ir: dict[str, Any], document: Path, output: Path) -> dict[str, Any]:
+        renderer = compiler_identity()
         before = self._require_exact(ir, document)
         output = output.expanduser().resolve()
         arguments = ["export-document", str(document), "--formats", "pdf,tiff_300", "--out", str(output)]
@@ -138,7 +139,12 @@ class ManagedVeuszCompiler:
             raise ValueError("Managed native artifact changed during export.")
         evidence = {str(document): before["document_sha256"]}
         evidence.update({record["path"]: record["sha256"] for record in result["exports"]})
-        return {**result, "status": "exported", "ready_to_use": True, "evidence_files": evidence,
+        # Reuse is optional; older or incomplete audits still require a live native inspection.
+        proof = ({"native_export_audit": {key: before[key] for key in ("native_state_hash", "document_sha256", "ir_hash")}
+                  | {"compiler_identity": renderer}}
+                 if all(key in before for key in ("native_state_hash", "document_sha256", "ir_hash"))
+                 and compiler_identity() == renderer else {})
+        return {**result, **proof, "status": "exported", "ready_to_use": True, "evidence_files": evidence,
                 "scientific_audit": before["scientific_audit"], "ir_hash": ir["ir_hash"],
                 **({"publication_qa": before["publication_qa"]} if "publication_qa" in before else {})}
 

@@ -9,7 +9,7 @@ import pytest
 from test_managed_backend import managed_ir
 from sciplot_core.plot_document import DocumentError
 from sciplot_core.plot_engine.errors import EngineError
-from sciplot_core.plot_engine.managed_delivery_data import project_data
+from sciplot_core.plot_engine.managed_delivery_data import capture_plot_data, project_data
 from sciplot_core.plot_ir import seal_ir
 
 
@@ -32,7 +32,7 @@ def test_each_dataset_keeps_own_length_column_order_float_roundtrip_and_null(tmp
     path = tmp_path / "sealed-ir.json"
     path.write_text(json.dumps(ir))
     before = path.read_bytes()
-    result = project_data(path, tmp_path / "attempt", "001_figure", expected=identity(ir))
+    result = project_data(capture_plot_data(path, expected=identity(ir)), tmp_path / "attempt", "001_figure")
     assert (tmp_path / "attempt" / result["ir"]["path"]).read_bytes() == before
     assert [item["row_count"] for item in result["datasets"]] == [3, 1]
     assert result["datasets"][0]["column_ids"] == ["column:1", "column:0"]
@@ -51,7 +51,7 @@ def test_mismatched_columns_block_instead_of_padding_or_truncating(tmp_path):
     path = tmp_path / "invalid-ir.json"
     path.write_text(json.dumps(ir))
     with pytest.raises(DocumentError) as caught:
-        project_data(path, tmp_path / "attempt", "001_figure", expected=identity(ir))
+        project_data(capture_plot_data(path, expected=identity(ir)), tmp_path / "attempt", "001_figure")
     assert caught.value.reason_code == "transform_ragged_dataset"
     assert not (tmp_path / "attempt").exists()
 
@@ -70,6 +70,6 @@ def test_ir_content_seal_and_selected_identity_checked_before_csv(tmp_path, chan
     path = tmp_path / "ir.json"
     path.write_text(json.dumps(ir))
     with pytest.raises((DocumentError, EngineError)) as caught:
-        project_data(path, tmp_path / "attempt", "001_figure", expected=expected)
+        project_data(capture_plot_data(path, expected=expected), tmp_path / "attempt", "001_figure")
     assert caught.value.reason_code == ("plot_ir_hash_mismatch" if change == "tampered_values" else "managed_delivery_ir_changed")
     assert not (tmp_path / "attempt").exists()
