@@ -57,31 +57,22 @@ def owned_io(root: Path) -> StoreIO | None:
 def _leases(root: Path, locations: Mapping[str, Path], *, blocking: bool,
             writer: bool) -> Iterator[dict[Path, DirectoryWriterLease]]:
     while True:
-        stack = ExitStack()
-        try:
-            # The directory inode still serializes Store writers. A saved-state
-            # read does not create a native editing session or its lock file.
-            if writer:
-                stack.enter_context(external_project_session(root))
-            leases = {path: stack.enter_context(exclusive_directory_lease(path))
-                      for path in sorted({root, *locations.values()}, key=str)}
-            break
-        except (ProjectSessionBusy, WriterLeaseBusy) as exc:
-            stack.close()
-            if not blocking:
-                if isinstance(exc, WriterLeaseBusy):
-                    raise ProjectSessionBusy("Another Store operation owns this project or one of its resources. Retry from current state.") from exc
-                raise
-            # Legacy manifest edit scopes retain their documented blocking
-            # read-modify-write admission. No native work has been admitted.
-            time.sleep(0.01)
-        except BaseException:
-            stack.close()
-            raise
-    try:
-        yield leases
-    finally:
-        stack.close()
+        with ExitStack() as stack:
+            try:
+                # A reader needs the directory leases, not a native lock file.
+                if writer:
+                    stack.enter_context(external_project_session(root))
+                leases = {path: stack.enter_context(exclusive_directory_lease(path))
+                          for path in sorted({root, *locations.values()}, key=str)}
+            except (ProjectSessionBusy, WriterLeaseBusy) as exc:
+                if not blocking:
+                    if isinstance(exc, WriterLeaseBusy):
+                        raise ProjectSessionBusy("Another Store operation owns this project or one of its resources. Retry from current state.") from exc
+                    raise
+            else:
+                yield leases
+                return
+        time.sleep(0.01)  # Legacy blocking admission retries after releasing leases.
 
 
 def digest(value: Any) -> str:
