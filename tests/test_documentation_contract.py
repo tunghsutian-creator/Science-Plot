@@ -156,8 +156,9 @@ def test_saved_figure_ai_entry_chooses_compact_only_for_known_managed_plots() ->
     assert '"description":{"scope":"edit","target":"ID", "property":"NAME"}' in route
     assert "status`, `changed_inputs`, `artifact_status`, `pending` and `next_step" in route
     assert "`read_only: true` can be opened and redrawn without changing the old project" in route
-    assert "returned `legacy-redraw` command" in route
-    assert "returned `legacy-convert` command to make a separate" in route
+    assert "returned `sciplot_project_legacy_redraw` MCP tool (or the `project legacy-redraw` CLI)" in route
+    assert "`sciplot_project_legacy_convert` (or `project legacy-convert`) to make a separate Managed copy" in route
+    assert "Never convert it just to read it" in route
     assert "When authority is unknown or the figure is a LegacyPlot" in readme
     assert "do not read it again solely to get the summary" in intent
     assert "do not guess among duplicates" in intent

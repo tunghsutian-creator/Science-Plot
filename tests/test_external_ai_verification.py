@@ -179,8 +179,10 @@ def test_external_control_sources_select_behavior_and_existing_strict_scope(
 def test_external_control_sources_are_in_the_single_configured_type_scope() -> None:
     config = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     scope = config["tool"]["mypy"]["files"]
-    assert all(scope.count(path) == 1 for path in TYPED_BEHAVIOR_PATHS)
-    assert scope.count("src/sciplot_core/verification/external_ai_owners.py") == 1
+    for path in (*TYPED_BEHAVIOR_PATHS, "src/sciplot_core/verification/external_ai_owners.py"):
+        owners = [entry for entry in scope if path == entry
+                  or ((REPO_ROOT / entry).is_dir() and Path(path).is_relative_to(Path(entry)))]
+        assert len(owners) == 1, (path, owners)
 
 
 @pytest.mark.parametrize(
