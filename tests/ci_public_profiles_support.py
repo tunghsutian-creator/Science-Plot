@@ -1,59 +1,80 @@
 """Public CI profile and bounded feedback controls."""
 from __future__ import annotations
 
-import io
 import json
+import subprocess
 
 import pytest
 
 
-def exercise_profile_stage_route(tmp_path, monkeypatch):
+def exercise_profile_stage_route(tmp_path, monkeypatch, capsys):
     from sciplot_core.verification import ci_public_profiles as profiles
+
     calls = []
-    # The mocked stage supplies the same existing result field as a real stage;
-    # keep official CI's GITHUB_SHA binding active instead of stripping it.
+    stdout = b'{"complete": "complete worker stdout; expands in real CI"}\n'
     monkeypatch.setenv("GITHUB_SHA", "a" * 40)
-    for profile in ("focused", "comprehensive"):
-        directory = tmp_path / f".tmp_verify/ci_public_{profile}"
+    result = {"origin_head": "a" * 40, "status": "PASS", "actual_exit_code": 0}
+    for path in ("ci_public_focused", "ci_public_comprehensive",
+                 "ci_public_full/public-focused", "ci_public_full/public-comprehensive"):
+        directory = tmp_path / ".tmp_verify" / path
         directory.mkdir(parents=True)
-        (directory / "result.json").write_text(json.dumps({"origin_head": "a" * 40}))
-    tails = []
+        (directory / "result.json").write_text(json.dumps(result))
     exit_code = [0]
+
     class Process:
         def __init__(self, command, **kwargs):
-            self.is_tail = command[0] == "tail"
-            self.stdout = io.StringIO("owner result\n") if not self.is_tail else None
-            self.running = True
+            self.timed = False
             calls.append(command)
-            if self.is_tail:
-                tails.append(self)
-        def wait(self):
-            self.running = False
-            return 0 if self.is_tail else exit_code[0]
-        def poll(self):
-            return None if self.running else 0
-        def terminate(self):
-            self.running = False
+            kwargs["stdout"].write(stdout)
+
+        def wait(self, *, timeout):
+            assert timeout == profiles.PROGRESS_INTERVAL_SECONDS
+            if not self.timed:
+                self.timed = True
+                raise subprocess.TimeoutExpired(calls[-1], timeout)
+            return exit_code[0]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            pass
+
     with monkeypatch.context() as context:
         context.setattr(profiles.subprocess, "Popen", Process)
-        for profile in ("focused", "comprehensive"):
+        for profile in ("focused", "comprehensive", "full"):
             assert profiles.run_profile(tmp_path, profile) == 0
-            command = calls[-1]
-            assert command[1:5] == ["-m", "sciplot_core.verification.public_stage", "--profile", "public-" + profile]
-            assert command[-1] == ".tmp_verify/ci_public_" + profile
-            assert str(tmp_path / (".tmp_verify/ci_public_" + profile + "/command.log")) in calls[-2]
-        assert len(tails) == 2 and not any(tail.running for tail in tails)
+            selected = "public-ci-full" if profile == "full" else "public-" + profile
+            assert calls[-1][1:5] == ["-m", "sciplot_core.verification.public_stage", "--profile", selected]
+            assert calls[-1][-1] == ".tmp_verify/ci_public_" + profile
+            assert (tmp_path / profiles.DIRECTORY / f"{profile}.log").read_bytes() == stdout
+        assert "complete worker stdout" not in capsys.readouterr().out
         wrong = tmp_path / "wrong-stage-head"
-        result = wrong / ".tmp_verify/ci_public_focused/result.json"
-        result.parent.mkdir(parents=True)
-        result.write_text(json.dumps({"origin_head": "b" * 40}))
+        wrong_result = wrong / ".tmp_verify/ci_public_focused/result.json"
+        wrong_result.parent.mkdir(parents=True)
+        wrong_result.write_text(json.dumps({**result, "origin_head": "b" * 40}))
         with pytest.raises(ValueError, match="Actual public stage source"):
             profiles.run_profile(wrong, "focused")
-        assert not any(tail.running for tail in tails)
+
         exit_code[0] = 7
-        assert profiles.run_profile(tmp_path / "failed", "focused") == 7
-        assert not tails[-1].running
-        assert (tmp_path / "failed" / profiles.DIRECTORY / "focused.log").read_text() == "owner result\n"
+        failed = tmp_path / "failed"
+        directory = failed / ".tmp_verify/ci_public_focused"
+        directory.mkdir(parents=True)
+        (directory / "result.json").write_text(json.dumps({**result, "status": "BLOCKED", "actual_exit_code": 7}))
+        node_a, node_b = ("tests/test_generated.py::test_failed[exact-a]", "tests/test_generated.py::test_failed[exact-b]")
+        (directory / "reports.json").write_text(json.dumps({"reports": [
+            {"nodeid": node_a, "when": "call", "outcome": "failed"},
+            {"nodeid": node_a, "when": "teardown", "outcome": "failed"},
+            {"nodeid": node_b, "when": "setup", "outcome": "failed"},
+        ]}))
+        (directory / "command.log").write_bytes(b"HUGE ORIGINAL PYTEST OUTPUT\n" * 10000)
+        assert profiles.run_profile(failed, "focused") == 7
+        console = capsys.readouterr().out
+        assert f"FAILED {node_a} [call, teardown]" in console
+        assert f"FAILED {node_b} [setup]" in console
+        assert "HUGE ORIGINAL" not in console and len(console) < 1000
+        assert (directory / "command.log").read_bytes() == b"HUGE ORIGINAL PYTEST OUTPUT\n" * 10000
+        assert (failed / profiles.DIRECTORY / "focused.log").read_bytes() == stdout
 
 
 def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
@@ -233,8 +254,13 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
 
     workflow = (root / ".github/workflows/minimal-repository.yml").read_text()
     steps = workflow.split("      - name: ")
+    upload = next(step for step in steps if step.startswith("Preserve public failure evidence"))
+    assert "failure()" in upload and "actions/upload-artifact@v4" in upload
+    assert "/public-*/command.log" in upload and "/public-*/reports.json" in upload
+    assert "include-hidden-files: true" in upload and "retention-days: 14" in upload
+    assert "/source/" not in upload and "/stage-diagnostics/" not in upload
     conditional = {step.splitlines()[0]: re.search(r"        if: \$\{\{ (.*?) \}\}", step).group(1)
-                   for step in steps if "        if: ${{ " in step}
+                   for step in steps if "        if: ${{ " in step and step is not upload}
     full_names = ("Run reviewed complete public behavior",
                   "Run fixture-free lifecycle smoke")
     def enabled(expression, outcome, layer, event, admission_outcome="success", referenced="false",

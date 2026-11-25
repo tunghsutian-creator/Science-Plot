@@ -83,14 +83,19 @@ def run_affected(root: Path, base: str, *, event: str, ref: str = "") -> dict[st
     if plan["layer"] != "affected" or plan["source_only"]:
         raise ValueError("Affected eligibility changed; complete gates were not executed.")
     directory = root / ".tmp_verify/ci_public_affected"
+    from sciplot_core.verification.ci_public_profiles import report_profile
+
     if plan["native_targets"]:
         results = run_public_profiles(root, directory, [
             ("public-affected", plan["targets"]), ("public-affected-native", plan["native_targets"])])
         result = results[0]
+        for profile, report in zip(("public-affected", "public-affected-native"), results, strict=False):
+            report_profile(directory / profile, report)
         if len(results) == 2:
             result.update(status=results[-1]["status"], targeted_native=results[-1])
     else:
         result = run_public_stage(root, directory, "public-affected", targets=plan["targets"])
+        report_profile(directory, result)
     result.update(feedback_plan=plan, full_public_profiles="NOT_EXECUTED", real_private_inputs="NOT_EXECUTED",
                   access_capture="NOT_EXECUTED", native_preflight="NOT_EXECUTED", doctor="NOT_EXECUTED",
                   lifecycle_smoke="NOT_EXECUTED", reusable_origin=False)
@@ -189,7 +194,8 @@ def main() -> int:
             return 4
         result = {"layer": "full", "reason": "unavailable_scope", "detail": str(error), "source_only": False}
     environment = os.environ
-    print(json.dumps(result, sort_keys=True))
+    if not args.run_affected:
+        print(json.dumps(result, sort_keys=True))
     output = environment.get("GITHUB_OUTPUT")
     if output and not args.run_affected:
         with Path(output).open("a") as stream:

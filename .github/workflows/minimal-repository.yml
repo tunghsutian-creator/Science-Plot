@@ -337,14 +337,42 @@ jobs:
           raise SystemExit(result.returncode if result.returncode else (4 if issues else 0))
           PY
       - name: Run reviewed affected public feedback
+        id: affected-public
         if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome == 'success' && steps.native-feedback.outputs.layer == 'affected' && github.event_name != 'workflow_dispatch') && (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.source_only != 'true') }}
         env:
           SCIPLOT_EVENT_BASE: ${{ steps.native-feedback.outputs.base }}
           SCIPLOT_EVENT_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref && format('refs/heads/{0}', github.event.pull_request.base.ref) || github.ref }}
         run: python3 -m sciplot_core.verification.ci_feedback --base "$SCIPLOT_EVENT_BASE" --run-affected
       - name: Run reviewed complete public behavior
+        id: complete-public
         if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && ((steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch')) }}
         run: python3 -m sciplot_core.verification.ci_public_profiles full
+      - name: Preserve public failure evidence
+        if: ${{ failure() && (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.complete-public.outcome == 'failure' || steps.affected-public.outcome == 'failure') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-failure-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          retention-days: 14
+          include-hidden-files: true
+          if-no-files-found: warn
+          path: |
+            .tmp_verify/ci-public-profiles/*.log
+            .tmp_verify/ci_public_full/public-*/command.log
+            .tmp_verify/ci_public_full/public-*/finish.json
+            .tmp_verify/ci_public_full/public-*/reports.json
+            .tmp_verify/ci_public_full/public-*/result.json
+            .tmp_verify/ci_public_full/public-*/pytest-progress.json
+            .tmp_verify/ci_public_affected/feedback-result.json
+            .tmp_verify/ci_public_affected/command.log
+            .tmp_verify/ci_public_affected/finish.json
+            .tmp_verify/ci_public_affected/reports.json
+            .tmp_verify/ci_public_affected/result.json
+            .tmp_verify/ci_public_affected/pytest-progress.json
+            .tmp_verify/ci_public_affected/public-*/command.log
+            .tmp_verify/ci_public_affected/public-*/finish.json
+            .tmp_verify/ci_public_affected/public-*/reports.json
+            .tmp_verify/ci_public_affected/public-*/result.json
+            .tmp_verify/ci_public_affected/public-*/pytest-progress.json
       - name: Verify source-checkout wrapper bootstrap
         if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.source_only != 'true') }}
         run: env -u PYTHONPATH SCIPLOT_PYTHON=python3 skill/scripts/sciplot --help >/dev/null

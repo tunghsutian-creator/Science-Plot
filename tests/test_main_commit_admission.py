@@ -75,13 +75,9 @@ def future_origin():
         {"name": name, "number": number, "status": "completed", "conclusion": "success"}
         for number, name in enumerate(names, 1)
     ]
-    job["steps"].append(
-        {
-            "name": "Run reviewed affected public feedback",
-            "number": len(names) + 1,
-            "status": "completed",
-            "conclusion": "skipped",
-        }
+    job["steps"].extend(
+        {"name": name, "number": len(names) + offset, "status": "completed", "conclusion": "skipped"}
+        for offset, name in enumerate(("Run reviewed affected public feedback", "Preserve public failure evidence"), 1)
     )
     return {"total_count": 1, "workflow_runs": [run]}, {"total_count": 1, "jobs": [job]}
 

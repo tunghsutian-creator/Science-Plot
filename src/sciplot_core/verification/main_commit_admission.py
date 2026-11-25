@@ -26,7 +26,8 @@ REQUIRED_STEPS = (
     "Run fixture-free lifecycle smoke",
 )
 PLATFORM_STEPS = {"Set up job", "Complete job", "Post Run actions/checkout@v4"}
-LIMITED_STEPS = {"Run reviewed affected public feedback", "Run source-only documentation feedback"}
+SKIPPED_FULL_STEPS = {"Run reviewed affected public feedback", "Run source-only documentation feedback",
+                      "Preserve public failure evidence"}
 RUN_STATE = ("id", "run_number", "run_attempt", "status", "conclusion", "head_sha", "event", "path")
 
 
@@ -145,7 +146,7 @@ def admit(environment: Mapping[str, str], read: Callable[[str], dict[str, Any]] 
         if [by_name[name]["number"] for name in REQUIRED_STEPS] != sorted(by_name[name]["number"] for name in REQUIRED_STEPS):
             raise Unavailable("required_steps_out_of_order")
         if any(not _successful(step) if name in PLATFORM_STEPS else
-               name not in LIMITED_STEPS or step.get("status") != "completed" or step.get("conclusion") != "skipped"
+               name not in SKIPPED_FULL_STEPS or step.get("status") != "completed" or step.get("conclusion") != "skipped"
                for name, step in by_name.items() if name not in REQUIRED_STEPS):
             raise Unavailable("unknown_or_nonfull_step")
         final = _related(read(path), int(current), sha)

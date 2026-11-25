@@ -54,7 +54,7 @@ def test_local_only_documentation_stays_ignored(path: str) -> None:
 
 
 @pytest.mark.focused
-def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeypatch) -> None:
+def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeypatch, capsys) -> None:
     paths = [".github/workflows/minimal-repository.yml", ".gitignore", "tests/test_repository_policy.py"]
     plan = build_changed_verification_plan(paths, repo_root=ROOT)
     assert plan["unowned_paths"] == []
@@ -200,7 +200,7 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
         assert ci_feedback.main() == 0
         assert native_output.read_text() == "layer=full\n"
     from ci_public_profiles_support import exercise_profile_stage_route
-    exercise_profile_stage_route(tmp_path / "profile-routes", monkeypatch)
+    exercise_profile_stage_route(tmp_path / "profile-routes", monkeypatch, capsys)
     from ci_public_profiles_support import exercise_ci_feedback_layers
     exercise_ci_feedback_layers(ROOT, tmp_path, monkeypatch)
 
