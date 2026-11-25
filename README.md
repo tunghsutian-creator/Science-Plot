@@ -227,28 +227,19 @@ If a source or project moved, `task continue SOURCE --search-root KNOWN_FOLDER
 --json` finds exact source matches in a bounded folder search. Identical copies
 remain separate choices; select the returned exact `--target`. It checks the
 current editing authority without rebinding sources or modifying old receipts.
-Export snapshots remain explicitly distinct from their original project.
-To move an already versioned Store, use `project bundle-export` and
-`project bundle-import`. The new location keeps the same project ID and
-history; this is neither a paper snapshot nor an independent project.
-See [find, continue, or relocate](skill/references/saved-work-continuation.md).
+See [find and continue saved work](skill/references/saved-work-continuation.md).
 
-For a manuscript, [selected paper figures](skill/references/paper-figures.md)
-packages one explicitly selected figure per item across saved projects, in the
-requested order, with PDF, TIFF, portable editable VSZ and source-version
-evidence. Originals stay unchanged. Existing output directories, changed sources
-and changed package contents block publication or reuse; an exact retry resumes
-unfinished work. Historical completion alone does not certify a current package.
+### Deliver, move, or make a separate copy
 
-For current ManagedPlots, [Managed delivery](skill/references/managed-delivery.md)
-uses `plot deliver` (RPC `plot.deliver`, MCP `sciplot_plot_deliver`) to package
-an ordered selection of byte-sealed publications. It creates the index, original
-data, exact plotted datasets, PDF/TIFF, native snapshots, launcher and ZIP locally.
-Each item retains its own revision and recovery state. Missing or changed export
-evidence blocks packaging without rebuilding or replacing the original figure.
-A package can reconnect to an unchanged original ManagedPlot on this Mac; its
-independent VSZ remains editable after relocation. The package does not contain
-a portable Managed document registry or a standalone human Managed editor.
+| What you want | Command | How to recognize the result |
+|---|---|---|
+| **Deliver figures** for a paper | Use `plot export` for [only PDF or PDF + TIFF](skill/references/managed-delivery.md#copy-one-current-figure-without-its-editable-or-source-files), or [`plot deliver`](skill/references/managed-delivery.md) for a full handoff with figures, plotted data and editable VSZ snapshots. | A selected export lists only the files you requested. The full handoff reports `mode=native_snapshot` and `portable_managed_project=false`. It does not move or create a Managed project. |
+| **Move the same project** to another location | [`project bundle-export` then `project bundle-import`](skill/references/saved-work-continuation.md#relocate-an-existing-store) on a versioned project. | The returned `project` is the new editing location. The `project_id`, generation and history stay the same. Old host permissions and external delivery paths do not transfer; the old directory is not removed. |
+| **Save As** to edit a separate copy | [`project save-as`](skill/references/saved-work-continuation.md#make-a-new-independently-editable-copy) on one current Managed figure. | Open the returned `plot` handle. It has new project and plot IDs and starts at revision zero, with the selected data and presentation but without the original history. The original stays unchanged; no figures are exported by Save As. |
+
+[Selected paper figures](skill/references/paper-figures.md) explains how to
+package an ordered figure selection across saved projects. Use the exact plot
+handle and revision to select one Managed figure from a multi-figure item.
 
 AI-driven panel assembly brings saved figures and microscopy images or diagrams
 onto one physical page. The `compose` commands and matching MCP tools use one
