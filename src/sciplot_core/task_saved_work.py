@@ -14,6 +14,8 @@ from sciplot_core.policy import DELIVERY_LAUNCHER
 from sciplot_core.studio_core.project_query_evidence import _tree_hash
 from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.project_lifecycle.figure_observation import bound_delivery_project
+from sciplot_core.project_lifecycle.errors import EngineError
+from sciplot_core.project_lifecycle.head_observation import require_matching_figure
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_next_step import task_next_step
 from sciplot_core.task_storage import load_task
@@ -269,6 +271,13 @@ def continue_saved_work(source: Path, *, search_roots: list[Path] | None = None,
     if not matches:
         return {**base, "status": "blocked", "reason_code": "selected_target_not_discovered", "search": found}
     match = matches[0]
+    if figure_id is not None and match["kind"] == "managed_plot":
+        document = match["document"]
+        try:
+            require_matching_figure(figure_id, plot_id=document["plot_id"], saved_figure_id=document["figure_id"])
+        except EngineError as exc:
+            return {**base, "status": "blocked", "reason_code": exc.reason_code,
+                    "message": str(exc), "selected": match}
     if not match["continuation_available"]:
         next_step = match.get("next_step", {"action": "resolve_saved_authority"})
         if match["state"] == "source_revision_required" and found["source_sha256"]:
@@ -291,7 +300,10 @@ def continue_saved_work(source: Path, *, search_roots: list[Path] | None = None,
                     raise
                 publication = {"current": False, "validation": "unknown"}
             current["export_current"] = publication
-            next_step = {"action": "plot.open", "arguments": {"target": str(selected)},
+            arguments = {"target": str(selected)}
+            if figure_id is not None:
+                arguments["figure_id"] = figure_id
+            next_step = {"action": "plot.open", "arguments": arguments,
                          "plot_id": current["plot_id"], "revision": current["revision"]}
         else:
             from sciplot_core.studio_core.document_edit_state import audit_edited_document

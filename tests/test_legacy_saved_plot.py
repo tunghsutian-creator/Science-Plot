@@ -175,7 +175,8 @@ def test_committed_legacy_head_is_read_only_even_with_a_real_revision_pointer(tm
 
     backend = FakeBackend(tmp_path / "backend")
     doc, binding = backend.initial()
-    binding.update(kind="sciplot_veusz_binding", project=str(backend.directory), document=str(backend.native))
+    binding.update(kind="sciplot_veusz_binding", project=str(backend.directory), document=str(backend.native),
+                   figure_id="legacy-figure")
     root = tmp_path / "old-shadow"
     commit(root, doc, binding, "import")
     previous = _tree(tmp_path)
@@ -184,6 +185,11 @@ def test_committed_legacy_head_is_read_only_even_with_a_real_revision_pointer(tm
     service = PlotService(backend, read_only_legacy=True)
     try:
         assert service.open(root)["read_only"]
+        assert service.open(root, figure_id=binding["figure_id"])["read_only"]
+        assert service.open(root, figure_id=doc["plot_id"])["read_only"]
+        with pytest.raises(EngineError) as wrong:
+            service.open(root, figure_id="other-figure")
+        assert wrong.value.reason_code == "figure_selection_mismatch"
         assert service.describe(root)["read_only"]
         with pytest.raises(EngineError) as caught:
             service.patch(root, request())

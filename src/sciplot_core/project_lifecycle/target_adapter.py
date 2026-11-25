@@ -5,6 +5,7 @@ from typing import Any
 
 from .contracts import RevisionToken
 from .errors import EngineError
+from .head_observation import observe_plot_head, require_matching_figure
 from .paths import canonical_path
 from .ports import ProjectRepository
 from .managed_creation_targets import managed_creation_target, source_control_parent
@@ -38,6 +39,11 @@ class FilesystemProjectTargets:
             return ManagedDeliveryTarget(selected["plot"], selected["item_id"], selected["native_snapshot"],
                                          RevisionToken.of(selected["head"]["document"]))
         if self.repository.has_head(target):
+            if figure_id is not None:
+                head = observe_plot_head(target, owner=self.repository)
+                assert head is not None
+                require_matching_figure(figure_id, plot_id=head["document"]["plot_id"],
+                                        saved_figure_id=head["binding"].get("figure_id"))
             return StoredTarget(target)
         resolve = self.resolve_figure
         if resolve is None:
@@ -52,7 +58,7 @@ class FilesystemProjectTargets:
         """Resolve read-only authority by selection, before any attach or import."""
         from sciplot_core.plot_engine.managed_delivery_continuation import managed_delivery_location
         from .attachment_index import read_index
-        from .head_observation import observe_plot_head
+        from .repository_router import ComposedProjectRepository
         from .store_composition import existing_store
         from sciplot_core.project_store.io import STORE
         from sciplot_core.studio_core.legacy_saved_plot import _saved_plot
@@ -66,6 +72,10 @@ class FilesystemProjectTargets:
                     document.get("coverage", {}).get("mode") in {"legacy_shadow", "opaque"}):
                 if binding.get("kind") != "sciplot_veusz_binding":
                     raise EngineError("legacy_native_binding_missing", "The saved legacy figure has no exact native document.")
+                if figure_id is not None:
+                    attached = self.repository._discover(root) if isinstance(self.repository, ComposedProjectRepository) else None
+                    figure = attached.attachment.entry["figure_id"] if attached is not None else binding.get("figure_id")
+                    require_matching_figure(figure_id, plot_id=document["plot_id"], saved_figure_id=figure)
                 return canonical_path(Path(binding["project"])), canonical_path(Path(binding["document"]))
             return None
 

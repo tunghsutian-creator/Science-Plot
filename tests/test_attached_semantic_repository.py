@@ -43,6 +43,9 @@ def application(repo=None, backend=None):
 
 
 def test_attached_managed_create_patch_undo_export_has_one_generation_writer(tmp_path, monkeypatch):
+    from sciplot_core.project_lifecycle.attachment_index import read_index
+    from sciplot_core.project_lifecycle.errors import EngineError
+
     project = tmp_path / "project"
     project.mkdir()
     wire = request_for_source(project)
@@ -60,6 +63,21 @@ def test_attached_managed_create_patch_undo_export_has_one_generation_writer(tmp
     assert snapshot["generation"] != initial["generation"]
     assert root.relative_to(project).as_posix() + "/head.json" in snapshot["files"]
     assert all("artifacts/" not in name and "/ir/" not in name for name in snapshot["files"])
+    with project_runtime(store):
+        other = app.create(request_for_source(project, "B"))
+    snapshot = store.snapshot()
+    entry = next(row for row in read_index(store, snapshot)["attachments"].values()
+                 if row["plot_id"] == created["plot_id"])
+    assert entry["figure_id"] != entry["plot_id"]
+    for target in (root, root / "head.json"):
+        with pytest.raises(EngineError) as caught:
+            app.open(target, figure_id=other["plot_id"])
+        assert caught.value.reason_code == "figure_selection_mismatch"
+        for exact in (entry["figure_id"], entry["plot_id"]):
+            assert app.open(target, figure_id=exact)["plot_id"] == created["plot_id"]
+    assert app.open(project, figure_id=other["plot_id"])["plot_id"] == other["plot_id"]
+    assert store.snapshot()["generation"] == snapshot["generation"]
+    assert app.describe(Path(other["plot"]))["revision"] == 0
     original = app.describe(root)
     edited = app.patch(root, patch(created, "style", "style.line.width", "1.2pt", "series:A"))
     assert edited["revision"] == 1 and edited["scientific_hash"] == original["scientific_hash"]
