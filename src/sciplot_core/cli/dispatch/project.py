@@ -83,11 +83,7 @@ def dispatch_project_control(args: Any) -> int:
             polarity=args.polarity, expected_document_sha256=args.expected_document,
         )
     elif action == "inspect":
-        from .project_create import with_project_owner
-
-        payload = with_project_owner(lambda: inspect_project(
-            args.target, figure_id=args.figure, object_path=args.object
-        ))
+        payload = inspect_project(args.target, figure_id=args.figure, object_path=args.object)
     elif action == "preview":
         payload = preview_project_document(
             args.target, output_dir=args.out, figure_id=args.figure

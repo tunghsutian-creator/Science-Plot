@@ -9,6 +9,7 @@ from typing import Any
 from sciplot_core.studio_core.project_query import inspect_project
 from sciplot_core.studio_core.project_session import external_project_session
 from sciplot_core.task_contract import TaskControlError
+from sciplot_core.task_semantic_owner import managed_task_call
 from sciplot_core.task_control import resume_task, start_native_compatibility_creation, start_task
 from sciplot_core.task_group_contract import group_responses_schema, normalize_group_request, validate_shape
 from sciplot_core.task_group_storage import active_step, original_source_current, group_path, load_group, save_group, step_state, validate_group_location
@@ -132,6 +133,7 @@ def _run(root: Path, state: dict[str, Any], retry_items: set[str] | None = None)
         save_group(root, state)
 
 
+@managed_task_call
 def start_group(request: dict[str, Any], *, group_dir: Path, base_dir: Path | None = None) -> dict[str, Any]:
     request = normalize_group_request(request, base_dir=base_dir)
     root = group_path(group_dir)
@@ -157,12 +159,14 @@ def start_group(request: dict[str, Any], *, group_dir: Path, base_dir: Path | No
         return group_overview(root, state)
 
 
+@managed_task_call
 def inspect_group(group: Path) -> dict[str, Any]:
     root = group_path(group)
     with external_project_session(root):
         return group_overview(root, load_group(root))
 
 
+@managed_task_call
 def resume_group(group: Path, responses: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     responses = [] if responses is None else responses
     validate_shape(responses, group_responses_schema())

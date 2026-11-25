@@ -151,16 +151,6 @@ class PlotService(ProjectApplication):
         self.require_editable(plot)
         return super().export(plot)
 
-    @usecase
-    def inspect_delivery(self, request: dict[str, Any], *, paper_dir: Path | None = None) -> dict[str, Any]:
-        """Read the Managed delivery owner, or validate its separate paper receipt location."""
-        from .managed_delivery import inspect, require_paper_location
-
-        if paper_dir is not None:
-            require_paper_location(request, paper_dir)
-            return {}
-        return inspect(self, request)
-
     def intent(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
         self.require_editable(plot)
         return super().intent(plot, request)
@@ -172,3 +162,8 @@ class PlotService(ProjectApplication):
     def render(self, plot: Path) -> dict[str, Any]:
         self.require_editable(plot)
         return super().render(plot)
+
+
+def public_plot_service() -> PlotService:
+    """All public hosts use the same policy for saved legacy documents."""
+    return PlotService(read_only_legacy=True)

@@ -259,6 +259,7 @@ TASK_CONTROL_OWNERS = (
             "skill/references/figure-comparison.json",
             "src/sciplot_core/cli/task_paper.py",
             "src/sciplot_core/cli/parsers/tasks.py", "src/sciplot_core/cli/dispatch/tasks.py",
+            "src/sciplot_core/cli/dispatch/project_create.py",
             "src/sciplot_core/studio_core/project_creation.py",
             "src/sciplot_core/studio_core/project_receipt.py",
             "src/sciplot_core/studio_core/project_capabilities.py",

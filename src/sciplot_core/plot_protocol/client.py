@@ -20,7 +20,13 @@ def call(method: str, params: dict[str, Any], *, socket_path: Path | None = None
     if direct:
         from sciplot_core.plot_protocol.server import make_service
 
-        response = handle(make_service(), request)
+        service = make_service()
+        try:
+            response = handle(service, request)
+        finally:
+            close = getattr(service, "close", None)
+            if close is not None:
+                close()
         if "error" in response:
             raise RemoteError(response["error"])
         result: dict[str, Any] = response["result"]

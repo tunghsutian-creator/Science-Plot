@@ -178,6 +178,16 @@ class ProjectApplication(CommandDispatch):
         return deliver(self, request)
 
     @usecase
+    def inspect_delivery(self, request: dict[str, Any], *, paper_dir: Path | None = None) -> dict[str, Any]:
+        """Read the Managed delivery owner, or validate its separate paper receipt location."""
+        from sciplot_core.plot_engine.managed_delivery import inspect, require_paper_location
+
+        if paper_dir is not None:
+            require_paper_location(request, paper_dir)
+            return {}
+        return inspect(self, request)
+
+    @usecase
     def intent(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
         """Resolve two explicit FigureSpec text edits into the existing patch owner."""
         from sciplot_core.plot_engine.typed_intent import compile_intent, validate_intent
@@ -343,4 +353,7 @@ class ProjectApplication(CommandDispatch):
     def _managed_task_scope(self) -> AbstractContextManager[None]:
         from sciplot_core.task_semantic_owner import local_managed_actions
 
-        return local_managed_actions(self.create, lambda plot: self.describe(plot, description={"scope": "summary"}), self.deliver)
+        return local_managed_actions(
+            self.create, lambda plot: self.describe(plot, description={"scope": "summary"}),
+            self.deliver, lambda request, paper_dir: self.inspect_delivery(request, paper_dir=paper_dir),
+        )
