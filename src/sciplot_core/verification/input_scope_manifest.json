@@ -10265,7 +10265,8 @@
       "tests/test_plot_recovery.py::test_completed_export_offers_delivery_not_an_unsupported_resume",
       "tests/test_plot_recovery.py::test_deferred_comparison_recovery_preserves_the_export_action",
       "tests/test_project_store.py::test_bundle_copies_reachable_history_and_installs_only_after_projection",
-      "tests/test_task_comparisons_native.py::test_managed_comparison_reuses_exact_winner_on_cold_apply"
+      "tests/test_task_comparisons_native.py::test_managed_comparison_reuses_exact_winner_on_cold_apply",
+      "tests/test_managed_delivery_native.py::test_managed_delivery_uses_store_sealed_source_after_original_disappears"
     ],
     "private": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
@@ -20864,7 +20865,8 @@
       "tests/test_managed_curve_project_creation.py::test_source_only_uvvis_without_a_verified_sample_uses_native_and_reports_why",
       "tests/test_attached_semantic_native.py::test_cold_expert_bundle_does_not_write_to_its_historical_publication",
       "tests/test_mcp_stdio.py::test_daily_stdio_can_redraw_and_convert_archived_xy_without_changing_it",
-      "tests/test_task_comparisons_native.py::test_managed_comparison_reuses_exact_winner_on_cold_apply"
+      "tests/test_task_comparisons_native.py::test_managed_comparison_reuses_exact_winner_on_cold_apply",
+      "tests/test_managed_delivery_native.py::test_managed_delivery_uses_store_sealed_source_after_original_disappears"
     ]
   },
   "private_failure_responsibilities": [
