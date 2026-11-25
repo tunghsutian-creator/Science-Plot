@@ -342,3 +342,43 @@ def test_registered_directory_is_closed_and_generated_source_views_are_idempoten
     (original / "unknown.csv").write_bytes(b"unregistered raw input")
     with pytest.raises(ProjectConflict, match="unregistered"):
         store.resolve_path(original)
+
+
+def test_bundle_copies_reachable_history_and_installs_only_after_projection(tmp_path, monkeypatch):
+    import hashlib
+    import json
+
+    from sciplot_core.project_store import projection
+
+    store, before = fixture_store(tmp_path)
+    orphan = b"unused interrupted object"
+    with store._locked() as (io, current):
+        io.put(orphan)
+        io.write("generations/unpublished.json", {**current, "generation": "unpublished"})
+    reserve(store, before)
+    store.publish("edit", "edit-digest", writes={"studio/document.vsz": b"new native", "studio/spec.json": None}, result={})
+    bundle = store.export_bundle(tmp_path / "bundle")
+    names = json.loads((bundle / "bundle.json").read_text())["members"]
+    key = hashlib.sha256(orphan).hexdigest()
+    assert "generations/unpublished.json" not in names and f"objects/{key[:2]}/{key}" not in names
+    assert (store.root / ".sciplot_store" / "generations" / "unpublished.json").is_file()
+
+    target = tmp_path / "moved"
+    with monkeypatch.context() as scoped:
+        def fail_after_projection(io, current):
+            assert (io.root / "studio/document.vsz").read_bytes() == b"new native"
+            assert not target.exists()
+            raise ProjectConflict("injected verification failure")
+
+        relocate = projection.relocate
+        def stop(io, current):
+            relocate(io, current)
+            fail_after_projection(io, current)
+
+        scoped.setattr(projection, "relocate", stop)
+        with pytest.raises(ProjectConflict, match="injected verification failure"):
+            FileProjectStore.import_bundle(bundle, target)
+    assert not target.exists()
+    relocated = FileProjectStore.import_bundle(bundle, target)
+    assert relocated.read_bytes("studio/document.vsz") == b"new native"
+    assert relocated.read_bytes("studio/document.vsz", generation=before["generation"]) == b"native old"

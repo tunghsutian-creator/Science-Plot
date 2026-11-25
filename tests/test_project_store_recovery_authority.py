@@ -169,29 +169,34 @@ def test_cold_relocation_checks_receipts_before_materializing_any_active_bytes(t
 
     store, before = create(tmp_path)
     publish(store, before, "pending", b"exact portable native", monkeypatch=monkeypatch, fault="after_head")
-    # Export intentionally requires completed projections. The import fault below
-    # is the supported cold boundary; it leaves no active target bytes yet.
     assert store.recover()["phase"] == "complete"
     bundle = store.export_bundle(tmp_path / "bundle")
     target = tmp_path / "cold"
     with monkeypatch.context() as scoped:
         def interrupted(_io, _current):
+            assert not target.exists()
             raise Interrupted("before cold projection")
         scoped.setattr(projection, "relocate", interrupted)
         with pytest.raises(Interrupted, match="before cold projection"):
             FileProjectStore.import_bundle(bundle, target)
-    cold = FileProjectStore(target)
-    assert not (target / "document.vsz").exists()
-    assert not (target / "spec.json").exists()
+    assert not target.exists()
     if corrupt:
-        rewrite(cold, "pending", install_files=[])
-        unchanged = physical_files(target)
+        relative = state.command_path("pending")
+        receipt = bundle / "store" / relative
+        value = json.loads(receipt.read_bytes())
+        receipt.write_bytes(json.dumps({**value, "install_files": []}).encode())
+        manifest = bundle / "bundle.json"
+        header = json.loads(manifest.read_text())
+        header["members"][relative].update(sha256=hashlib.sha256(receipt.read_bytes()).hexdigest(),
+                                            size=receipt.stat().st_size)
+        manifest.write_text(json.dumps(header))
+        unchanged = physical_files(bundle)
         with pytest.raises(ProjectStoreError):
-            cold.recover()
-        assert physical_files(target) == unchanged
-        assert not (target / "document.vsz").exists()
+            FileProjectStore.import_bundle(bundle, target)
+        assert physical_files(bundle) == unchanged
+        assert not target.exists()
     else:
-        assert cold.recover()["phase"] == "complete"
+        cold = FileProjectStore.import_bundle(bundle, target)
         assert (target / "document.vsz").read_bytes() == b"exact portable native"
         assert cold.query("pending")["phase"] == "complete"
         assert cold.snapshot()["outside_changes"] == {}
