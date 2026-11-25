@@ -83,6 +83,17 @@ def exercise_profile_stage_route(tmp_path, monkeypatch, capsys):
         assert "ValueError: native runtime missing" in console and len(console) < 1000
         assert (no_result / profiles.DIRECTORY / "focused.log").read_bytes() == stdout
 
+        half = tmp_path / "half-group"
+        first = half / ".tmp_verify/ci_public_full/public-focused/result.json"
+        first.parent.mkdir(parents=True)
+        first.write_text(json.dumps(result))
+        stdout = json.dumps({"status": "BLOCKED", "error": "stage scratch could not be prepared"}).encode()
+        assert profiles.run_profile(half, "full") == 7
+        console = capsys.readouterr().out
+        assert "public-focused PASS" in console
+        assert "no result: public-comprehensive. stage scratch could not be prepared" in console
+        assert (half / profiles.DIRECTORY / "full.log").read_bytes() == stdout
+
 
 def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
     import re

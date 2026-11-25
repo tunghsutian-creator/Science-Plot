@@ -86,18 +86,23 @@ def run_profile(root: Path, profile: str) -> int:
             except subprocess.TimeoutExpired:
                 _progress(result_directories)
     expected_head = environment.get("GITHUB_SHA")
+    missing_results = []
     for path in result_directories:
         result = _read_object(path / "result.json")
         if result:
             report_profile(path, result)
+        else:
+            missing_results.append(path.name)
         if code == 0 and expected_head and result.get("origin_head") != expected_head:
             raise ValueError("Actual public stage source differs from GITHUB_SHA.")
-    if code and not any((path / "result.json").is_file() for path in result_directories):
+    if code:
         failure = _read_object(log)
         detail = failure.get("error")
-        print(f"Public verification exited {code} before creating a result."
-              + (f" {detail[:1000]}" if isinstance(detail, str) else ""), flush=True)
-        if not failure:
+        stages = f"; no result: {', '.join(missing_results)}" if missing_results else ""
+        if isinstance(detail, str) or missing_results:
+            print(f"Public verification exited {code}{stages}."
+                  + (f" {detail[:1000]}" if isinstance(detail, str) else ""), flush=True)
+        if missing_results and not failure:
             _console_tail(log, "public stage")
     return code
 
