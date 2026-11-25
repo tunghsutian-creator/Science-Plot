@@ -79,7 +79,8 @@ DAILY_INSTRUCTIONS = (
     "For an editable figure use task_edit for common changes, or plot_describe for exact "
     "capabilities. Use summary/edit scopes only when advertised. "
     "Review preview resources before accepting; follow returned recovery and export "
-    "receipts without reapplying an edit. plot_deliver makes paper snapshots; "
+    "receipts without reapplying an edit. After reconnecting, reopen the same figure to read "
+    "its pending preview in this connection. plot_deliver makes paper snapshots; "
     "project_bundle_export then project_bundle_import move the same Store and history; "
     "project_save_as makes one selected Managed figure an independent editable copy. "
     "For existing PDF diagrams use compose with "
@@ -112,6 +113,14 @@ def _preview_artifact(payload: dict[str, Any]) -> dict[str, Any] | None:
         image = preview.get("image")
         if isinstance(image, dict) and isinstance(image.get("path"), str):
             return image
+    if (payload.get("kind") == "sciplot_plot_description" and payload.get("plot_type") == "ManagedPlot"
+            and payload.get("status") == "current"):
+        recovery = payload.get("recovery")
+        if isinstance(recovery, dict) and recovery.get("phase") == "needs_review":
+            preview = recovery.get("preview")
+            if (isinstance(preview, dict) and isinstance(preview.get("path"), str)
+                    and isinstance(preview.get("sha256"), str)):
+                return preview
     # Task receipts may wrap the native edit review, but never inspect their
     # request payload for paths: only owner-generated result metadata is eligible.
     review = payload.get("review")

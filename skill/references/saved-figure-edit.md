@@ -279,6 +279,13 @@ accepting its current operation ID. Export failure resumes the same task with `t
 never reapply the accepted edit for that retry. An uncertain apply follows its
 recovery guidance before another mutation.
 
+After a daily MCP reconnect, reopen the same Managed figure, specifying its
+exact member when there are several. If the returned recovery is awaiting a
+decision, read the newly returned `preview_resource` before using its saved
+decision request. An earlier connection's URI does not work in this one.
+If the change is already saved and recovery offers `plot.export`, export that
+exact plot without applying the edit again.
+
 At `resolve_current_evidence`, read `evidence_gaps` and `current_project` already
 returned. Another unchanged inspect cannot restore missing source bindings.
 `result.figures` export paths still permit visual review, but unknown/stale evidence

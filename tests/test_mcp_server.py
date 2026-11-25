@@ -114,9 +114,15 @@ def test_compact_result_keeps_editable_values_and_unknown_readiness(monkeypatch)
 
 
 def test_preview_is_available_on_demand_as_immutable_image(tmp_path, monkeypatch):
+    from hashlib import sha256
+
     path = tmp_path / "candidate.png"
     path.write_bytes(PNG)
-    monkeypatch.setattr(server, "invoke_owner", lambda *_: {"status": "ok", "preview": {"path": str(path)}})
+    preview = {"path": str(path), "sha256": sha256(PNG).hexdigest()}
+    reopened = {"kind": "sciplot_plot_description", "plot_type": "ManagedPlot", "status": "current",
+                "recovery": {"phase": "needs_review", "preview": preview}}
+    monkeypatch.setattr(server, "invoke_owner", lambda name, _: reopened if name == "sciplot_project_open"
+                        else {"status": "ok", "preview": preview})
 
     async def scenario():
         adapter = server.Adapter()
@@ -129,6 +135,20 @@ def test_preview_is_available_on_demand_as_immutable_image(tmp_path, monkeypatch
         assert read.content[1].mime_type == "image/png"
         unknown = await adapter.call("sciplot_read_result", {"uri": "sciplot://result/" + "0" * 64})
         assert unknown.is_error and unknown.structured_content["error"]["code"] == "unknown_resource"
+
+        arguments = {"target": "/exact-project", "figure_id": "second", "description": {"scope": "summary"}}
+        daily = server.Adapter("daily")
+        assert (await daily.call("sciplot_read_result", {"uri": uri})).is_error
+        tampered = await daily.call("sciplot_project_open", arguments)
+        assert "preview_resource" not in tampered.structured_content
+        assert tampered.structured_content["resource_warnings"]
+        path.write_bytes(PNG)
+        current = await daily.call("sciplot_project_open", arguments)
+        read = await daily.call("sciplot_read_result", {"uri": current.structured_content["preview_resource"]})
+        assert base64.b64decode(read.content[1].data) == PNG
+        reopened["status"] = "stale"
+        stale = await server.Adapter("daily").call("sciplot_project_open", arguments)
+        assert "preview_resource" not in stale.structured_content
 
     anyio.run(scenario)
 
