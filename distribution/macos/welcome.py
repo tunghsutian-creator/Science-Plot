@@ -130,7 +130,8 @@ def render_page(command: Path, doctor: dict, mcp_available: bool, status_path: P
 <h2>3. 下次找回原图，再预览修改</h2>
 <div class="card">继续这个 SciPlot 项目，不要重新建图。把图例字号改成 8 pt，先给我看候选图，确认后再保存和更新交付。</div>
 <p>把原项目路径或原位置的已登记交付目录交给 AI。它用 <code>sciplot_project_open</code> 识别图；只记得原始文件时，先用 <code>sciplot_task_continue</code> 查找已有项目，有多个候选时由你选择。不要用原输入再建一份来代替编辑。</p>
-<p>可编辑图按实际公布的能力用 <code>sciplot_task_edit</code> 等入口提交修改。看过候选图再确认保存和导出。如果已保存但导出失败，修正原因后用原任务重试，不要再应用一次修改。只复制交付目录得到的是独立快照，不是能够继续原受管项目的迁移。</p>
+<p>可编辑图按实际公布的能力用 <code>sciplot_task_edit</code> 等入口提交修改。看过候选图再确认保存和导出。如果已保存但导出失败，修正原因后用原任务重试，不要再应用一次修改。</p>
+<p><strong>交稿：</strong>让 AI 给你当前的 PDF 或论文交付包，交出去的是成果快照。<strong>搬家续编：</strong>让 AI「把整个项目迁到新位置」，先导出项目迁移包，再导入一个未用的目录，保留同一项目和历史；以后从返回的新路径继续，不要两边同时改。<strong>另存副本：</strong>让 AI「把当前这张图另存为独立副本」，在新目录单独编辑；原图不变，也不会带过去旧项目的历史。</p>
 <p>如果打开结果为 <code>read_only</code>，旧图可读取，并用 <code>sciplot_project_legacy_redraw</code> 原样重画到新目录。只有要用新编辑功能时，才按返回的 <code>sciplot_project_legacy_convert</code> 指引将受支持的 XY 图转换为独立 Managed 副本；原图不变，不支持的图不强行转换。历史启动文件不作为打开入口。</p>
 <details><summary>不接入 AI 时的命令行入口</summary>
 <p>将示例中的绝对路径换成自己的路径。出图：</p><pre>{cli("task", "create", "/absolute/original.csv", "--json")}</pre>
