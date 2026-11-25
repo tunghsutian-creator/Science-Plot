@@ -32,7 +32,7 @@ class FileProjectStore:
             raise ProjectStoreError("A namespace backup capability cannot follow symbolic aliases.")
         if locations is None and (self.root / STORE / "local_locations.json").exists():
             # Cold bundles may register only confined, host-created local views.
-            with StoreIO(self.root, {}).locked() as io:
+            with StoreIO(self.root, {}).locked(writer=False) as io:
                 local = io.read("local_locations.json")
             ids = local.get("ids", []) if local else []
             if any(not isinstance(key, str) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", key) for key in ids):

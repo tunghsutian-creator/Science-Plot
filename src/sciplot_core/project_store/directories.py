@@ -88,7 +88,7 @@ def resolve(io: StoreIO, value: dict[str, Any], literal: Path, *, expected_sha25
     descriptor = {"generation": value["generation"], "prefix": prefix, "original": original, "members": members}
     identity = digest(descriptor)
     base = ("directories", value["generation"])
-    with directory(io.fd, base, create=True) as parent:
+    with io.locked(writer=True), directory(io.fd, base, create=True) as parent:
         try:
             with directory(parent, (identity,)) as view:
                 _verify_tree(view, members, io)

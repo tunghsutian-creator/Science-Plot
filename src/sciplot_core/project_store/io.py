@@ -55,20 +55,22 @@ def owned_io(root: Path) -> StoreIO | None:
 
 @contextmanager
 def _leases(root: Path, locations: Mapping[str, Path], *, blocking: bool,
-            observing: bool) -> Iterator[dict[Path, DirectoryWriterLease]]:
+            writer: bool) -> Iterator[dict[Path, DirectoryWriterLease]]:
     while True:
         stack = ExitStack()
         try:
             # The directory inode still serializes Store writers. A saved-state
             # read does not create a native editing session or its lock file.
-            if not observing:
+            if writer:
                 stack.enter_context(external_project_session(root))
             leases = {path: stack.enter_context(exclusive_directory_lease(path))
                       for path in sorted({root, *locations.values()}, key=str)}
             break
-        except (ProjectSessionBusy, WriterLeaseBusy):
+        except (ProjectSessionBusy, WriterLeaseBusy) as exc:
             stack.close()
             if not blocking:
+                if isinstance(exc, WriterLeaseBusy):
+                    raise ProjectSessionBusy("Another Store operation owns this project or one of its resources. Retry from current state.") from exc
                 raise
             # Legacy manifest edit scopes retain their documented blocking
             # read-modify-write admission. No native work has been admitted.
@@ -197,10 +199,14 @@ class StoreIO:
         # It is not persisted and never survives release/reacquisition.
         self.created_store = False
         self._read_existing = False
+        self._native_writer = False
 
     @contextmanager
-    def locked(self, *, blocking: bool = False, writer: bool = False,
+    def locked(self, *, blocking: bool = False, writer: bool | None = None,
                before_create: Callable[[], object] | None = None) -> Iterator[StoreIO]:
+        # Explicit callers declare mutation; naked low-level scopes retain
+        # the historical creation ABI used by storage bootstrapping.
+        mutating = writer if writer is not None else not observing_existing_store()
         active = _ACTIVE.get()
         if active is not None:
             owned, process, thread = active
@@ -208,17 +214,28 @@ class StoreIO:
                 if (owned.locations != self.locations or owned.location_members != self.location_members
                         or owned.namespace_backups != self.namespace_backups):
                     raise ProjectStoreError("An owned project transaction cannot expand its resource roots.")
-                if writer and owned._read_existing:
+                if mutating and owned._read_existing:
                     raise ProjectStoreError("A held Store observation cannot be upgraded to a writer.")
                 owned.verify_roots()
-                yield owned
+                if mutating and not owned._native_writer:
+                    # Existing directory ownership is retained. Native
+                    # exclusion is acquired nonblocking at the first write,
+                    # not while inspecting a project or constructing a reader.
+                    with external_project_session(self.root):
+                        owned._native_writer = True
+                        try:
+                            yield owned
+                        finally:
+                            owned._native_writer = False
+                else:
+                    yield owned
                 return
             if process != os.getpid() or thread != get_ident():
                 _ACTIVE.set(None)
-        observing = not writer and observing_existing_store()
-        if observing and before_create is not None:
+        observing = not mutating and observing_existing_store()
+        if not mutating and before_create is not None:
             raise ProjectStoreError("A saved-state observation cannot admit a new store.")
-        with _leases(self.root, self.locations, blocking=blocking, observing=observing) as leases:
+        with _leases(self.root, self.locations, blocking=blocking, writer=mutating) as leases:
             self.advance_epoch()
             self.lease_epoch += 1
             lease = leases[self.root]
@@ -231,12 +248,12 @@ class StoreIO:
                 try:
                     os.stat(STORE, dir_fd=lease.fd, follow_symlinks=False)
                 except FileNotFoundError as exc:
-                    if observing:
+                    if not mutating:
                         raise ProjectRecoveryRequired("A saved-state observation requires an existing project store.") from exc
                     if before_create is not None:
                         before_create()
                 created_store = False
-                if not observing:
+                if mutating:
                     try:
                         os.mkdir(STORE, mode=0o700, dir_fd=lease.fd)
                     except FileExistsError:
@@ -247,6 +264,7 @@ class StoreIO:
                     self.fd = store_fd
                     self.created_store = created_store
                     self._read_existing = observing
+                    self._native_writer = mutating
                     token = _ACTIVE.set((self, os.getpid(), get_ident()))
                     try:
                         yield self
@@ -262,6 +280,7 @@ class StoreIO:
                 self.fd = -1
                 self.created_store = False
                 self._read_existing = False
+                self._native_writer = False
                 self.advance_epoch()
                 self.lease_epoch += 1
 

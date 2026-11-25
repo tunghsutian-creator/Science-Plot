@@ -109,7 +109,7 @@ def _snapshot_members(project: Path, *, blocking: bool = False) -> set[str]:
     """Retain finite archive members already admitted by exact host commands."""
     members: set[str] = set()
     primary = FileProjectStore(project, locations={})
-    with StoreIO(project, {}).locked(blocking=blocking):
+    with StoreIO(project, {}).locked(blocking=blocking, writer=False):
         current_names, records = primary._command_observation()
         names = list(current_names)
         for record in records:
@@ -161,7 +161,7 @@ def project_store(project: Path, *, create_delivery: bool = False, with_snapshot
         return store_for_project(project)
     request, claims = _admitted_project(project, intake_compat=intake_compat)
     if (project / ".sciplot_store" / "local_locations.json").exists():
-        with StoreIO(project, {}).locked(blocking=intake_compat):
+        with StoreIO(project, {}).locked(blocking=intake_compat, writer=False):
             repository = FileProjectStore(project)
         if with_snapshot and "snapshot" not in repository.locations:
             from sciplot_core.project_store import ResourceRoot

@@ -17,7 +17,7 @@ _CANONICAL_MANIFEST_NAME = "intake_manifest.json"
 def admitted_project_generation(project: Path, *, blocking: bool = False) -> Iterator[tuple[FileProjectStore, StoreIO, dict[str, Any]]]:
     """Read primary sealed metadata; never lease or project external resources."""
     primary = FileProjectStore(project, locations={})
-    with StoreIO(project, {}).locked(blocking=blocking):
+    with StoreIO(project, {}).locked(blocking=blocking, writer=False):
         with primary._locked(allow_pending=True) as (io, current):
             yield primary, io, current
 

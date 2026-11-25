@@ -113,9 +113,14 @@ def test_foreign_bytes_after_head_are_explicit_recovery_and_never_overwritten(tm
 
 def test_unidentified_live_native_window_excludes_store_even_without_file_changes(tmp_path):
     store, _before, _delivery = roots(tmp_path)
+    before = store.snapshot()
     with ProjectSessionLease(store.root, native=True):
+        assert store.snapshot() == before  # Pure observation needs no native writer admission.
         with pytest.raises(ProjectSessionBusy):
             store.reserve("unsafe-window", "digest", expected_generation=None, read_set={}, write_set=[])
+        with store._locked(), pytest.raises(ProjectSessionBusy):
+            store.reserve("unsafe-nested-window", "digest", expected_generation=None, read_set={}, write_set=[])
+    assert not store.commands()
 
 
 def test_readonly_query_commands_snapshot_never_repair_interrupted_active_files(tmp_path):
