@@ -29,7 +29,7 @@ def test_formats_are_normalized_and_only_accepted_for_standalone_semantic_creati
     source.write_text("Time,Mass\ns,%\n0,100\n10,96\n")
     request = _request(source, tmp_path / "output", ["tiff_300", "pdf"])
     assert validate_task_request(request)["formats"] == ["pdf", "tiff_300"]
-    for bad in ([], ["tiff_300"], ["pdf", "pdf"], ["pdf", "png"], ["plotted_csv"], ["pdf", "plotted_csv"], "pdf"):
+    for bad in ([], ["tiff_300"], ["pdf", "pdf"], ["pdf", "png"], ["plotted_csv"], ["pdf", "plotted_csv"], ["editable_vsz"], "pdf"):
         with pytest.raises(TaskControlError):
             validate_task_request({**request, "formats": bad})
     with pytest.raises(TaskControlError, match="formats"):

@@ -30,6 +30,10 @@ class SnapshotSealChanged(NativeSnapshotError):
     """Bytes at a capture, relocation or installation boundary did not match."""
 
 
+class SnapshotImportUnselected(SnapshotSealChanged):
+    """Native Save consumed a linked import not admitted for this handoff."""
+
+
 def _native(*arguments: str) -> Any:
     result = subprocess.run([sys.executable, "-m", "sciplot_core.task_paper_native", *arguments],
                             env=veusz_worker_environment(), capture_output=True, text=True,
@@ -72,7 +76,7 @@ def capture_native(
     _require_file(target, result["portable_sha256"])
     for entry in result["imports"]:
         if selected_imports.get(entry["source"]) != entry["sha256"]:
-            raise SnapshotSealChanged("Native Save consumed a linked source outside the selected byte seals.")
+            raise SnapshotImportUnselected("Native Save consumed a linked source outside the selected byte seals.")
     return result
 
 
@@ -153,6 +157,17 @@ def _verify_relocated_native(
     for name, sha256 in imports.items():
         _require_file(Path(name), sha256)
     _require_file(path, expected_sha256)
+
+
+def stage_standalone_native(source: Path, target: Path, scratch: Path, *, original_sha256: str) -> dict[str, Any]:
+    """Stage only the saved VSZ in its own directory and reopen it there."""
+    saved = scratch / target.name
+    portable = capture_native(source, saved, scratch / "imports",
+                              original_sha256=original_sha256, selected_imports={})
+    expected = portable["portable_sha256"]
+    copy_sealed_file(saved, target, expected)
+    _verify_relocated_native(target.parent, target.name, portable, {target.name: expected})
+    return portable
 
 
 def publish_snapshot(

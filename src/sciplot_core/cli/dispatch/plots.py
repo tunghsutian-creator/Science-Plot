@@ -62,10 +62,15 @@ def dispatch_plot(args: Any, argv: list[str] | None = None) -> int | None:
                 for source in binding["data_sources"]:
                     if isinstance(source, dict) and isinstance(source.get("path"), str) and source["path"].strip():
                         source["path"] = str(Path(source["path"]).expanduser().resolve())
-    if action == "export" and (args.tiff or args.plotted_csv
+    if action == "export" and (args.tiff or args.plotted_csv or args.editable_vsz
                                or any(value is not None for value in (args.output_dir, args.plot_id, args.revision))):
         destination = str(args.output_dir.expanduser().absolute()) if args.output_dir is not None else None
-        formats = ["plotted_csv"] if args.plotted_csv else ["pdf", "tiff_300"] if args.tiff else ["pdf"]
+        if args.plotted_csv:
+            formats = ["plotted_csv"]
+        elif args.editable_vsz:
+            formats = ["editable_vsz"]
+        else:
+            formats = ["pdf", "tiff_300"] if args.tiff else ["pdf"]
         params["handoff"] = {"output_dir": destination, "plot_id": args.plot_id, "revision": args.revision, "formats": formats}
     method = "project.open" if action == "open" else f"plot.{action}"
     result = call(method, params, socket_path=args.socket, direct=args.direct, timeout=args.timeout)

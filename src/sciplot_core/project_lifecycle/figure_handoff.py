@@ -7,9 +7,9 @@ from stat import S_ISDIR, S_ISREG
 from tempfile import TemporaryDirectory
 from typing import Any, TypedDict
 
+from sciplot_core.delivery import native_snapshot
 from sciplot_core.delivery.filesystem_metadata import is_delivery_finder_metadata
 from sciplot_core.delivery.install import install_new_delivery
-from sciplot_core.delivery.native_snapshot import SnapshotSealChanged, copy_sealed_file
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.research_destination import require_data_destination
 from sciplot_core.foundation.source_locations import selected_source_resolver
@@ -44,6 +44,12 @@ class _PlottedSeal:
     samples: dict[str, str]
 
 
+@dataclass(frozen=True)
+class _EditableSeal:
+    document: Path
+    sha256: str
+
+
 def _directory_identity(path: Path) -> list[int]:
     status = path.lstat()
     if not S_ISDIR(status.st_mode):
@@ -68,7 +74,7 @@ def _installed_matches(out: Path, token: RevisionToken, result: dict[str, Any], 
 
 
 def _publication(root: Path, out: Path, request: dict[str, Any],
-                 backend: PlotBackend) -> tuple[RevisionToken, list[dict[str, str]] | _PlottedSeal]:
+                 backend: PlotBackend) -> tuple[RevisionToken, list[dict[str, str]] | _PlottedSeal | _EditableSeal]:
     with project_query(root):
         if not has_head(root):
             raise EngineError("figure_handoff_managed_required", "Select an exact current Managed v2 plot.")
@@ -92,6 +98,8 @@ def _publication(root: Path, out: Path, request: dict[str, Any],
         require_current(backend, binding)
         publication = sealed_publication(root, head) or {}
         if publication.get("ready_to_use") is True:
+            if request["formats"] == ["editable_vsz"]:
+                return token, _EditableSeal(Path(binding["document"]), publication["document_sha256"])
             if request["formats"] == ["plotted_csv"]:
                 samples = {identifier: mapping["sample"] for identifier, mapping in document["scientific"]["mappings"].items()
                            if "sample" in mapping}
@@ -121,10 +129,10 @@ def handoff_figure(root: Path, request: dict[str, Any], backend: PlotBackend, *,
     token, evidence = _publication(root, out, request, backend)
     result = {"kind": "sciplot_figure_handoff", "version": 1, "status": "exported", "ready_to_use": True,
               "plot": str(root), "plot_id": token.plot_id, "revision": token.revision, "output_dir": str(out)}
-    if not isinstance(evidence, _PlottedSeal):
+    if isinstance(evidence, list):
         result["exports"] = [{**record, "path": str(out / Path(record["path"]).name)} for record in evidence]
     if installed is not None:
-        if not isinstance(evidence, _PlottedSeal) and _installed_matches(Path(request["output_dir"]), token, result, installed):
+        if isinstance(evidence, list) and _installed_matches(Path(request["output_dir"]), token, result, installed):
             return result
         raise EngineError("figure_handoff_install_changed", "The task's selected-file delivery is missing, changed or not its own; nothing was replaced.")
     try:
@@ -140,10 +148,19 @@ def handoff_figure(root: Path, request: dict[str, Any], backend: PlotBackend, *,
                               ir_hash=evidence.ir_hash, ir_sha256=evidence.ir_sha256,
                               scientific_hash=token.scientific_hash, presentation_hash=token.presentation_hash,
                               coordinate_space="scientific_layer_inputs")
+            elif isinstance(evidence, _EditableSeal):
+                name = "figure.vsz"
+                portable = native_snapshot.stage_standalone_native(
+                    evidence.document, staged / name, Path(temporary) / "native-save", original_sha256=evidence.sha256)
+                result.update(exports=[{"format": "editable_vsz", "path": str(out / name),
+                                        "sha256": portable["portable_sha256"]}],
+                              mode="independent_native_snapshot", managed_project_included=False,
+                              native_state_sha256=portable["native_state_sha256"],
+                              scientific_hash=token.scientific_hash, presentation_hash=token.presentation_hash)
             else:
                 for record in evidence:
                     source = Path(record["path"])
-                    copy_sealed_file(source, staged / source.name, record["sha256"])
+                    native_snapshot.copy_sealed_file(source, staged / source.name, record["sha256"])
             if before_install is not None:
                 before_install({"directory_identity": _directory_identity(staged),
                                 "revision_token": token.to_payload(), "result": result})
@@ -152,6 +169,11 @@ def handoff_figure(root: Path, request: dict[str, Any], backend: PlotBackend, *,
             install_new_delivery(staged, out)
     except FileExistsError as exc:
         raise EngineError("figure_handoff_destination_exists", "Choose a new output directory; nothing was replaced.") from exc
-    except SnapshotSealChanged as exc:
+    except native_snapshot.SnapshotImportUnselected as exc:
+        raise EngineError("figure_handoff_vsz_requires_linked_files",
+                          "This figure requires linked data and cannot be delivered as one VSZ file.") from exc
+    except native_snapshot.SnapshotSealChanged as exc:
         raise EngineError("figure_handoff_publication_changed", str(exc)) from exc
+    except native_snapshot.NativeSnapshotError as exc:
+        raise EngineError("figure_handoff_vsz_unverified", "Native Save and reopen could not verify this editable VSZ.") from exc
     return result

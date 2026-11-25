@@ -40,6 +40,18 @@ interpolation or offsets are not applied, and no analysis is rerun. Use
 `plot deliver` when you also need the exact IR and full provenance in a paper
 snapshot. First-figure task formats are unchanged.
 
+## Export only one editable Veusz file
+
+Use the same exact plot, revision and fresh directory with `--editable-vsz`
+or daily MCP handoff `formats: ["editable_vsz"]`. Only `figure.vsz` is
+delivered. SciPlot uses Veusz Native Save and verifies that the relocated
+file reopens without linked data. A figure requiring linked files is refused
+rather than shipped without its data.
+
+Open this independent snapshot in Veusz to edit or export a copy. It is not
+a SciPlot project and does not change or continue the original Managed
+figure. Use `plot deliver` instead for the full paper handoff.
+
 ## Package editable snapshots for handoff
 
 Reuse each plot's current `plot`, `plot_id` and `revision`. Labels below are

@@ -242,6 +242,8 @@ package an ordered figure selection across saved projects. Use the exact plot
 handle and revision to select one Managed figure from a multi-figure item.
 To audit the plotted values without an entire package, [export only plotted data
 CSVs](skill/references/managed-delivery.md#export-only-the-plotted-data-columns).
+For a separately editable native copy, [export only one Veusz
+file](skill/references/managed-delivery.md#export-only-one-editable-veusz-file).
 
 AI-driven panel assembly brings saved figures and microscopy images or diagrams
 onto one physical page. The `compose` commands and matching MCP tools use one

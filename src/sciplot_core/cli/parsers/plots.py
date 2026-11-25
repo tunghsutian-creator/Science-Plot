@@ -27,6 +27,7 @@ def register_plot_commands(subparsers: Any) -> None:
             formats = action.add_mutually_exclusive_group()
             formats.add_argument("--tiff", action="store_true", help="Also copy the audited 300 dpi TIFF.")
             formats.add_argument("--plotted-csv", action="store_true", help="Export only the current plot's bound data columns as CSVs.")
+            formats.add_argument("--editable-vsz", action="store_true", help="Export only one independent editable Veusz file.")
         if name == "create":
             action.add_argument("--project", type=Path, help="Explicit existing project for Managed Template/Binding creation; outside the scientific request.")
         action.add_argument("--json", action="store_true")
