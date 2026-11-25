@@ -666,9 +666,18 @@ def test_opted_in_ftir_raw_overlay_asks_exact_blocks_and_resumes_same_task(tmp_p
     assert bad.value.reason_code == "invalid_task_response" and len(calls) == 2
     assert source.read_bytes() == original
 
+    single = tmp_path / "single-task"
+    pending = control.start_task(request, task_dir=single)
+    one = control.resume_task(single, {**answer, "expected_question_id": pending["question"]["question_id"],
+                                       "choices": {"blocks": [options[1]]}})
+    assert one["blocker"]["reason_code"] == "synthetic_native_boundary"
+    assert one["source_plan"]["selection"]["selected_block_count"] == 1
+    assert {slot["sample"] for slot in calls[-1][1]["data_binding"]["slots"].values()} == {"Resin red"}
+    assert len(calls) == 3 and calls[-1][0] == str(single)
+
     second = tmp_path / "changed-task"
     pending = control.start_task(request, task_dir=second)
     source.write_bytes(original.replace(b"700,84", b"700,85"))
     changed = control.resume_task(second, {**answer, "expected_question_id": pending["question"]["question_id"]})
     assert changed["status"] == "blocked" and changed["blocker"]["reason_code"] == "source_changed"
-    assert len(calls) == 2 and not (tmp_path / "deliver").exists()
+    assert len(calls) == 3 and not (tmp_path / "deliver").exists()

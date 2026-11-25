@@ -119,7 +119,8 @@ def build_request(state: dict[str, Any]) -> dict[str, Any]:
         # metadata and scientific lineage checks. This is preparation only.
         from sciplot_core.plot_engine.managed_sources import load_sources
 
-        explicit_selection = "selection" in intent or candidate.get("sample_view") is True
+        explicit_selection = ("selection" in intent or plan.get("selection", {}).get("mode") == "explicit"
+                              or candidate.get("sample_view") is True)
         if not explicit_selection:
             # Retain the original source identities and graph for saved and
             # omitted-selection requests. Explicit selection binds below first.
