@@ -2,8 +2,8 @@
 
 状态：验收方案与空白记录格式；本文件不表示已完成任何干净机器、真人或真实客户端验收。
 
-本方案用于 [独立用户与安装验收](../DEVELOPMENT_ROADMAP.md#12-independent-beginner-and-installation-acceptance)，
-也是 [候选版发行](../DEVELOPMENT_ROADMAP.md#13-freeze-and-qualify-one-candidate-for-release) 的独立证据。
+本方案用于 [独立用户与安装验收](../DEVELOPMENT_ROADMAP.md#independent-beginner-and-installation-acceptance)，
+也是 [候选版发行](../DEVELOPMENT_ROADMAP.md#freeze-and-qualify-one-candidate-for-release) 的独立证据。
 固定一个 macOS 构建、一个真实外部 AI 客户端和一组任务，再采集安装、使用和效率证据。
 参与者用发行包的 [START_HERE 安装说明](PUBLIC_BETA.md) 和应用实际生成的欢迎页；
 [公开接口指南](../skill/references/external-control.md) 供 AI 或维护者查阅细节。
