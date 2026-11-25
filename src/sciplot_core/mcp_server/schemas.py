@@ -18,7 +18,7 @@ ToolProfile = Literal["daily", "expert"]
 _DAILY_TOOLS = frozenset({
     "capabilities", "task_capabilities", "task_start", "task_continue",
     "task_edit", "task_inspect", "task_table_region", "task_find", "task_resume",
-    "project_open", "project_inspect", "plot_describe", "plot_patch", "plot_intent",
+    "project_open", "project_legacy_redraw", "project_legacy_convert", "project_inspect", "plot_describe", "plot_patch", "plot_intent",
     "plot_decide", "plot_resume", "plot_export", "plot_deliver", "preview", "annotation_inspect", "export",
     "compose_capabilities", "compose", "pdf_review_create", "pdf_review_read", "read_result",
 })
@@ -136,6 +136,12 @@ def tool_definitions(profile: ToolProfile = "expert") -> list[Tool]:
         {"request": managed_delivery_schema()}, ["request"], idempotent=True)
     add("project_open", "Open one existing saved figure. A known ManagedPlot or supported bound native suite object advertises summary/edit scopes and legal deltas in object_operations. A multi-figure suite requires figure_id or its exact returned VSZ. Archived plots open read-only and require conversion for new editing features. Unknown authority uses full open. Does not overwrite or promote native coverage.",
         {"target": semantic_path, "figure_id": string, "description": description}, ["target"], idempotent=True)
+    legacy_target = {"target": semantic_path, "output_dir": semantic_path, "figure_id": string}
+    add("project_legacy_redraw", "Redraw an exact archived VSZ without changing it. Use a new local output directory outside the original project; formats default to PDF. The result remains read-only.",
+        {**legacy_target, "formats": {"type": "array", "items": string, "minItems": 1, "uniqueItems": True}},
+        ["target", "output_dir"])
+    add("project_legacy_convert", "Create a separately editable Managed copy of a supported archived XY figure. Use a new local directory outside the old project; supply original axis units only when needed. Never modifies or upgrades the original.",
+        {**legacy_target, "x_unit": string, "y_unit": string}, ["target", "output_dir"])
     add("project_bundle_export", "Export a complete local Store bundle from an exact existing Store root to a new path. Keeps project identity and committed history; no host permissions are included. Not a paper package or an independent project copy.",
         {"project": semantic_path, "output_dir": semantic_path}, ["project", "output_dir"])
     add("project_bundle_import", "Relocate an exact saved Store bundle into a new local directory. The same project ID and generation remain authoritative. Does not grant host executor permissions or create an independent project identity.",

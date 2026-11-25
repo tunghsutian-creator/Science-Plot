@@ -33,7 +33,7 @@ def verify_mcp(command: Path, environment: dict[str, str], connection_directory:
             names = {tool.name for tool in tools.tools}
             daily = {"sciplot_capabilities", "sciplot_task_capabilities", "sciplot_task_start",
                      "sciplot_task_continue", "sciplot_project_open", "sciplot_task_edit",
-                     "sciplot_task_resume"}
+                     "sciplot_task_resume", "sciplot_project_legacy_redraw", "sciplot_project_legacy_convert"}
             if not daily <= names or "sciplot_plot_create" in names:
                 raise RuntimeError("The bundled MCP server did not advertise its daily creation, continuation and edit catalog")
             result = await client.call_tool("sciplot_capabilities", {})

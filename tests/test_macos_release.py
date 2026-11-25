@@ -259,5 +259,5 @@ def test_welcome_downloads_embed_exact_contents_for_local_file_pages(tmp_path):
     assert cli.parse_args(create[1:]).task_action == "create"
     assert cli.parse_args(reopen[1:]).plot_action == "open"
     assert "Open_in_SciPlot.command" not in page and "Open_in_Veusz.command" not in page
-    assert "legacy-redraw" in page and "legacy-convert" in page
+    assert "sciplot_project_legacy_redraw" in page and "sciplot_project_legacy_convert" in page
     assert "sciplot_task_continue" in page and "sciplot_task_edit" in page

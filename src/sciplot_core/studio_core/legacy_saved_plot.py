@@ -66,6 +66,7 @@ def open_legacy_document(root: Path, document: Path) -> dict[str, Any]:
             "pages": observed["pages"], "linked_files": observed["linked_files"],
             "read_only": True, "new_features_require_conversion": True,
             "next_step": {"action": "redraw_legacy", "target": str(document),
+                          "mcp_tool": "sciplot_project_legacy_redraw",
                           "cli_argv": ["sciplot", "project", "legacy-redraw", str(document), "--out"],
                           "requires": ["new_output_directory"]},
             "conversion": conversion_guidance(document)}
@@ -73,6 +74,7 @@ def open_legacy_document(root: Path, document: Path) -> dict[str, Any]:
 
 def conversion_guidance(document: Path) -> dict[str, Any]:
     return {"action": "legacy_convert", "target": str(document),
+            "mcp_tool": "sciplot_project_legacy_convert",
             "cli_argv": ["sciplot", "project", "legacy-convert", str(document), "--out"],
             "requires": ["new_output_directory"],
             "message": "To edit a supported saved XY plot, convert a separate copy."}

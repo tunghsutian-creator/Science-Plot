@@ -25,8 +25,9 @@ Choose the first read from authority already established for this figure:
   `coverage`. Reuse that full result even if it reveals a ManagedPlot; do not
   immediately read it again as a summary. An archived plot returned with
   `read_only: true` can be opened and redrawn without changing the old
-  project. Use the returned `legacy-redraw` command with a new output directory.
-  For new edits, use the returned `legacy-convert` command to make a separate
+  project. Use the returned `sciplot_project_legacy_redraw` MCP tool (or the
+  `project legacy-redraw` CLI) with a new output directory. For new edits use
+  `sciplot_project_legacy_convert` (or `project legacy-convert`) to make a separate
   Managed copy of a supported saved Cartesian XY plot first. Never convert it
   just to read it, and do not send edits to the archived project.
 
@@ -88,7 +89,9 @@ correcting the intent. Unknown or uncertain applied work cannot be discarded.
 `plot rollback` appends a revision using target_revision/base_revision and a new
 idempotency key. Full diagnostics/history stay at returned local references.
 
-Imports currently retain `legacy_shadow` coverage. Their represented widths,
+Already-admitted native figures and explicitly supported native suites can retain
+`legacy_shadow` coverage; the label is not permission to start new edits on an
+archived read-only figure. For admitted native figures, represented widths,
 colors, fonts, managed titles/annotations and advertised axis/legend properties use this path;
 other changes use the compatibility route below. Scientific mapping/normalization/
 fitting need their explicit scientific owner and cannot be presentation patches.
@@ -116,8 +119,8 @@ cover all selected series without cycling colors.
 
 Managed FigureSpec v2 typography covers its represented theme, axes, legends,
 annotations and text marks; an exact font family must be installed. Other
-authority types expose their existing coverage. A LegacyPlot retains the complete
-current VSZ; unsupported font or legend properties fail closed. Non-target
+authority types expose their existing coverage. An editable admitted LegacyPlot
+retains the complete current VSZ; unsupported font or legend properties fail closed. Non-target
 presentation and scientific state remain intact.
 
 `legend.columns` is the typed equivalent of `--legend-columns`, with integer
@@ -175,8 +178,8 @@ Use the existing scientific patch, preview/decision and identical-key recovery;
 this operation retains historical requests and does not replace original data.
 
 The same typed patch properties are `series.display_label` and `series.visible`.
-Managed FigureSpec v2 targets a layer ID; Legacy ordinary native curves target a
-series ID under their advertised `legacy_shadow` coverage. Discover the exact
+Managed FigureSpec v2 targets a layer ID; admitted editable Legacy native curves
+target a series ID under their advertised `legacy_shadow` coverage. Discover the exact
 current value/schema through the normal `plot describe` route. Other legacy
 objects retain their original native authority and opaque settings. Review a
 returned candidate and follow its bound decision; reuse the original task

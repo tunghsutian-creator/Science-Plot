@@ -75,9 +75,9 @@ def test_official_stdio_client_discovery_and_error_recovery():
     async def scenario():
         async with Client(_parameters(cli=True), read_timeout_seconds=60) as client:
             tools = await client.list_tools()
-            assert len(tools.tools) == 50
+            assert len(tools.tools) == 53
             discovered = {tool.name: tool for tool in tools.tools}
-            assert len(discovered) == 50
+            assert len(discovered) == 53
             assert {"sciplot_project_bundle_export", "sciplot_project_bundle_import"} <= discovered.keys()
             assert {"sciplot_intake_prepare", "sciplot_intake_table", "sciplot_intake_create"} <= discovered.keys()
             assert "sciplot_plot_intent" in discovered
@@ -117,7 +117,8 @@ def test_official_stdio_client_discovery_and_error_recovery():
             daily_tools = (await client.list_tools()).tools
             daily = {tool.name: tool for tool in daily_tools}
             assert {"sciplot_task_start", "sciplot_task_resume", "sciplot_task_edit", "sciplot_read_result",
-                    "sciplot_plot_export", "sciplot_plot_resume", "sciplot_plot_decide", "sciplot_compose"} <= daily.keys()
+                    "sciplot_plot_export", "sciplot_plot_resume", "sciplot_plot_decide", "sciplot_compose",
+                    "sciplot_project_legacy_redraw", "sciplot_project_legacy_convert"} <= daily.keys()
             assert daily.keys() < discovered.keys()
             for tool in daily_tools:
                 Draft202012Validator.check_schema(tool.input_schema)
@@ -313,3 +314,36 @@ def test_stdio_local_task_creates_then_reviews_applies_and_exports_annotation(tm
 
     anyio.run(scenario)
     assert source.read_bytes() == raw
+
+
+@pytest.mark.comprehensive
+def test_daily_stdio_can_redraw_and_convert_archived_xy_without_changing_it(tmp_path):
+    from managed_plot_helpers import patch
+    from test_legacy_conversion import _original
+    from test_legacy_saved_plot import _tree
+
+    archive, original = _original(tmp_path)
+    before = _tree(archive)
+
+    async def scenario():
+        async with Client(_parameters(cli=True, profile="daily"), read_timeout_seconds=90) as client:
+            opened = await _call(client, "sciplot_project_open", {"target": str(archive)})
+            assert opened["read_only"]
+            redraw, conversion = opened["next_step"], opened["conversion"]
+            assert redraw["target"] == conversion["target"] == str(original)
+            drawing = await _call(client, redraw["mcp_tool"], {
+                "target": redraw["target"], "output_dir": str(tmp_path / "redrawn")})
+            assert drawing["status"] == "redrawn"
+            assert drawing["document_sha256"] == file_sha256(original)
+            assert {item["format"] for item in drawing["exports"]} == {"pdf"}
+            assert Path(drawing["exports"][0]["path"]).is_file()
+            copy = await _call(client, conversion["mcp_tool"], {
+                "target": conversion["target"], "output_dir": str(tmp_path / "copy")})
+            assert copy["status"] == "converted" and Path(copy["plot"]).is_relative_to(tmp_path / "copy")
+            edited_plot = await _call(client, "sciplot_project_open", {"target": copy["plot"]})
+            edited = await _call(client, "sciplot_plot_patch", {"plot": copy["plot"],
+                "request": patch(edited_plot, "edit-converted-copy", "axis.label", "Elapsed time (s)", "axis:x")})
+            assert edited["revision"] == 1 and edited["scientific_hash"] == copy["scientific_hash"]
+        assert _tree(archive) == before
+
+    anyio.run(scenario)
