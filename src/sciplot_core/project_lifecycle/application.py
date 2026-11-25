@@ -2,7 +2,6 @@
 
 from contextlib import AbstractContextManager
 from pathlib import Path
-from .context import exists
 
 from .admission import usecase, admitted
 from .ports import ProjectRepository, ProjectTargets
@@ -35,7 +34,6 @@ from sciplot_core.project_lifecycle.context import (
     commit,
     load_head,
     persist,
-    read,
 )
 
 

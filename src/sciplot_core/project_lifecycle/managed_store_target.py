@@ -84,7 +84,7 @@ def open_claimed_store(root: Path, claim: dict[str, Any], *,
             except ProjectRecoveryRequired:
                 # Recover only publication of already committed Store records.
                 if store.recover()["phase"] != "complete":
-                    raise EngineError("document_state_changed", "The Managed Store has a command with an unknown outcome.")
+                    raise EngineError("document_state_changed", "The Managed Store has a command with an unknown outcome.") from None
         observed = store.observe_members((MANAGED_STORE_CLAIM,), projection=False, physical=(MANAGED_STORE_CLAIM,))
         stored_claim = observed.members[MANAGED_STORE_CLAIM].data
         physical_claim = observed.physical[MANAGED_STORE_CLAIM]
