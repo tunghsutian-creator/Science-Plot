@@ -11,7 +11,7 @@ from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.plan_preview import PlanPreviewResolution
 from sciplot_core.studio_core.document_edit import apply_document_edit
 from sciplot_core.studio_core.project_creation import create_project, export_project
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_editing import current_edit_request, unchanged_style_review
 from sciplot_core.task_planning import plan_task, save_profile

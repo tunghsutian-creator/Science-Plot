@@ -155,7 +155,7 @@ def test_mapped_annotated_update_rechecks_reordered_columns_and_rebinds_peak(tmp
     from openpyxl import load_workbook
     from test_table_ranges import literal_curve_path
     from sciplot_core.task_control import start_task, resume_task, inspect_task
-    from sciplot_core.studio_core.project_query import resolve_project_figure
+    from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
     from sciplot_core.studio_core.peak_analysis import inspect_peak_candidates
     from sciplot_core.studio_core.annotation_operations import inspect_annotation_state
     from sciplot_core.foundation.file_hashing import file_sha256

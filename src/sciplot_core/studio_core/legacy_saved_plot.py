@@ -38,18 +38,20 @@ def _saved_plot(target: Path, figure_id: str | None) -> tuple[Path, Path]:
     if target.is_file() and target.suffix.lower() == ".vsz":
         root = _native_file_root(target)
         if figure_id is not None:
-            from sciplot_core.studio_core.project_query_paths import project_snapshot, select_figure
+            from sciplot_core.project_lifecycle.figure_observation import observe_legacy_project
 
             if not (root / "plot_request.json").is_file():
                 raise ValueError("Select a project directory to use a figure ID.")
-            _, primary, figures = project_snapshot(root)
-            if select_figure(target, primary, figures, figure_id)["document"] != str(target):
+            observation = observe_legacy_project(root)
+            selected = observation.select(figure_id)
+            observation.require_current(selected=selected)
+            if selected["document"] != str(target):
                 raise ValueError("The figure ID does not match this saved VSZ.")
         return root, target
     if not ((target.is_dir() and (target / "plot_request.json").is_file())
             or (target.is_file() and target.name == "plot_request.json")):
         raise ValueError("Select a saved project directory, plot_request.json or exact .vsz file.")
-    from sciplot_core.studio_core.project_query import resolve_project_figure
+    from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
 
     selected = resolve_project_figure(target, figure_id)
     return Path(selected["project"]), Path(selected["document"])

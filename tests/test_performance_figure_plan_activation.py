@@ -183,7 +183,7 @@ def test_exact_current_performance_registry_hash_detects_manual_primary_edit(
     )
     document.write_bytes(document.read_bytes() + b"\n# manual edit\n")
     from sciplot_core.studio_core.native_adoption import adopt_saved_native
-    from sciplot_core.studio_core.project_query import resolve_project_figure
+    from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
 
     adopt_saved_native(project_dir, resolve_project_figure(project_dir))
 

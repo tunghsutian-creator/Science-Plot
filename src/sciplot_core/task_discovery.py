@@ -9,7 +9,7 @@ from typing import Any
 from sciplot_core.output_contract import resolve_user_output_layout
 from sciplot_core.foundation.source_locations import selected_source_resolver
 from sciplot_core.studio_core.project_query_evidence import _tree_hash
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_storage import load_task
 

@@ -24,7 +24,7 @@ TYPED_BEHAVIOR_PATHS = {
     "src/sciplot_core/studio_core/document_edit_state.py": "tests/test_document_edit.py",
     "src/sciplot_core/studio_core/project_query.py": "tests/test_project_query.py",
     "src/sciplot_core/studio_core/project_query_evidence.py": "tests/test_project_query.py",
-    "src/sciplot_core/studio_core/project_query_paths.py": "tests/test_project_query.py",
+    "src/sciplot_core/project_lifecycle/figure_observation.py": "tests/test_project_query.py",
     "src/sciplot_core/studio_core/project_session.py": "tests/test_project_session.py",
     "src/sciplot_core/veusz_worker/document_edit.py": "tests/test_native_document_edit.py",
 }

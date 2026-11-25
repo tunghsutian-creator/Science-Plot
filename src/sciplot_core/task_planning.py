@@ -17,7 +17,7 @@ from sciplot_core.plan_preview import PlanPreviewResolution, resolve_plan_previe
 from sciplot_core.render.inspection import observe_inspection
 from sciplot_core.semantic import classify_source
 from sciplot_core.source_tables import read_raw_table
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_column_mapping import column_question, mapped_plan_request, pause_for_columns, table_question
 

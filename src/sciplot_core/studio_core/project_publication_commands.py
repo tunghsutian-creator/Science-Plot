@@ -192,7 +192,7 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
             load_data_mapping_execution(mapping_reads.execution)
             mapping_reads.seal()
         from sciplot_core.studio_core.project_command_scope import figure_read_state
-        from sciplot_core.studio_core.project_query_paths import project_snapshot
+        from sciplot_core.project_lifecycle.figure_observation import project_snapshot
 
         _, primary_figure_id, selected_figures = project_snapshot(project)
         external_sources: dict[str, str] = {}

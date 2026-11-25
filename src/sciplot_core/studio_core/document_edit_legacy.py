@@ -9,7 +9,7 @@ from typing import Any
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.studio_core.document_edit_state import history_directory, preview_identity
 from sciplot_core.studio_core.delivery_recovery_state import canonical_path
-from sciplot_core.studio_core.project_query_paths import read_object
+from sciplot_core.project_lifecycle.figure_observation import read_object
 from sciplot_core.studio_core.document_edit_companion import companion_path
 
 def applied_native_edit_chain(

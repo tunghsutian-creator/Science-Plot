@@ -199,7 +199,7 @@ def _headless_save_scenario(root, store):
     from sciplot_core.project_store import ProjectConflict
     from sciplot_core.project_store.adapters import publish_files
     from sciplot_core.studio_core.native_adoption import adopt_saved_native
-    from sciplot_core.studio_core.project_query import resolve_project_figure
+    from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
     from sciplot_core.studio_core.persistence import atomic_save_veusz_document, bind_project_document_save
 
     _application = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])

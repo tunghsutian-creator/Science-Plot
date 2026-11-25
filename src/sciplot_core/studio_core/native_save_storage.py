@@ -85,7 +85,7 @@ def publish_native_save(document: Any, target: Path, staged: Path, *, result: di
                 item["resource"] for item in binding.get("projected_reads", []))):
             raise ProjectConflict("A project Save As cannot replace a scientific source or immutable history.")
         if logical in binding["files"]:
-            from sciplot_core.studio_core.project_query import resolve_project_figure
+            from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
 
             try:
                 selected = resolve_project_figure(target)

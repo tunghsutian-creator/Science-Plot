@@ -10,7 +10,7 @@ from uuid import uuid4
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.studio_core.document_edit import preview_project_document
 from sciplot_core.studio_core.document_edit_state import edit_state
-from sciplot_core.studio_core.project_query import resolve_project_figure
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
 from sciplot_core.studio_core.project_session import external_project_session
 from sciplot_core.task_comparison_contract import (
     candidate_request, comparison_selection_schema, normalize_comparison_request,

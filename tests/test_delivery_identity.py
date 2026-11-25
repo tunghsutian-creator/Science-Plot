@@ -187,7 +187,7 @@ def test_cold_import_keeps_literal_identity_and_observes_only_current_physical_f
     from sciplot_core.delivery_identity import make_delivery_binding
     from sciplot_core.project_store import FileProjectStore
     from sciplot_core.project_store.runtime import project_runtime
-    from sciplot_core.studio_core.project_query_paths import bound_delivery_project
+    from sciplot_core.project_lifecycle.figure_observation import bound_delivery_project
     from test_project_delivery_runtime import _project_and_delivery
 
     project, delivery, store = _project_and_delivery(tmp_path, internal=internal, legacy_identity=False, bind_internal=internal)

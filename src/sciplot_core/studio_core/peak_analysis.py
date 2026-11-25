@@ -9,7 +9,7 @@ from typing import Any
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.studio_core.annotation_schema import AnnotationOperationError
 from sciplot_core.studio_core.document_edit_state import audit_edited_document
-from sciplot_core.studio_core.project_query import resolve_project_figure
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
 from sciplot_core.studio_core.peak_evidence import peak_candidates_for_spec as peak_candidates_for_spec
 from sciplot_core.studio_core.peak_evidence import validate_peak_candidate as validate_peak_candidate
 

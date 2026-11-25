@@ -15,7 +15,7 @@ from sciplot_core.studio_core.native_adoption import adopt_saved_native
 from sciplot_core.studio_core.project_command_scope import (
     command_for_binding, project_command_runtime, project_store, source_versions,
 )
-from sciplot_core.studio_core.project_query import resolve_project_figure
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
 from sciplot_core.studio_core.export_projection import export_projection
 
 

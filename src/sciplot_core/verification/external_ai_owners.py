@@ -137,7 +137,7 @@ EXTERNAL_AI_OWNERS = (
             {
                 "src/sciplot_core/studio_core/project_query.py",
                 "src/sciplot_core/studio_core/project_query_evidence.py",
-                "src/sciplot_core/studio_core/project_query_paths.py",
+                "src/sciplot_core/project_lifecycle/figure_observation.py",
             }
         ),
         owned_test_paths=frozenset(

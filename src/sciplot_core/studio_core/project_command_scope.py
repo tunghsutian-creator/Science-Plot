@@ -20,7 +20,7 @@ from sciplot_core.project_host_factory import (
 )
 from sciplot_core.project_store.runtime import project_runtime, resolve_runtime_path
 from sciplot_core.source_coverage.managed_documents import source_records
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
@@ -31,7 +31,7 @@ def project_command_runtime(function: Callable[_P, _R]) -> Callable[_P, _R]:
     @wraps(function)
     def invoke(*args: _P.args, **kwargs: _P.kwargs) -> _R:
         value = args[0] if args else kwargs.get("project_dir", kwargs.get("project"))
-        from sciplot_core.studio_core.project_query_paths import resolve_project_path
+        from sciplot_core.project_lifecycle.figure_observation import resolve_project_path
 
         project = resolve_project_path(cast(Path, value))
         repository = project_store(project)
@@ -47,7 +47,7 @@ def project_read_runtime(function: Callable[_P, _R]) -> Callable[_P, _R]:
     @wraps(function)
     def invoke(*args: _P.args, **kwargs: _P.kwargs) -> _R:
         value = args[0] if args else kwargs.get("project_dir", kwargs.get("project"))
-        from sciplot_core.studio_core.project_query_paths import resolve_project_path
+        from sciplot_core.project_lifecycle.figure_observation import resolve_project_path
 
         project = resolve_project_path(cast(Path, value))
         if not (project / ".sciplot_store").exists():

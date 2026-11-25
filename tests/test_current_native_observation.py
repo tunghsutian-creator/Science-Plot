@@ -14,6 +14,7 @@ from sciplot_core.project_store import ProjectConflict, ProjectStoreError
 from sciplot_core.project_store.native_artifacts import resolve_native_artifact
 from sciplot_core.project_store.runtime import project_runtime
 from sciplot_core.plot_backends.veusz_identity import fingerprint
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
 from sciplot_core.studio_core import project_query as query
 from sciplot_core.studio_core.annotation_operations import require_edit_source_current
 from sciplot_core.studio_core.observed_figure_binding import observed_figure_binding
@@ -161,7 +162,7 @@ def test_current_native_inspection_refuses_aliased_project_members(tmp_path, mon
 
 
 def selected_audit(project):
-    selected = query.resolve_project_figure(project)
+    selected = resolve_project_figure(project)
     audit = {"status": "passed", "document_sha256": selected["document_sha256"],
              "spec_sha256": selected["spec_sha256"]}
     return selected, audit

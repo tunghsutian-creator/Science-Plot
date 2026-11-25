@@ -21,7 +21,7 @@ from sciplot_core.studio_core.observed_figure_binding import observed_figure_rea
 from sciplot_core.studio_core.project_command_scope import (
     command_for_binding, project_command_runtime, project_store, query_for_apply, source_versions,
 )
-from sciplot_core.studio_core.project_query import resolve_project_figure, resolve_project_path
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure, resolve_project_path
 
 
 @project_command_runtime

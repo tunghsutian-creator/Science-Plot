@@ -12,7 +12,8 @@ from sciplot_core.delivery_identity import DELIVERY_IDENTITY, read_delivery_bind
 from sciplot_core.output_contract import resolve_user_output_layout
 from sciplot_core.policy import DELIVERY_LAUNCHER
 from sciplot_core.studio_core.project_query_evidence import _tree_hash
-from sciplot_core.studio_core.project_query_paths import bound_delivery_project, canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
+from sciplot_core.project_lifecycle.figure_observation import bound_delivery_project
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_next_step import task_next_step
 from sciplot_core.task_storage import load_task

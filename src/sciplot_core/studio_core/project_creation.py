@@ -19,8 +19,8 @@ from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.plan_preview import PlanPreviewResolution, resolve_expected_plan
 from sciplot_core.semantic_sources.scientific_source_models import ResolvedScientificSource
 from sciplot_core.studio_core.project_export import export_project_document
-from sciplot_core.studio_core.project_query import resolve_project_path
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.studio_core.project_receipt import project_receipt
 from sciplot_core.studio_core.studio_prepare import prepare_studio_document
 

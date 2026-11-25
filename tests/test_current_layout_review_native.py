@@ -14,7 +14,8 @@ from sciplot_core.project_commands import ProjectCommand, ProjectCommands, Proje
 from sciplot_core.project_host_factory import project_store
 from sciplot_core.studio_core.annotation_operations import preview_document_operations
 from sciplot_core.studio_core.document_edit import apply_document_edit
-from sciplot_core.studio_core.project_query import inspect_project, resolve_project_figure
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
+from sciplot_core.studio_core.project_query import inspect_project
 from sciplot_core.studio_core.review_artifacts import _current_layout_issues
 from sciplot_core.qa.audit_support import _run_veusz_audit
 

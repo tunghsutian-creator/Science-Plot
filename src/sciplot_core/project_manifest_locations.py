@@ -8,7 +8,7 @@ from typing import Any
 
 from sciplot_core.foundation.path_names import safe_filename
 from sciplot_core.project_store import FileProjectStore, ResourceRoot
-from sciplot_core.project_store.io import StoreIO, directory
+from sciplot_core.project_store.io import StoreIO, directory, observing_existing_store
 
 _CANONICAL_MANIFEST_NAME = "intake_manifest.json"
 
@@ -49,7 +49,7 @@ def intake_snapshot_location(project: Path, payload: dict[str, Any]) -> Resource
     if (project / ".sciplot_store/local_locations.json").is_file():
         descriptor = os.open(project, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
-            with directory(descriptor, (".sciplot_resources", "snapshot"), create=True):
+            with directory(descriptor, (".sciplot_resources", "snapshot"), create=not observing_existing_store()):
                 pass
         finally:
             os.close(descriptor)

@@ -14,8 +14,8 @@ from sciplot_core.project_commands.resources import PreparedFile
 from sciplot_core.project_store import FileProjectStore
 from sciplot_core.project_store.runtime import project_runtime
 from sciplot_core.studio_core.project_command_scope import figure_read_witness, project_store
-from sciplot_core.studio_core.project_query import resolve_project_figure
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.studio_core.export_projection import export_projection
 
 

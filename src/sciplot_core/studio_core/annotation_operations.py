@@ -14,7 +14,8 @@ from sciplot_core.studio_core.annotation_schema import (
     AnnotationOperationError, annotation_operation_capabilities, validate_operation_batch,
 )
 from sciplot_core.studio_core.document_edit_state import audit_edited_document
-from sciplot_core.studio_core.project_query import inspect_project, resolve_project_figure
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
+from sciplot_core.studio_core.project_query import inspect_project
 from sciplot_core.studio_core.sample_style import expand_sample_styles
 from sciplot_core.studio_core.sample_style_presets import expand_style_presets
 from sciplot_core.studio_core.annotation_batch import compile_annotation_operations as compile_annotation_operations

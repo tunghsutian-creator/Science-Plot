@@ -11,7 +11,7 @@ from typing import Any
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot, _assert_snapshot_current, _write_private_snapshot
 from sciplot_core.studio_core.persistence import atomic_save_veusz_document
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.studio_core.veusz_numeric_persistence import ensure_veusz_numeric_precision
 from sciplot_core.veusz_worker.document_edit import loaded_native_document
 from sciplot_core.veusz_worker.numeric_evidence import _numeric_payload

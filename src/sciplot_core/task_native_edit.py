@@ -16,7 +16,7 @@ from sciplot_core.studio_core.document_edit_review import (
 )
 from sciplot_core.studio_core.document_edit_state import native_edit_request_key
 from sciplot_core.studio_core.project_command_scope import figure_read_state, project_store
-from sciplot_core.studio_core.project_query import resolve_project_figure
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
 from sciplot_core.task_editing import unchanged_style_review
 from sciplot_core.task_storage import save_task
 

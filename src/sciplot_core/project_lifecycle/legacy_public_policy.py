@@ -34,7 +34,7 @@ def _known_review(target: Path, review: dict[str, Any] | None) -> bool:
     from sciplot_core.studio_core.document_edit_legacy import read_edit_operation
     from sciplot_core.studio_core.document_edit_state import history_directory
     from sciplot_core.studio_core.project_command_scope import project_store
-    from sciplot_core.studio_core.project_query import resolve_project_path
+    from sciplot_core.project_lifecycle.figure_observation import resolve_project_path
 
     project = resolve_project_path(target)
     if (project / STORE / "head.json").is_file():

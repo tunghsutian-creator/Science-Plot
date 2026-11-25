@@ -52,7 +52,7 @@ def save_transferred_style_pair(document: Any, target: Path, spec_path: Path,
     if context is not None:
         project = context["project_dir"]
         repository = project_store(project)
-        from sciplot_core.studio_core.project_query import resolve_project_figure
+        from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
         from sciplot_core.studio_core.project_command_scope import figure_binding
 
         selected = resolve_project_figure(target)

@@ -69,12 +69,12 @@ def test_native_probe_refuses_absent_link_observation_and_changed_document(tmp_p
 
 
 def test_project_native_probe_uses_all_registered_ready_documents(tmp_path, monkeypatch):
-    from sciplot_core.studio_core import project_query_paths
+    from sciplot_core.project_lifecycle import figure_observation
 
     documents = [tmp_path / "first.vsz", tmp_path / "second.vsz"]
     for path in documents:
         path.write_bytes(b"saved native")
-    monkeypatch.setattr(project_query_paths, "project_snapshot", lambda _root: (
+    monkeypatch.setattr(figure_observation, "project_snapshot", lambda _root: (
         {}, "first", [{"document": str(path), "status": "ready"} for path in documents]
         + [{"document": str(tmp_path / "unready.vsz"), "status": "pending"}],
     ))

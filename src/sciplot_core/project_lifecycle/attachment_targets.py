@@ -89,7 +89,7 @@ def resolve_attached_open(repository: ComposedProjectRepository, target: Path, f
         return StoredTarget(attachment.root)
     resolve = resolve_figure
     if resolve is None:
-        from sciplot_core.studio_core.project_query import resolve_project_figure
+        from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
 
         resolve = resolve_project_figure
     selection = resolve(target, figure_id)

@@ -21,7 +21,7 @@ from sciplot_core.plot_engine.service import PlotService
 from sciplot_core.plot_engine.storage import active, digest, load_head
 from sciplot_core.plot_ir.figure_document import figure_spec, is_figure
 from sciplot_core.policy.contract_loader import load_plot_contract
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.style_values import normalize_physical_size
 from sciplot_core.task_series_edits import compile_series_edits
 

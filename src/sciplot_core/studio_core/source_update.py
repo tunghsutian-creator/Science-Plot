@@ -48,7 +48,7 @@ def _prepared_update(project_dir: Path, source_path: Path, worksheet: str | None
                      annotation_decisions: list[dict[str, Any]] | None = None) -> Iterator[tuple[Path, dict[str, Any], tuple[PreparedSource, ...], dict[str, Any]]]:
     from sciplot_core.studio_core.native_adoption import adopt_saved_native
     from sciplot_core.studio_core.project_command_scope import project_store
-    from sciplot_core.studio_core.project_query_paths import project_snapshot
+    from sciplot_core.project_lifecycle.figure_observation import project_snapshot
     from sciplot_core.project_store.runtime import project_runtime
     from sciplot_core.studio_core.source_update_sources import baseline_scope
     from sciplot_core.studio_core.source_update_sources import incoming_scope
@@ -166,7 +166,7 @@ def _prepared_update_current(
             )
         from sciplot_core.studio_core.preparation_commands import audit_studio_candidate
         payload: dict[str, Any] = {"document": str(candidate / "studio/document.vsz")}
-        from sciplot_core.studio_core.project_query_paths import project_snapshot
+        from sciplot_core.project_lifecycle.figure_observation import project_snapshot
 
         _, _, candidate_figures = project_snapshot(candidate)
         payload["figure_set"] = {"figures": candidate_figures}
@@ -223,7 +223,7 @@ def preview_project_source_update(
     annotation_decisions: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build and audit an isolated candidate without changing the active project."""
-    from sciplot_core.studio_core.project_query_paths import resolve_project_path
+    from sciplot_core.project_lifecycle.figure_observation import resolve_project_path
 
     project_dir = resolve_project_path(project_dir)
     try:

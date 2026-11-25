@@ -7,7 +7,7 @@ from sciplot_core.doctor import doctor_payload
 from sciplot_core.studio_core.annotation_operations import require_edit_source_current
 from sciplot_core.studio_core.control_results import compact_result
 from sciplot_core.studio_core.project_query import inspect_project
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.task_capabilities import edit_context_capabilities
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_storage import load_task, task_path, task_summary

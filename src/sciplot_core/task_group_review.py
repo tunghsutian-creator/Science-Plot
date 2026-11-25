@@ -17,7 +17,7 @@ from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.foundation.writer_lease import exclusive_directory_lease
 from sciplot_core.studio_core.document_edit import preview_project_document
 from sciplot_core.studio_core.project_query import inspect_project
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.task_group_storage import original_source_current, active_step, step_state
 from sciplot_core.task_group_gallery import write_group_gallery as _write_gallery
 from sciplot_core.task_next_step import task_next_step

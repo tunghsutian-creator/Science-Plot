@@ -9,7 +9,7 @@ from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.foundation.canonical_paths import canonical_path
 
 from .errors import EngineError
 from sciplot_core.project_lifecycle.checkpoint_storage import EditCheckpointStorage

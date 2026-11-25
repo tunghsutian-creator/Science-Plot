@@ -40,7 +40,7 @@ class NativeInterfaceRetired(ValueError):
 def _saved_export_payload(target: Path) -> dict[str, Any] | None:
     """Resolve saved export inputs without entering the preparation writer."""
     from sciplot_core.studio_core.delivery_target import resolve_delivery_target
-    from sciplot_core.studio_core.project_query_paths import resolve_project_path
+    from sciplot_core.project_lifecycle.figure_observation import resolve_project_path
     from sciplot_core.studio_core.request_overrides import _existing_document_payload
 
     path = target.expanduser()

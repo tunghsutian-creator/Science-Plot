@@ -39,7 +39,7 @@ class FilesystemProjectTargets:
             return StoredTarget(target)
         resolve = self.resolve_figure
         if resolve is None:
-            from sciplot_core.studio_core.project_query import resolve_project_figure
+            from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
 
             resolve = resolve_project_figure
         selection = resolve(target, figure_id)
@@ -49,12 +49,14 @@ class FilesystemProjectTargets:
     def read_legacy_saved(self, target: Path, figure_id: str | None) -> tuple[Path, Path] | None:
         """Resolve read-only authority by selection, before any attach or import."""
         from .attachment_index import read_index
+        from .figure_observation import observe_plot_head
         from .store_composition import existing_store
         from sciplot_core.project_store.io import STORE
         from sciplot_core.studio_core.legacy_saved_plot import _saved_plot
 
         def stored(root: Path) -> tuple[Path, Path] | None:
-            envelope = self.repository.load_head(root)
+            envelope = observe_plot_head(root, owner=self.repository)
+            assert envelope is not None
             document, binding = envelope["document"], envelope["binding"]
             authority = document.get("plot_type")
             if authority == "LegacyPlot" or (authority is None and

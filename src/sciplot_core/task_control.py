@@ -14,8 +14,9 @@ from sciplot_core.project_lifecycle.legacy_public_policy import require_public_e
 from sciplot_core.source_tables.read_session import with_table_reads
 from sciplot_core.task_timing import timed_task_call, finish_timing, observe_phase
 from sciplot_core.studio_core.annotation_schema import AnnotationOperationError, validate_operation_batch
-from sciplot_core.studio_core.project_query import inspect_project, resolve_project_path
-from sciplot_core.studio_core.project_query_paths import canonical_path
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_path
+from sciplot_core.studio_core.project_query import inspect_project
+from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.studio_core.project_session import external_project_session
 from sciplot_core.task_contract import (
     TaskControlError, task_request_schema, task_response_schema, validate_task_request,

@@ -269,7 +269,7 @@ def test_pair_declarations_do_not_cross_worksheets_and_conflicts_remain_blocked(
 @pytest.mark.comprehensive
 def test_native_unequal_revision_cross_sheet_annotation_and_export(tmp_path):
     from sciplot_core.foundation.file_hashing import file_sha256
-    from sciplot_core.studio_core.project_query import resolve_project_figure
+    from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
     from sciplot_core.studio_core.peak_analysis import inspect_peak_candidates
     from sciplot_core.studio_core.annotation_operations import inspect_annotation_state
 
