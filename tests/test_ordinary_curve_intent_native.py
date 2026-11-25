@@ -1,6 +1,5 @@
 """Public task/plot processes retain original arrays through ordinary continuation."""
 
-from socket_fixture_helpers import socket_directory
 import csv
 import json
 import math
@@ -11,6 +10,8 @@ import signal
 import subprocess
 
 import pytest
+from managed_plot_helpers import read_managed_head_and_ir
+from socket_fixture_helpers import socket_directory
 from test_managed_source_append_native import _cli
 from test_ordinary_curve_intent import mass_source, paired_quantities, same_file_request
 from test_series_display_native import _native_save
@@ -19,7 +20,7 @@ from sciplot_core._paths import REPO_ROOT
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_backends.managed_audit import scientific_audit
 from sciplot_core.plot_backends.native_primitives import dataset_name
-from sciplot_core.plot_engine.storage import load_head, read
+from sciplot_core.plot_engine.storage import load_head
 from sciplot_core.plot_ir.figure_document import figure_spec
 from sciplot_core.plot_protocol.paths import read_owner
 from sciplot_core.veusz_worker.document_edit import loaded_native_document
@@ -52,10 +53,13 @@ def test_public_ordinary_curve_intent_cold_continuation_native_arrays_and_replay
             assert process.returncode == 0, process.stdout + process.stderr
             created = json.loads(process.stdout)
             assert created['status'] == 'complete', created
-            server_pid = read_owner(socket)['pid']
+            assert not socket.exists(), "Ordinary CLI creation uses its invocation-local owner."
             plot = Path(created['project'])
-            head = load_head(plot)
-            initial_ir = read(Path(head['binding']['ir_path']))
+            opened = _cli(tmp_path, 'open', plot, arguments=('--scope', 'summary'), direct=False)
+            server_pid = read_owner(socket)['pid']
+            head, initial_ir = read_managed_head_and_ir(plot)
+            assert opened['status'] == 'current' and opened['plot_id'] == head['document']['plot_id']
+            assert opened['revision'] == head['document']['revision'] == 0
             spec = figure_spec(head['document'])
             layers = spec['views'][0]['layers']
             changes = [{'op': 'set', 'target': ['figure:main'], 'property': 'layout',
@@ -109,9 +113,8 @@ def test_public_ordinary_curve_intent_cold_continuation_native_arrays_and_replay
             assert replay['replayed'] and replay['revision'] == accepted['revision']
             exported = _cli(tmp_path, 'export', plot, direct=False)
             assert exported['ready_to_use'] and exported['revision'] == accepted['revision'], exported
-            current = load_head(plot)
+            current, ir = read_managed_head_and_ir(plot)
             final = figure_spec(current['document'])
-            ir = read(Path(current['binding']['ir_path']))
             assert final['views'][0]['layers'][:len(layers)] == before_spec['views'][0]['layers']
             for layer in final['views'][0]['layers']:
                 assert layer['marks'][0]['style']['line_color'] == layer['marks'][1]['style']['marker_color']

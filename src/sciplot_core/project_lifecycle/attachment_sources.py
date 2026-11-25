@@ -130,8 +130,17 @@ class AttachmentSourceResolver(ProjectSourceResolver):
         matches = [item for item in self.pending if item["path"] == str(original)]
         if matches:
             allowed = [item for item in matches if expected_sha256 in {None, item["sha256"]} and source_id in {None, item.get("source_id")}]
-            if not allowed and expected_sha256 is not None and expected_sha256 not in {item["sha256"] for item in matches}:
-                return super().resolve_path(original, expected_sha256=expected_sha256, source_id=source_id)
+            if not allowed and expected_sha256 is not None:
+                # Appending another table block must not mask already registered
+                # source identities for the same literal and immutable version.
+                registered = source_id is not None and any(
+                    entry.get("locator") == str(original)
+                    and (source_id == identity or source_id in entry.get("aliases", ()))
+                    for identity, versions in self.snapshot["sources"].items()
+                    if (entry := versions.get(expected_sha256)) is not None
+                )
+                if registered or expected_sha256 not in {item["sha256"] for item in matches}:
+                    return super().resolve_path(original, expected_sha256=expected_sha256, source_id=source_id)
             if not allowed or len({item["sha256"] for item in allowed}) != 1:
                 raise EngineError("semantic_source_declaration_conflict", "A new source read must match its exact declared identity and bytes.")
             actual = Path(allowed[0].get("actual", str(original)))
