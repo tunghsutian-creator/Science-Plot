@@ -7,9 +7,9 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 10414,
-    "nodeids_sha256": "c1e8d2c745ba599e006d51a177b55bbc8115a5ef12689b3a22685a4c348a534e",
-    "test_sources_sha256": "b99f85073787ad1ecdca4dd4c57a9beaee68087f0f0c18aa8c3eb922c2061046",
+    "nodeid_count": 10419,
+    "nodeids_sha256": "737581cb96947646a233539e4780a94c9c64c63b68ef4004f36f73372ea3201f",
+    "test_sources_sha256": "cd18a9d47d2656807e1520bf885e0becbb2c099c4a0e6f1bcb573ad9dad14b49",
     "test_source_count": 661,
     "candidate_nodeids": [
       "tests/test_plot_template_native.py::test_legacy_paired_template_reauthored_as_managed_preserves_data_and_styles",
@@ -5841,7 +5841,9 @@
       "tests/test_managed_curve_project_creation.py::test_verified_curve_project_creates_managed_and_recovers_existing_delivery",
       "tests/test_managed_curve_project_creation.py::test_source_only_uvvis_single_and_group_keep_managed_authority_through_retry_and_cold_edit",
       "tests/test_managed_curve_project_creation.py::test_source_only_uvvis_without_a_verified_sample_uses_native_and_reports_why",
-      "tests/test_ordinary_plotting_owners.py::test_each_domain_has_exact_existing_paths_and_generated_native_controls[managed_curve_project]"
+      "tests/test_ordinary_plotting_owners.py::test_each_domain_has_exact_existing_paths_and_generated_native_controls[managed_curve_project]",
+      "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/delivery/native_snapshot.py]",
+      "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/project_lifecycle/relocation.py]"
     ],
     "synthetic_candidates": [
       {
@@ -28503,6 +28505,14 @@
       {
         "nodeid": "tests/test_ordinary_plotting_owners.py::test_each_domain_has_exact_existing_paths_and_generated_native_controls[managed_curve_project]",
         "reason": "The owner parameter checks source-controlled path ownership, verification gates and constructed command selections without running those commands or reading private scientific data."
+      },
+      {
+        "nodeid": "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/delivery/native_snapshot.py]",
+        "reason": "Generated change-routing control using code paths only; no private scientific inputs."
+      },
+      {
+        "nodeid": "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/project_lifecycle/relocation.py]",
+        "reason": "Generated change-routing control using code paths only; no private scientific inputs."
       }
     ],
     "review_method": "2026-11-10: actual unfiltered collect-only confirmed 10236 unique nodes, 9740 focused and 496 comprehensive, zero test reports and unchanged Python inputs. Thirty-six added storage lifecycle and changed-runner controls use generated data only and are public-focused. Eighteen unchanged registered Python fixture helpers were adopted by original SHA; no raw or golden data was copied. All 165 private cases, 210 dependencies, 23 directory roles, 111 historical duties and remaining full/scientific access obligations are retained. Static disposition is not full execution or scientific acceptance. 2026-11-10 storage closure: actual zero-body unfiltered10342-node collection,81 additive generated public-focused cases, original tiers/private dependencies/duties retained. Synthetic host providers isolate unit paths; production has no test-environment placement exemption. Static review is not full/private scientific acceptance. 2026-11-10 CI workspace correction: original10342 full collection plus complete11-node policy-module collection gives10345, three additive generated focused allocator controls. The actual unchanged12-node staged native preflight must freshly confirm full scope before any body; no historical node, tier or scientific duty removed. 2026-11-10 callback migration closure: complete50-node collection for four consumer modules remains exact (49 original focused bodies PASS,one original comprehensive deselected). Five test doubles explicitly accept their real namespace parameter and check containment; no production code,scientific assertion,node,tier,dependency or duty change. Only current test-byte binding changes; earlier c29112-node receipt remains historical under its own SHA. 2026-11-10 public capture carrier consumer: the actual guarded child now receives build_check_spec prepared environment; dropping only the workspace carrier is explicitly refused in the same original node. Thirty unchanged module node IDs, no production guard,scientific assertion,scope classification or dependency change. Previous5299705 successful bodies and one failure remain historical,not a new-SHA pass. 2026-11-11 targeted correctness remediation: actual unfiltered 10370-node collection, zero executed bodies, 25 additive generated public-focused controls. Original private cases, dependencies, tiers, and responsibilities remain unchanged. Static test-byte binding only; no new full-suite or scientific acceptance claim. 2026-11-16: unfiltered collect-only confirmed 10372 nodes, zero bodies, two new generated public-focused worksheet controls. Existing tiers, private dependencies and scientific responsibilities unchanged.",

@@ -71,23 +71,20 @@ def open_claimed_store(root: Path, claim: dict[str, Any], *,
         if not root.is_dir() or read_json_object(canonical_path(root / MANAGED_STORE_CLAIM)) != claim:
             raise EngineError("document_idempotency_conflict", "This Store creation key belongs to a different or unowned request.")
         store_path = canonical_path(root / STORE)
-        store = FileProjectStore(root)
-        if not canonical_path(store_path / "head.json").is_file():
-            if any(item.name not in {MANAGED_STORE_CLAIM, STORE} for item in root.iterdir()):
-                raise EngineError("document_state_changed", "The uninitialized Managed store contains unowned files.")
-            # A v2 root already holds the exact claim. Repeat only the original
-            # empty Store setup; no scientific or native execution has begun.
-            store.snapshot(import_legacy=True)
-        else:
-            try:
-                store.snapshot()
-            except ProjectRecoveryRequired:
-                # Recover only publication of already committed Store records.
-                if store.recover()["phase"] != "complete":
-                    raise EngineError("document_state_changed", "The Managed Store has a command with an unknown outcome.") from None
-        observed = store.observe_members((MANAGED_STORE_CLAIM,), projection=False, physical=(MANAGED_STORE_CLAIM,))
-        stored_claim = observed.members[MANAGED_STORE_CLAIM].data
-        physical_claim = observed.physical[MANAGED_STORE_CLAIM]
-        if stored_claim is None or physical_claim is None or stored_claim != physical_claim[0]:
-            raise EngineError("document_state_changed", "The Managed Store root claim differs from its recorded bytes.")
-        return store
+        initialize = not canonical_path(store_path / "head.json").is_file()
+        if initialize and any(item.name not in {MANAGED_STORE_CLAIM, STORE} for item in root.iterdir()):
+            raise EngineError("document_state_changed", "The uninitialized Managed store contains unowned files.")
+    # Store operations acquire this same non-reentrant external lease. The
+    # physical root claim is sealed before handing off to that writer.
+    store = FileProjectStore(root)
+    try:
+        store.snapshot(import_legacy=initialize)
+    except ProjectRecoveryRequired:
+        if store.recover()["phase"] != "complete":
+            raise EngineError("document_state_changed", "The Managed Store has a command with an unknown outcome.") from None
+    observed = store.observe_members((MANAGED_STORE_CLAIM,), projection=False, physical=(MANAGED_STORE_CLAIM,))
+    stored_claim = observed.members[MANAGED_STORE_CLAIM].data
+    physical_claim = observed.physical[MANAGED_STORE_CLAIM]
+    if stored_claim is None or physical_claim is None or stored_claim != physical_claim[0]:
+        raise EngineError("document_state_changed", "The Managed Store root claim differs from its recorded bytes.")
+    return store

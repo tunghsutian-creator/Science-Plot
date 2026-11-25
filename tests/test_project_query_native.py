@@ -9,10 +9,8 @@ import pytest
 from sciplot_core._paths import REPO_ROOT
 from sciplot_core.delivery_identity import DELIVERY_IDENTITY
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.studio_core.project_query import (
-    inspect_project,
-    resolve_project_figure,
-)
+from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
+from sciplot_core.studio_core.project_query import inspect_project
 
 
 def _inventory(root: Path) -> dict[str, str]:

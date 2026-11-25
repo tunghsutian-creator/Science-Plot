@@ -10256,7 +10256,9 @@
       "tests/test_managed_frequency_creation.py::test_task_create_managed_frequency_cold_resume_uses_exact_owner",
       "tests/test_managed_curve_project_creation.py::test_verified_curve_project_creates_managed_and_recovers_existing_delivery",
       "tests/test_managed_curve_project_creation.py::test_source_only_uvvis_single_and_group_keep_managed_authority_through_retry_and_cold_edit",
-      "tests/test_managed_curve_project_creation.py::test_source_only_uvvis_without_a_verified_sample_uses_native_and_reports_why"
+      "tests/test_managed_curve_project_creation.py::test_source_only_uvvis_without_a_verified_sample_uses_native_and_reports_why",
+      "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/delivery/native_snapshot.py]",
+      "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/project_lifecycle/relocation.py]"
     ],
     "private": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
@@ -20328,7 +20330,9 @@
       "tests/test_rheology_managed_sparse_metric.py::test_sparse_measured_replicate_keeps_union_x_without_fabricating_loss_column",
       "tests/test_rheology_managed_sparse_metric.py::test_frequency_graph_preserves_reported_magnitude_and_derives_before_averaging",
       "tests/test_rheology_mean_suite_publication.py::test_frequency_readable_narrow_log_keeps_fixed_endpoints_and_unmarked_specs",
-      "tests/test_rheology_mean_suite_publication.py::test_frequency_cli_does_not_fall_back_after_managed_science_replay_mismatch"
+      "tests/test_rheology_mean_suite_publication.py::test_frequency_cli_does_not_fall_back_after_managed_science_replay_mismatch",
+      "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/delivery/native_snapshot.py]",
+      "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/project_lifecycle/relocation.py]"
     ],
     "comprehensive": [
       "tests/test_annotation_operations_native.py::test_initial_crop_can_be_reviewed_and_exported_without_regeneration",
