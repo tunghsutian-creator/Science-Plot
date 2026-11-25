@@ -85,23 +85,24 @@ paths. Renames/deletions retain both owner endpoints. Tests execute the current
 worktree, not a different staged-index image. A clean default comparison reports
 `NO_TESTS`, zero executed checks and exit 2; a plan is not a test pass.
 
-`--quick` uses the same owner selection and assertions as unrecorded `--changed`.
-It rejects record/reuse/output/audit options, prints the selected owners, actual
-pytest summary, per-command elapsed times and the later required gates, and
-explicitly labels the result as development feedback rather than merge acceptance.
-`--json` retains the structured plan/results. The target count describes selectors,
-never executed test bodies. Unknown owners fail before checks; shared public or
-scientific contracts retain their broader mapped regressions. No cache or test
-sharding is introduced. One actual typed-intent documentation edit selected the
-same 32 successful bodies and four checks in both modes: quick 11.00 seconds,
-unrecorded changed 10.09 seconds. This is an explicit daily entry and protection
-against accidental evidence collection, not an algorithmic speedup claim.
+For reviewed leaf changes, `--quick` runs the existing exact public-focused
+selectors in the current worktree, without requiring the private fixture corpus.
+It still runs shared source checks, lint/type checks when selected, and whitespace
+checks. It reports the remaining owner checks, comprehensive lifecycle tests,
+private science and later gates separately. Use `--changed` for the broader
+owner checks or while adding tests that are not yet in the reviewed collection.
+Mixed changes outside the reviewed paths, deletions and shared contracts keep
+the broader owner checks; unknown owners still stop before running checks.
 
-Exact shared source targets execute once in the first shared gate, rather than
-again in the later owner command. A selected whole module still runs unchanged;
-the planner does not guess how to subtract a function from a module. An empty
-remaining owner selection never becomes a bare, unfiltered pytest command.
-Record mode declares the shared command as its original pytest input scope.
+Quick feedback cannot record or reuse evidence, or attach output/audit options.
+It is not merge acceptance. `--json` retains the plan, timings, actual check
+results and deferred scope; the declared target count is not a test body count.
+
+Exact shared assertions run once, in the first shared gate. For a reviewed
+module selector the public-focused inventory gives the other exact nodes to
+run, without repeating any shared node. The broader `--changed` path keeps
+whole-module selectors intact. An empty remaining owner selection never becomes
+an unfiltered pytest command. Record mode preserves the original check scopes.
 
 Component measurements retained 47 unique assertions while removing five exact
 repetitions: the changed API took 17.75 then 14.03 seconds, excluding the outer

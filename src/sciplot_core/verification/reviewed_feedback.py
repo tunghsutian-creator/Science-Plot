@@ -1,5 +1,5 @@
 """The reviewed public subset of the shared changed verification plan."""
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -157,3 +157,13 @@ def reviewed_feedback(
             targets.extend((*ARCHITECTURE_CORE_TARGETS, *_AFFECTED_GUARDS))
     return {"reason": reason, "targets": sorted(set(targets)), "native_targets": sorted(set(native_targets)),
             "source_only": bool(targets) and bool(selected) and selected <= DOCUMENTATION_PATHS}
+
+
+def quick_public_nodes(targets: Sequence[str]) -> list[str]:
+    """Use the reviewed public tier without repeating nodes in the shared gate."""
+    from sciplot_core.verification.input_scope import load_manifest
+    from sciplot_core.verification.public_stage_selection import match_targets
+
+    manifest = load_manifest()
+    focused = set(manifest["scopes"]["public"]).intersection(manifest["tiers"]["focused"])
+    return sorted(match_targets(focused, targets) - match_targets(focused, CHEAP_SOURCE_TARGETS))

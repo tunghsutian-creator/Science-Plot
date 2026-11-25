@@ -143,7 +143,7 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
             else:
                 print(payload["error"]["message"])
             return 1
-        options: dict[str, Any] = {}
+        options: dict[str, Any] = {"quick": True} if quick else {}
         if args.base is not None:
             options["base"] = args.base
         if args.plan_only:
@@ -161,7 +161,11 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
             print(f"SciPlot changed verification: {payload['status']}")
             if quick:
                 print("Quick development feedback only; this is not merge acceptance.")
-                print("Pytest tier: focused (may include bounded native checks); comprehensive lifecycle tests are deferred.")
+                if scope := payload.get("quick_scope"):
+                    print("Pytest owner tier: public-focused (reviewed local worktree).")
+                    print("Not run: " + ", ".join(scope["deferred"]) + ".")
+                else:
+                    print("Pytest tier: focused (may include bounded native checks); comprehensive lifecycle tests are deferred.")
             owner_ids = [owner["owner_id"] for owner in payload["owners"]]
             print("Owners: " + (", ".join(owner_ids) if owner_ids else "none"))
             print(f"Checks: {len(payload['checks'])}; base: {payload['comparison']['base']}")

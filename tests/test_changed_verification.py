@@ -1495,7 +1495,7 @@ def test_quick_verify_preserves_plan_base_and_empty_scope_status(status, plan_on
         arguments.append("--plan-only")
     assert cli.main(arguments) == expected_exit
     assert json.loads(capsys.readouterr().out) == {**payload, "claim": "development_feedback_only", "scientific_acceptance": False}
-    assert calls == [{"base": "HEAD~2", **({"plan_only": True} if plan_only else {})}]
+    assert calls == [{"quick": True, "base": "HEAD~2", **({"plan_only": True} if plan_only else {})}]
 
 
 @pytest.mark.parametrize("path", [
@@ -1521,6 +1521,16 @@ def test_quick_verify_preserves_unknown_and_shared_owner_scope(path, monkeypatch
         assert "full_pytest" in payload["required_later"]["release"]
 
 
+    # One unreviewed or missing path keeps the existing conservative scope.
+    leaf = "src/sciplot_core/source_tables/curve_tables.py"
+    for paths, root in (([leaf, path], REPO_ROOT), ([leaf], REPO_ROOT / "missing")):
+        quick = build_changed_verification_plan(paths, repo_root=root, quick=True)
+        changed = build_changed_verification_plan(paths, repo_root=root)
+        assert "quick_scope" not in quick
+        assert quick["checks"] == changed["checks"]
+        assert quick["required_later"] == changed["required_later"]
+
+
 def test_unrecorded_check_timings_use_monotonic_command_intervals(monkeypatch):
     from sciplot_core.verification import changed
 
@@ -1541,7 +1551,7 @@ def test_quick_human_output_reports_selection_actual_summary_and_feedback_limit(
         check.update(status="passed", wall_seconds=0.125, stdout="")
         if check["check_id"] == "pytest_changed_owners":
             check["stdout"] = "....\n4 passed in 0.10s\n"
-    monkeypatch.setattr(verification, "run_changed_verification", lambda: payload)
+    monkeypatch.setattr(verification, "run_changed_verification", lambda **_kwargs: payload)
     assert cli.main(["verify", "--quick"]) == 0
     output = capsys.readouterr().out
     assert "Quick development feedback only; this is not merge acceptance." in output
@@ -1551,6 +1561,45 @@ def test_quick_human_output_reports_selection_actual_summary_and_feedback_limit(
     assert "Pytest final output: 4 passed in 0.10s" in output
     assert "Command elapsed: 0.12s" in output
     assert "release: full_pytest" in output
+
+
+    # Use the real quick planner behind the CLI with a simulated small edit.
+    from sciplot_core.verification.input_scope import load_manifest
+    from sciplot_core.verification.public_stage_selection import match_targets, target_modules
+    from sciplot_core.verification.source_contracts import CHEAP_SOURCE_TARGETS
+
+    paths = ["src/sciplot_core/source_tables/curve_tables.py", "tests/test_source_numeric_encodings.py"]
+    baseline = build_changed_verification_plan(paths, repo_root=REPO_ROOT)
+    calls = []
+    def run(**kwargs):
+        return run_changed_verification(repo_root=REPO_ROOT, changed_paths=paths,
+            command_runner=lambda command, _cwd: calls.append(list(command)) or _completed(command), **kwargs)
+    monkeypatch.setattr(verification, "run_changed_verification", run)
+    assert cli.main(["verify", "--quick"]) == 0
+    output = capsys.readouterr().out
+    assert "public-focused" in output and "private_science" in output
+    assert "release: full_pytest" in output
+    exact = {arg.split("=", 1)[1] for arg in calls[2] if arg.startswith("--sciplot-public-target=")}
+    manifest = load_manifest()
+    public_focused = set(manifest["scopes"]["public"]) & set(manifest["tiers"]["focused"])
+    shared = match_targets(public_focused, CHEAP_SOURCE_TARGETS)
+    assert exact == match_targets(public_focused, baseline["public_feedback"]["targets"]) - shared
+    assert exact and all(mod in calls[2] for mod in target_modules(sorted(exact)))
+    assert len(calls) == 4 and calls[2][4:7] == [
+        "-p", "sciplot_core.verification.public_stage_selection", "--input-scope=public-focused",
+    ]
+    assert calls[:2] == [row["command"] for row in baseline["checks"][:2]]
+    assert calls[3] == baseline["checks"][3]["command"]
+
+    # Also subtract exact shared assertions when a reviewed selector names a
+    # whole module, but keep every other expected node from that module.
+    prose = build_changed_verification_plan(["docs/DESIGN_PROJECT_LIFECYCLE.md"], repo_root=REPO_ROOT, quick=True)
+    command = next(c["command"] for c in prose["checks"] if c["check_id"] == "pytest_changed_owners")
+    exact = {arg.split("=", 1)[1] for arg in command if arg.startswith("--sciplot-public-target=")}
+    assert exact.isdisjoint(shared)
+    assert set(prose["public_feedback"]["targets"]) >= {"tests/test_repository_policy.py"}
+    assert any(node.startswith("tests/test_repository_policy.py::") for node in exact)
+    assert exact == match_targets(public_focused, prose["public_feedback"]["targets"]) - shared
 
 
 @pytest.mark.parametrize("elapsed", [None, float("nan"), float("inf"), -1, "unknown"])

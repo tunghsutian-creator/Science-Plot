@@ -66,7 +66,7 @@ def register_diagnostics_commands(subparsers: Any) -> None:
     verify_scope.add_argument(
         "--quick",
         action="store_true",
-        help="Run owner-selected development feedback without evidence recording; not merge acceptance.",
+        help="Run reviewed public development feedback when eligible; not merge acceptance.",
     )
     verify_scope.add_argument(
         "--changed",
