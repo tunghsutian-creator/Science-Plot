@@ -261,10 +261,13 @@ if __name__ == "__main__":
 
 
 def test_cold_expert_bundle_does_not_write_to_its_historical_publication(tmp_path):
+    import anyio
+    from mcp import Client
     from managed_plot_helpers import patch, request_for_source
+    from test_mcp_stdio import _call, _parameters
 
     from sciplot_core.plot_engine.service import PlotService
-    from sciplot_core.project_lifecycle.relocation import export_project_bundle, import_project_bundle
+    from sciplot_core.project_store.repository import FileProjectStore
     from sciplot_core.studio_core.project_query import inspect_project
 
     sources = tmp_path / "original-input"
@@ -282,26 +285,68 @@ def test_cold_expert_bundle_does_not_write_to_its_historical_publication(tmp_pat
         plot = Path(created["plot"])
         store = plot.parent.parent
         snapshot = {path.relative_to(output): path.read_bytes() for path in output.rglob("*") if path.is_file()}
-        result = export_project_bundle(store, tmp_path / "bundle")
     finally:
         with_service.close()
-    offline = tmp_path / "offline"
-    sources.rename(offline)
-    moved = tmp_path / "new-location"
-    relocated = import_project_bundle(tmp_path / "bundle", moved)
-    assert (relocated["project_id"], relocated["generation"]) == (result["project_id"], result["generation"])
-    cold = PlotService(read_only_legacy=True)
-    try:
-        opened = cold.open(moved, figure_id=created["plot_id"], description={"scope": "summary"})
-        assert opened["plot_id"] == created["plot_id"] and opened["revision"] == 0
-        latest = cold.patch(Path(opened["plot"]), patch(opened, "cold-style", "style.line.width", "1.3pt", "series:A"))
-        assert latest["ready_to_use"] and latest["revision"] == 1, latest
-        assert latest["scientific_hash"] == created["scientific_hash"]
-        assert all(Path(item["path"]).is_relative_to(moved) for item in latest["exports"])
-        inspected = inspect_project(Path(opened["plot"]), figure_id=created["plot_id"])
-        assert inspected["selected_figure"]["revision"] == 1 and inspected["ready_to_use"] is True
-        assert inspected["delivery"]["current"] and inspected["qa"]["current"] is False
-        assert {path.relative_to(output): path.read_bytes() for path in output.rglob("*") if path.is_file()} == snapshot
-        assert (offline / raw.relative_to(sources)).read_bytes() == raw_bytes
-    finally:
-        cold.close()
+    original_store = FileProjectStore(store)
+    history = {name: original_store.read_bytes(name) for name in original_store.snapshot()["files"] if "/revisions/" in name}
+    assert history
+
+    async def scenario():
+        async with Client(_parameters(cli=True, profile="daily"), read_timeout_seconds=180) as client:
+            rejected_target = await client.call_tool("sciplot_project_bundle_export", {
+                "project": str(plot), "output_dir": str(tmp_path / "not-a-bundle")})
+            assert rejected_target.is_error and rejected_target.structured_content["error"]["code"] == "project_bundle_store_required"
+            assert not (tmp_path / "not-a-bundle").exists()
+            result = await _call(client, "sciplot_project_bundle_export", {
+                "project": str(store), "output_dir": str(tmp_path / "bundle")})
+            assert result["project"] == str(store) and result["status"] == "exported"
+            offline = tmp_path / "offline"
+            # The expert creation's Store is inside the source tree.
+            sources.rename(offline)
+            assert not raw.exists() and not store.exists()
+            moved = tmp_path / "new-location"
+            relocation = {"bundle": result["bundle"], "output_dir": str(moved)}
+            relocated = await _call(client, "sciplot_project_bundle_import", relocation)
+            assert relocated["project"] == str(moved) and relocated["status"] == "imported"
+            assert (relocated["project_id"], relocated["generation"]) == (result["project_id"], result["generation"])
+            assert relocated["host_grants_included"] is False
+            duplicate = await client.call_tool("sciplot_project_bundle_import", relocation)
+            assert duplicate.is_error and duplicate.structured_content["error"]["code"] == "project_bundle_destination_exists"
+            cold_store = FileProjectStore(moved)
+            assert cold_store.snapshot()["generation"] == result["generation"]
+            assert {name: cold_store.read_bytes(name) for name in history} == history
+
+            cold = PlotService(read_only_legacy=True)
+            try:
+                opened = cold.open(moved, figure_id=created["plot_id"], description={"scope": "summary"})
+                assert opened["plot_id"] == created["plot_id"] and opened["revision"] == 0
+                latest = cold.patch(Path(opened["plot"]), patch(opened, "cold-style", "style.line.width", "1.3pt", "series:A"))
+                assert latest["ready_to_use"] and latest["revision"] == 1, latest
+                assert latest["scientific_hash"] == created["scientific_hash"]
+                assert all(Path(item["path"]).is_relative_to(moved) for item in latest["exports"])
+                inspected = inspect_project(Path(opened["plot"]), figure_id=created["plot_id"])
+                assert inspected["selected_figure"]["revision"] == 1 and inspected["ready_to_use"] is True
+                assert inspected["delivery"]["current"] and inspected["qa"]["current"] is False
+                assert {name: cold_store.read_bytes(name) for name in history} == history
+                original_generation = cold_store.snapshot()["generation"]
+
+                independent = tmp_path / "independent-project"
+                save_as = {"plot": opened["plot"], "plot_id": opened["plot_id"], "revision": latest["revision"],
+                           "output_dir": str(independent)}
+                fork = await _call(client, "sciplot_project_save_as", save_as)
+                assert fork["project"] == str(independent) and fork["project_id"] != relocated["project_id"]
+                assert fork["plot_id"] != opened["plot_id"] and fork["created_revision"] == 0
+                assert not fork["history_copied"] and fork["scientific_hash"] == latest["scientific_hash"]
+                assert (await _call(client, "sciplot_project_save_as", save_as)) == fork
+                forked = cold.open(Path(fork["plot"]), description={"scope": "summary"})
+                changed = cold.patch(Path(fork["plot"]), patch(forked, "fork-style", "style.line.width", "1.8pt", "series:A"))
+                assert changed["ready_to_use"] and changed["revision"] == 1
+                assert changed["scientific_hash"] == latest["scientific_hash"]
+                assert all(Path(item["path"]).is_relative_to(independent) for item in changed["exports"])
+                assert cold_store.snapshot()["generation"] == original_generation
+            finally:
+                cold.close()
+            assert {path.relative_to(output): path.read_bytes() for path in output.rglob("*") if path.is_file()} == snapshot
+            assert (offline / raw.relative_to(sources)).read_bytes() == raw_bytes
+
+    anyio.run(scenario)

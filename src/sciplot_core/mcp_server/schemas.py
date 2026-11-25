@@ -18,7 +18,8 @@ ToolProfile = Literal["daily", "expert"]
 _DAILY_TOOLS = frozenset({
     "capabilities", "task_capabilities", "task_start", "task_continue",
     "task_edit", "task_inspect", "task_table_region", "task_find", "task_resume",
-    "project_open", "project_legacy_redraw", "project_legacy_convert", "project_inspect", "plot_describe", "plot_patch", "plot_intent",
+    "project_open", "project_legacy_redraw", "project_legacy_convert", "project_inspect",
+    "project_bundle_export", "project_bundle_import", "project_save_as", "plot_describe", "plot_patch", "plot_intent",
     "plot_decide", "plot_resume", "plot_export", "plot_deliver", "preview", "annotation_inspect", "export",
     "compose_capabilities", "compose", "pdf_review_create", "pdf_review_read", "read_result",
 })
@@ -142,13 +143,13 @@ def tool_definitions(profile: ToolProfile = "expert") -> list[Tool]:
         ["target", "output_dir"])
     add("project_legacy_convert", "Create a separately editable Managed copy of a supported archived XY figure. Use a new local directory outside the old project; supply original axis units only when needed. Never modifies or upgrades the original.",
         {**legacy_target, "x_unit": string, "y_unit": string}, ["target", "output_dir"])
-    add("project_bundle_export", "Export a complete local Store bundle from an exact existing Store root to a new path. Keeps project identity and committed history; no host permissions are included. Not a paper package or an independent project copy.",
+    add("project_bundle_export", "Prepare a project move: bundle the exact existing Store root (not a plot, task, or paper package) at a new path. Preserves project identity and history; excludes host permissions.",
         {"project": semantic_path, "output_dir": semantic_path}, ["project", "output_dir"])
-    add("project_bundle_import", "Relocate an exact saved Store bundle into a new local directory. The same project ID and generation remain authoritative. Does not grant host executor permissions or create an independent project identity.",
+    add("project_bundle_import", "Finish a project move: import the Store bundle into a new directory and continue there under the same project ID and history. No host permissions or old external export paths transfer. The old location is not removed.",
         {"bundle": semantic_path, "output_dir": semantic_path}, ["bundle", "output_dir"])
     add("plot_describe", "Read current object capabilities and values without rebuilding science. When advertised, use scope edit for one target/property and its exact schema. Supported native suite values come from the current selected VSZ. Omit description for full state; stale inputs and pending work remain explicit.",
         {**semantic_plot, "description": description}, ["plot"], read_only=True)
-    add("project_save_as", "Copy one exact current Managed member and its own bound source bytes into a new independent editable Store, with new project and plot IDs. Does not copy history, publish papers, convert legacy VSZ, or transfer executor grants. After a lost reply retry the identical destination and source revision.",
+    add("project_save_as", "Save one selected current Managed plot and its bound data into a separate editable project with new project and plot IDs. Use the plot ID and revision from its summary. No history or host permissions transfer. After a lost reply retry the identical destination and source revision.",
         {**semantic_plot, "plot_id": string, "revision": {"type": "integer", "minimum": 0},
          "output_dir": semantic_path}, ["plot", "plot_id", "revision", "output_dir"], idempotent=True)
     add("plot_create", "Expert Template/Binding creation through the existing semantic lifecycle; ordinary attachment plotting uses task_start sources+intent. Source-only compatibility remains. Keep idempotency_key unchanged on retry; unresolved scientific choices return a decision.",

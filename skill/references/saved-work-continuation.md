@@ -100,6 +100,10 @@ protection, a real source-update review and missing-raw rejection.
 
 ## Relocate an existing Store
 
+The daily MCP profile has three different paths. Use `sciplot_plot_deliver` to
+hand off snapshots for a paper. Use Store relocation to edit the same project
+from a new location. Use Save As to make a separate editable copy of one figure.
+
 Use the exact root of an already versioned Store, not a figure handle, raw
 VSZ, task directory or paper package. Choose new paths under existing research
 directories:
@@ -109,13 +113,17 @@ sciplot project bundle-export STORE_ROOT --out NEW_BUNDLE --json
 sciplot project bundle-import BUNDLE_ROOT --out NEW_PROJECT_PATH --json
 ```
 
-The expert MCP tools are `sciplot_project_bundle_export` and
-`sciplot_project_bundle_import`. They use the same Store owner as the CLI.
+In daily or expert MCP, call `sciplot_project_bundle_export` with
+`project` (the exact Store root) and `output_dir` (a new bundle directory).
+Then call `sciplot_project_bundle_import` with the returned `bundle` path and
+an unused `output_dir` for the project. Both tools use the same Store owner as
+the CLI.
 Compare returned `project_id` and `generation` before continuing at the new
-location. Import preserves the project and admitted history, without granting
-executor permissions or external export destinations from another host. New
-exports stay with the moved Store; use a new delivery destination for a visible
-package. An installed paper snapshot still cannot recover the original Store.
+location. Use the returned `project` path to reopen it. Import preserves the
+project and admitted history, without granting executor permissions or external
+export destinations from another host. New exports stay with the moved Store;
+use a new delivery destination for a visible package. An installed paper
+snapshot still cannot recover the original Store.
 
 Keep using one active location for the project. This operation does not give
 two independently writable identities and does not remove the previous
@@ -148,5 +156,5 @@ This command does not transfer executor permissions. Plots that declare
 external executors are refused; restore or operate on them in their original
 project. For a standalone old VSZ, use the explicit legacy conversion if the
 old figure is supported. Moving an entire project with its history and same
-identity is a different operation. MCP's `sciplot_project_save_as` takes
-`plot`, `plot_id`, `revision` and `output_dir`.
+identity is a different operation. In daily or expert MCP,
+`sciplot_project_save_as` takes `plot`, `plot_id`, `revision` and `output_dir`.

@@ -118,7 +118,8 @@ def test_official_stdio_client_discovery_and_error_recovery():
             daily = {tool.name: tool for tool in daily_tools}
             assert {"sciplot_task_start", "sciplot_task_resume", "sciplot_task_edit", "sciplot_read_result",
                     "sciplot_plot_export", "sciplot_plot_resume", "sciplot_plot_decide", "sciplot_compose",
-                    "sciplot_project_legacy_redraw", "sciplot_project_legacy_convert"} <= daily.keys()
+                    "sciplot_project_legacy_redraw", "sciplot_project_legacy_convert", "sciplot_plot_deliver",
+                    "sciplot_project_bundle_export", "sciplot_project_bundle_import", "sciplot_project_save_as"} <= daily.keys()
             assert daily.keys() < discovered.keys()
             for tool in daily_tools:
                 Draft202012Validator.check_schema(tool.input_schema)

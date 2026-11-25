@@ -23,10 +23,15 @@ PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4
 def test_tool_discovery_uses_closed_shared_operation_schema():
     tools = {item.name: item for item in tool_definitions()}
     assert len(tools) == 53
-    assert set(tools["sciplot_project_bundle_export"].input_schema["required"]) == {"project", "output_dir"}
-    assert set(tools["sciplot_project_bundle_import"].input_schema["required"]) == {"bundle", "output_dir"}
-    assert "sciplot_project_bundle_import" not in {tool.name for tool in tool_definitions("daily")}
     daily = {item.name: item for item in tool_definitions("daily")}
+    for operation, required in {
+        "bundle_export": {"project", "output_dir"},
+        "bundle_import": {"bundle", "output_dir"},
+        "save_as": {"plot", "plot_id", "revision", "output_dir"},
+    }.items():
+        name = f"sciplot_project_{operation}"
+        assert daily[name] == tools[name]
+        assert set(daily[name].input_schema["required"]) == required
     for name in ("sciplot_project_legacy_redraw", "sciplot_project_legacy_convert"):
         assert set(daily[name].input_schema["required"]) == {"target", "output_dir"}
         assert daily[name].annotations.read_only_hint is False

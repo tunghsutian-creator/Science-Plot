@@ -79,7 +79,10 @@ DAILY_INSTRUCTIONS = (
     "For an editable figure use task_edit for common changes, or plot_describe for exact "
     "capabilities. Use summary/edit scopes only when advertised. "
     "Review preview resources before accepting; follow returned recovery and export "
-    "receipts without reapplying an edit. For existing PDF diagrams use compose with "
+    "receipts without reapplying an edit. plot_deliver makes paper snapshots; "
+    "project_bundle_export then project_bundle_import move the same Store and history; "
+    "project_save_as makes one selected Managed figure an independent editable copy. "
+    "For existing PDF diagrams use compose with "
     "export-pdf for a standalone PDF. Resources are scoped to this server connection. "
     "For specialized workflows or the full upfront schemas reconnect with --profile expert."
 )
