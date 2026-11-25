@@ -1,6 +1,7 @@
 """Copy only the requested files from one ready, current Managed publication."""
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from stat import S_ISDIR, S_ISREG
 from tempfile import TemporaryDirectory
@@ -17,6 +18,7 @@ from sciplot_core.plot_document.validation import validate_wire
 from sciplot_core.plot_engine.backend import PlotBackend
 from sciplot_core.plot_engine.current import require_current
 from sciplot_core.plot_engine.export_status import sealed_publication
+from sciplot_core.plot_engine.managed_delivery_data import capture_plot_data, plotted_dataset_csvs
 from sciplot_core.plot_ir.figure_document import is_figure
 from sciplot_core.project_store.source_resolver import ProjectSourceResolver
 from sciplot_core.studio_core.source_update_files import reject_symlink_path
@@ -32,6 +34,14 @@ class FigureInstall(TypedDict):
     directory_identity: list[int]
     revision_token: dict[str, Any]
     result: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class _PlottedSeal:
+    ir_path: Path
+    ir_hash: str
+    ir_sha256: str
+    samples: dict[str, str]
 
 
 def _directory_identity(path: Path) -> list[int]:
@@ -57,7 +67,8 @@ def _installed_matches(out: Path, token: RevisionToken, result: dict[str, Any], 
         return False
 
 
-def _publication(root: Path, out: Path, request: dict[str, Any], backend: PlotBackend) -> tuple[RevisionToken, list[dict[str, str]]]:
+def _publication(root: Path, out: Path, request: dict[str, Any],
+                 backend: PlotBackend) -> tuple[RevisionToken, list[dict[str, str]] | _PlottedSeal]:
     with project_query(root):
         if not has_head(root):
             raise EngineError("figure_handoff_managed_required", "Select an exact current Managed v2 plot.")
@@ -81,6 +92,10 @@ def _publication(root: Path, out: Path, request: dict[str, Any], backend: PlotBa
         require_current(backend, binding)
         publication = sealed_publication(root, head) or {}
         if publication.get("ready_to_use") is True:
+            if request["formats"] == ["plotted_csv"]:
+                samples = {identifier: mapping["sample"] for identifier, mapping in document["scientific"]["mappings"].items()
+                           if "sample" in mapping}
+                return token, _PlottedSeal(Path(binding["ir_path"]), publication["ir_hash"], publication["ir_sha256"], samples)
             records = [entry for entry in publication["exports"] if entry["format"] in request["formats"]]
             if len(records) == len(request["formats"]) and {entry["format"] for entry in records} == set(request["formats"]):
                 return token, records
@@ -103,26 +118,36 @@ def handoff_figure(root: Path, request: dict[str, Any], backend: PlotBackend, *,
         raise EngineError("figure_handoff_destination_exists", "Choose a new output directory; nothing was replaced.")
     if not out.parent.is_dir():
         raise EngineError("figure_handoff_invalid_destination", "The parent directory must already exist.")
-    token, records = _publication(root, out, request, backend)
-    files = [{**record, "path": str(out / Path(record["path"]).name)} for record in records]
+    token, evidence = _publication(root, out, request, backend)
     result = {"kind": "sciplot_figure_handoff", "version": 1, "status": "exported", "ready_to_use": True,
-              "plot": str(root), "plot_id": token.plot_id, "revision": token.revision, "output_dir": str(out),
-              "exports": files}
+              "plot": str(root), "plot_id": token.plot_id, "revision": token.revision, "output_dir": str(out)}
+    if not isinstance(evidence, _PlottedSeal):
+        result["exports"] = [{**record, "path": str(out / Path(record["path"]).name)} for record in evidence]
     if installed is not None:
-        if _installed_matches(Path(request["output_dir"]), token, result, installed):
+        if not isinstance(evidence, _PlottedSeal) and _installed_matches(Path(request["output_dir"]), token, result, installed):
             return result
         raise EngineError("figure_handoff_install_changed", "The task's selected-file delivery is missing, changed or not its own; nothing was replaced.")
     try:
         with TemporaryDirectory(prefix=".sciplot-figure-", dir=out.parent) as temporary:
             staged = Path(temporary) / "figure"
             staged.mkdir()
-            for record in records:
-                source = Path(record["path"])
-                copy_sealed_file(source, staged / source.name, record["sha256"])
+            if isinstance(evidence, _PlottedSeal):
+                data = capture_plot_data(evidence.ir_path, sha256=evidence.ir_sha256,
+                    expected={"ir_hash": evidence.ir_hash, "scientific_hash": token.scientific_hash,
+                              "presentation_hash": token.presentation_hash})
+                files = plotted_dataset_csvs(data, staged, evidence.samples)
+                result.update(exports=[{**file, "path": str(out / file["path"])} for file in files],
+                              ir_hash=evidence.ir_hash, ir_sha256=evidence.ir_sha256,
+                              scientific_hash=token.scientific_hash, presentation_hash=token.presentation_hash,
+                              coordinate_space="scientific_layer_inputs")
+            else:
+                for record in evidence:
+                    source = Path(record["path"])
+                    copy_sealed_file(source, staged / source.name, record["sha256"])
             if before_install is not None:
                 before_install({"directory_identity": _directory_identity(staged),
                                 "revision_token": token.to_payload(), "result": result})
-            if _publication(root, out, request, backend) != (token, records):
+            if _publication(root, out, request, backend) != (token, evidence):
                 raise EngineError("figure_handoff_publication_changed", "The selected publication changed during handoff.")
             install_new_delivery(staged, out)
     except FileExistsError as exc:

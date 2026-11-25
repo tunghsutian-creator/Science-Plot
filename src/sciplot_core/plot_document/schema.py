@@ -78,5 +78,5 @@ def figure_handoff_schema() -> dict[str, Any]:
         "output_dir": {"type": "string", "pattern": "^/"},
         "plot_id": IDENTIFIER,
         "revision": {"type": "integer", "minimum": 0},
-        "formats": figure_formats_schema(),
+        "formats": {"oneOf": [figure_formats_schema(), {"const": ["plotted_csv"]}]},
     })

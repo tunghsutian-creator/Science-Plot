@@ -24,6 +24,22 @@ rebuilds a publication, or copies a VSZ or data file. If the publication is
 missing, finish the existing `plot export PLOT` operation first. On a stale
 revision, read the current summary again before selecting new files.
 
+## Export only the plotted data columns
+
+Use the same exact plot, revision and fresh directory with `--plotted-csv`
+instead of `--tiff`. In daily MCP, set the `sciplot_plot_export` handoff's
+`formats` to `["plotted_csv"]`. The directory contains one CSV per dataset
+feeding the figure's visible layers, and no figures or sidecar files.
+
+The returned receipt links each CSV and its byte hash to the saved PlotIR,
+dataset, layer, bound sample (where declared), column units, and source-table
+selection and transform identities. It preserves original row order, paired
+column values (including gaps), and independent dataset lengths. The values
+are the sealed data feeding the plotted layers, not screen geometry: presentation
+interpolation or offsets are not applied, and no analysis is rerun. Use
+`plot deliver` when you also need the exact IR and full provenance in a paper
+snapshot. First-figure task formats are unchanged.
+
 ## Package editable snapshots for handoff
 
 Reuse each plot's current `plot`, `plot_id` and `revision`. Labels below are

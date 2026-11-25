@@ -240,6 +240,8 @@ See [find and continue saved work](skill/references/saved-work-continuation.md).
 [Selected paper figures](skill/references/paper-figures.md) explains how to
 package an ordered figure selection across saved projects. Use the exact plot
 handle and revision to select one Managed figure from a multi-figure item.
+To audit the plotted values without an entire package, [export only plotted data
+CSVs](skill/references/managed-delivery.md#export-only-the-plotted-data-columns).
 
 AI-driven panel assembly brings saved figures and microscopy images or diagrams
 onto one physical page. The `compose` commands and matching MCP tools use one

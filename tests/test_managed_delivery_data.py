@@ -73,3 +73,36 @@ def test_ir_content_seal_and_selected_identity_checked_before_csv(tmp_path, chan
         project_data(capture_plot_data(path, expected=expected), tmp_path / "attempt", "001_figure")
     assert caught.value.reason_code == ("plot_ir_hash_mismatch" if change == "tampered_values" else "managed_delivery_ir_changed")
     assert not (tmp_path / "attempt").exists()
+
+
+def test_selected_csv_keeps_bound_columns_distinct_lengths_nulls_and_layer_provenance(tmp_path):
+    from sciplot_core.plot_engine.managed_delivery_data import PlotData, plotted_dataset_csvs
+
+    first = deepcopy(managed_ir()["datasets"]["raw:A"])
+    first["columns"] = {
+        "x": {"label": "Wavenumber", "unit": "cm^-1", "values": [780, 820, 870]},
+        "unused": {"label": "Other measurement", "unit": "K", "values": [300, 302, 303]},
+        "y": {"label": "Transmittance", "unit": "%", "values": [1.2345678901234567, None, 30]},
+    }
+    short = deepcopy(first)
+    for column in short["columns"].values():
+        column["values"] = column["values"][:1]
+    layer = {"label": "Duplicate display name", "role": "measurement", "mappings": {"x": "x", "y": "y"},
+             "marks": [{"id": "interpolated"}]}
+    data = PlotData({}, {"datasets": {"original-input": first, "visible:long": first, "visible:short": short,
+                                     "hidden": short},
+                        "views": [{"id": "view:main", "layers": [
+                            {**layer, "id": "long", "dataset_id": "visible:long"},
+                            {**layer, "id": "short", "dataset_id": "visible:short"},
+                            {**layer, "id": "hidden", "dataset_id": "hidden", "visible": False}]}],
+                        "display_curves": {"interpolated": {"curve": {"x": [820], "y": [99]}}}})
+    records = plotted_dataset_csvs(data, tmp_path, {"long": "A", "short": "B"})
+    assert [record["dataset_id"] for record in records] == ["visible:long", "visible:short"]
+    assert set(file.name for file in tmp_path.iterdir()) == {"001.csv", "002.csv"}
+    assert [record["row_count"] for record in records] == [3, 1]
+    assert [record["layers"][0]["sample"] for record in records] == ["A", "B"]
+    assert all(record["column_ids"] == ["x", "y"] and record["layers"][0]["display_curve"] for record in records)
+    assert [record["provenance"]["sources"][0]["sha256"] for record in records] == [
+        first["provenance"]["sources"][0]["sha256"], short["provenance"]["sources"][0]["sha256"]]
+    assert (tmp_path / "001.csv").read_text() == "Wavenumber,Transmittance\n780,1.2345678901234567\n820,\n870,30\n"
+    assert (tmp_path / "002.csv").read_text() == "Wavenumber,Transmittance\n780,1.2345678901234567\n"

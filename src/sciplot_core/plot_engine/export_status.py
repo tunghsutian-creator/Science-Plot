@@ -84,4 +84,5 @@ def sealed_publication(root: Path, head: dict[str, Any]) -> dict[str, Any] | Non
             or not proof.get("document_sha256") or files.get(binding.get("document")) != proof["document_sha256"]
             or not evidence_current(files, cache.get("evidence_inventories"))):
         return None
-    return _publication(cache, head)
+    publication = _publication(cache, head)
+    return {**publication, "ir_sha256": proof["ir_sha256"]} if publication is not None else None
