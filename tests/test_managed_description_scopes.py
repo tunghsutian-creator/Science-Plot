@@ -1,14 +1,13 @@
 """Compact reads preserve managed edit contracts and currentness guards."""
 
 import json
-from contextlib import nullcontext
 from pathlib import Path
 
 import pytest
 from managed_plot_helpers import request_for_source
 from test_figure_document import request_for_figure
 
-from sciplot_core.project_lifecycle import application as service_module
+from sciplot_core.project_lifecycle import managed_application as service_module
 from sciplot_core.plot_engine.description_scope import selector_issues
 from sciplot_core.plot_engine.figure_updates import patch_capabilities
 from sciplot_core.plot_engine.service import PlotService
@@ -37,7 +36,6 @@ def _service(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, figure: bool = 
                ]}}
     head = {"document": document, "binding": binding}
     monkeypatch.setattr(service_module, "load_head", lambda _: head)
-    monkeypatch.setattr(service_module, "external_project_session", lambda _: nullcontext())
     monkeypatch.setattr(service_module, "changed_inputs", lambda _backend, _binding: [])
     monkeypatch.setattr(service_module, "active", lambda _: None)
     monkeypatch.setattr(service_module, "dependency_state", lambda _doc, _binding, _changed: {"invalidated": []})

@@ -11,14 +11,13 @@ from test_managed_source_reconfirmation import basic, fresh_value, patch
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_document import seal_document
 from sciplot_core.plot_engine import current_unit_admission, managed_state
-from sciplot_core.project_lifecycle import publication_repair
-from sciplot_core.project_lifecycle import application as service
+from sciplot_core.project_lifecycle import managed_application, patch_execution, publication_repair
 from sciplot_core.plot_engine.content_store import intern_document
 from sciplot_core.plot_engine.current_unit_admission import admit_current_units, prepare_current_update
 from sciplot_core.plot_engine.managed_sources import load_sources
 from sciplot_core.plot_engine.managed_updates import prepare_update
 from sciplot_core.plot_engine.service import PlotService
-from sciplot_core.plot_engine.storage import digest, write
+from sciplot_core.plot_engine.storage import digest, transaction_path, write
 
 
 def forbidden(*args, **kwargs):
@@ -79,15 +78,20 @@ def test_invalid_fresh_source_closure_has_no_reservation_journal_executor_or_hea
         value["bindings"].pop("raw:B")
     head = {"document": document, "binding": {}}
     original = deepcopy(head)
-    monkeypatch.setattr(service, "load_head", lambda root: head)
-    monkeypatch.setattr(service, "require_current", forbidden)
+    monkeypatch.setattr(patch_execution, "load_head", lambda root: head)
+    monkeypatch.setattr(patch_execution, "require_current", forbidden)
     monkeypatch.setattr(managed_state, "scientific_binding", forbidden)
     monkeypatch.setattr(publication_repair, "reserve_repair", forbidden)
-    monkeypatch.setattr(service, "persist", forbidden)
-    monkeypatch.setattr(service, "advance", forbidden)
+    monkeypatch.setattr(patch_execution, "persist", forbidden)
+    monkeypatch.setattr(patch_execution, "advance", forbidden)
     root = tmp_path / "unreserved"
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError) as error:
         PlotService(backend=object())._patch(root, patch(document, value))
+    if change == "metadata-proof":
+        assert "Evidence cell text does not match the original" in str(error.value)
+    else:
+        assert error.value.reason_code == {"source-unit": "managed_metadata_conflict",
+                                           "missing-group": "managed_source_hash_invalid"}[change]
     assert head == original and not root.exists()
 
 
@@ -95,9 +99,9 @@ def test_stale_unsaved_revision_rejects_before_source_read_or_reservation(tmp_pa
     document = basic(tmp_path)
     request = patch(document, "a" * 64)
     request["base_revision"] = 8
-    monkeypatch.setattr(service, "load_head", lambda root: {"document": document, "binding": {}})
+    monkeypatch.setattr(patch_execution, "load_head", lambda root: {"document": document, "binding": {}})
     monkeypatch.setattr(current_unit_admission, "admit_current_units", forbidden)
-    monkeypatch.setattr(service, "advance", forbidden)
+    monkeypatch.setattr(patch_execution, "advance", forbidden)
     with pytest.raises(ValueError) as error:
         PlotService(backend=object())._patch(tmp_path / "store", request)
     assert error.value.reason_code == "document_revision_conflict"
@@ -108,13 +112,12 @@ def test_lost_reply_and_cold_service_old_saved_key_replay_exact_request_before_c
     # This historical scalar is no longer safe for a fresh multi-binding request.
     request = patch(document, "a" * 64, key="already-complete")
     tx = {"phase": "complete", "request": request, "request_hash": digest(request), "result": "original exact outcome"}
-    saved = tmp_path / "saved.json"
+    saved = transaction_path(tmp_path, request["idempotency_key"])
     write(saved, tx)
     (tmp_path / "figure.csv").unlink()  # A historical replay cannot require current original input bytes.
-    monkeypatch.setattr(service, "transaction_path", lambda *args: saved)
-    monkeypatch.setattr(service, "load_head", forbidden)
+    monkeypatch.setattr(patch_execution, "load_head", forbidden)
     monkeypatch.setattr(current_unit_admission, "admit_current_units", forbidden)
-    monkeypatch.setattr(service, "replay", lambda root, value, backend: value)
+    monkeypatch.setattr(patch_execution, "replay", lambda root, value, backend: value)
     for _lost_reply_or_new_instance in range(2):
         assert PlotService(backend=object())._patch(tmp_path, deepcopy(request)) == tx
     changed = deepcopy(request)
@@ -162,7 +165,7 @@ def test_virtual_source_namespace_collision_preserves_existing_object_operations
     owner, root, document = _service(tmp_path, monkeypatch)
     spec = figure_spec(document)
     spec["id"] = "source:raw:A"
-    service.load_head(root)["document"] = store_spec(document, spec)
+    managed_application.load_head(root)["document"] = store_spec(document, spec)
     summary = owner.describe(root, description={"scope": "summary"})
     assert summary["edit_targets"]["source:raw:A"]["kind"] == "figure"
     assert set(summary["edit_targets"]["source:raw:A"]["properties"]) == {"theme", "layout", "source.sha256"}

@@ -12,10 +12,11 @@ from test_figure_document import request_for_figure
 
 from sciplot_core.plot_document import seal_document
 from sciplot_core.project_lifecycle import application as service_module
-from sciplot_core.project_lifecycle import admission as admission_module
+from sciplot_core.project_lifecycle import admission as admission_module, patch_execution
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.managed_updates import prepare_update
 from sciplot_core.plot_engine.service import PlotService
+from sciplot_core.plot_engine.storage import digest, transaction_path, write
 from sciplot_core.plot_engine.typed_intent import compile_intent, validate_intent
 from sciplot_core.plot_ir import create_managed_document
 from sciplot_core.plot_protocol import rpc
@@ -233,20 +234,16 @@ def test_apply_retry_resolves_original_snapshot_not_renamed_label(tmp_path: Path
     newer, _, _, _ = prepare_update(original, patch)
     newer["revision"] = 1
     newer = seal_document(newer)
-    saved = root / "transaction.json"
-    saved.write_text("{}")
     monkeypatch.setattr(service_module, "canonical_path", lambda path: path)
     monkeypatch.setattr(service_module, "external_project_session", lambda _: nullcontext())
-    monkeypatch.setattr(service_module, "transaction_path", lambda *_: saved)
-    monkeypatch.setattr(admission_module, "transaction_path", lambda *_: saved)
-    transaction = {"before": original, "request": patch.to_payload(), "request_hash": service_module.digest(patch.to_payload()),
+    transaction = {"before": original, "request": patch.to_payload(), "request_hash": digest(patch.to_payload()),
                    "phase": "complete"}
-    monkeypatch.setattr(service_module, "read", lambda _: transaction)
-    monkeypatch.setattr(admission_module, "read", lambda _: transaction)
-    monkeypatch.setattr(service_module, "load_head", lambda _: {"document": newer})
+    write(transaction_path(root, patch.to_payload()["idempotency_key"]), transaction)
+    monkeypatch.setattr(admission_module, "load_head", lambda _: {"document": newer})
+    monkeypatch.setattr(patch_execution, "load_head", lambda _: {"document": newer})
     service = PlotService(backend=object())
     replayed = []
-    monkeypatch.setattr(service_module, "replay", lambda _root, tx, _backend: replayed.append(tx) or {"status": "complete"})
+    monkeypatch.setattr(patch_execution, "replay", lambda _root, tx, _backend: replayed.append(tx) or {"status": "complete"})
     assert service.intent(root, _request(mode="apply"))["status"] == "complete"
     assert replayed == [transaction]
     with pytest.raises(EngineError) as stale:
