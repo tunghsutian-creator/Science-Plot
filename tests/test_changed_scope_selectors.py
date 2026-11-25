@@ -206,6 +206,15 @@ def test_ai_only_owner_boundaries_keep_business_absence_and_unknown_refusals():
                        if row["check_id"] == "pytest_changed_owners")
         assert targets <= set(command)
         assert "full_pytest" in plan["required_later"]["release"]
+    for path, owner_id in (
+        ("materials_rules/thermal_metrics.py", "materials_analysis"),
+        ("semantic_sources/curve_output.py", "scientific_transform"),
+        ("studio_core/managed_curve_query.py", "native_project_commands"),
+        ("studio_core/project_query_paths.py", "native_project_commands"),
+    ):
+        plan = build_changed_verification_plan([f"src/sciplot_core/{path}"], repo_root=root)
+        assert plan["status"] == "planned" and not plan["unowned_paths"]
+        assert owner_id in {row["owner_id"] for row in plan["owners"]}
     renamed = build_changed_verification_plan(
         ["src/sciplot_gui/studio_assistant_history/contracts.py"], repo_root=root)
     assert {row["owner_id"] for row in renamed["owners"]} == {"assistant_history"}
