@@ -29,3 +29,14 @@ def patch(description, key, prop, value, target, *, scientific=False):
     return {"plot_id": description["plot_id"], "base_revision": description["revision"],
             "idempotency_key": key, "intent_class": "scientific" if scientific else "presentation",
             "changes": [{"op": "set", "target": [target], "property": prop, "value": value}]}
+
+
+def read_managed_head_and_ir(plot: Path):
+    """Inspect a bound IR in the exact repository selected for the plot."""
+    from sciplot_core.project_lifecycle.context import repository_scope
+    from sciplot_core.project_lifecycle.repository_router import ComposedProjectRepository
+
+    owner = ComposedProjectRepository()
+    with repository_scope(owner), owner.query_scope(plot):
+        head = owner.load_head(plot)
+        return head, owner.read(Path(head["binding"]["ir_path"]))

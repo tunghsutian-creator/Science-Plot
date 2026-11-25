@@ -89,7 +89,11 @@ class RepositoryBackendPaths:
 
     def export(self, binding: dict[str, Any]) -> dict[str, Any]:
         with self.repository.binding_scope(binding):
-            result: dict[str, Any] = self.backend.export(binding)
+            active = binding
+            if binding.get("kind") == "sciplot_managed_binding":
+                # Audit the actual derivative view, not a saved host locator.
+                active = {**binding, "ir_path": str(self.repository.runtime_path(Path(binding["ir_path"])))}
+            result: dict[str, Any] = self.backend.export(active)
             output = self.repository.managed_publication_output(binding)
             if output is not None and result.get("ready_to_use") is True:
                 from .managed_artifact_projection import publish_managed_artifacts

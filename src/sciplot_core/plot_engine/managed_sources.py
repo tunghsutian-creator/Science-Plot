@@ -1,5 +1,6 @@
 """Load explicit managed table bindings through the existing original-table owner."""
 
+from pathlib import Path
 from typing import Any
 import math
 
@@ -39,7 +40,8 @@ def _selected_source(source: dict[str, Any], rule_id: str) -> dict[str, Any]:
         raise EngineError("managed_source_changed", "Use the exact original source bytes or explicitly refresh their scientific binding.")
     if "table_selection" not in source:
         raise EngineError("managed_table_selection_required", "Managed data requires explicit original worksheet and row bounds.")
-    snapshot = source_table_snapshot(path, rule_id=rule_id, sheets=[source["table_selection"]["sheet"]])
+    snapshot = source_table_snapshot(Path(source["path"]), rule_id=rule_id,
+                                     sheets=[source["table_selection"]["sheet"]], expected_sha256=source["sha256"])
     if snapshot is None:
         raise EngineError("managed_source_unsupported", "This source format does not support explicit original-table binding.")
     selected = select_table(snapshot, source["table_selection"], source.get("metadata_confirmations"))

@@ -12,7 +12,7 @@ from test_figure_document import request_for_figure
 
 from sciplot_core._paths import REPO_ROOT
 from sciplot_core.native_font_catalog import installed_font_families
-from sciplot_core.plot_engine.storage import load_head, read
+from managed_plot_helpers import read_managed_head_and_ir
 
 
 @pytest.mark.comprehensive
@@ -43,12 +43,11 @@ def test_official_mcp_font_edit_keeps_default_mac_server_alive_and_rejects_unava
             created = await client.call_tool("sciplot_plot_create", {"request": request})
             assert not created.is_error, created.content
             root = Path(created.structured_content["plot"])
-            initial = load_head(root)
-            original_ir = read(Path(initial["binding"]["ir_path"]))
+            initial, original_ir = read_managed_head_and_ir(root)
             missing = tmp_path / "invalid-font-entry"
             invalid = await client.call_tool("sciplot_task_edit", {"target": str(root), "font_family": "SciPlot missing font 92831", "task_dir": str(missing)})
             assert invalid.is_error and not missing.exists()
-            assert load_head(root) == initial and source.read_bytes() == original_source
+            assert read_managed_head_and_ir(root)[0] == initial and source.read_bytes() == original_source
             assert not (await client.call_tool("sciplot_capabilities", {})).is_error
             arguments = {"target": str(root), "font_family": family, "task_dir": str(tmp_path / "valid-font-entry")}
             edited = await client.call_tool("sciplot_task_edit", arguments)
@@ -57,8 +56,7 @@ def test_official_mcp_font_edit_keeps_default_mac_server_alive_and_rejects_unava
             assert result["status"] == "complete" and result["ready_to_use"]
             assert result["doctor"]["status"] == "ready"
             assert result["revision"] == 1 and result["scientific_hash"] == initial["document"]["scientific_hash"]
-            after = load_head(root)
-            ir = read(Path(after["binding"]["ir_path"]))
+            after, ir = read_managed_head_and_ir(root)
             assert ir["datasets"] == original_ir["datasets"] and ir["scales"] == original_ir["scales"]
             typography = [axis["style"] for view in ir["views"] for axis in view["axes"]]
             typography += [view["panel_label_style"] for view in ir["views"]]
@@ -70,7 +68,7 @@ def test_official_mcp_font_edit_keeps_default_mac_server_alive_and_rejects_unava
             assert all(Path(item["path"]).is_file() for item in result["exports"])
             replay = await client.call_tool("sciplot_task_edit", arguments)
             assert not replay.is_error and replay.structured_content["replayed"]
-            assert load_head(root) == after and source.read_bytes() == original_source
+            assert read_managed_head_and_ir(root)[0] == after and source.read_bytes() == original_source
             assert not (await client.call_tool("sciplot_capabilities", {})).is_error
             assert (await client.list_tools()).tools
     anyio.run(scenario)

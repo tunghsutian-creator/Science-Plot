@@ -8,7 +8,7 @@ from test_figure_legend_order import LAYERS, legend_request, order_patch
 from test_managed_source_append_native import _cli
 
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.plot_engine.storage import load_head, read
+from managed_plot_helpers import read_managed_head_and_ir
 from sciplot_core.plot_ir.figure_document import figure_spec
 
 
@@ -25,26 +25,25 @@ def test_cold_public_legend_order_review_reject_replay_and_native_entries_preser
     created = _cli(tmp_path, 'create', request=request)
     assert created['ready_to_use'], created
     root = Path(created['plot'])
-    before = load_head(root)
-    before_ir = read(Path(before['binding']['ir_path']))
+    before, before_ir = read_managed_head_and_ir(root)
     edit = _cli(tmp_path, 'describe', root, arguments=('--scope', 'edit', '--target-id', 'guide:legend', '--property', 'legend.order'))
     assert edit['current_value'] == [] and edit['figure_edit_contract']['guide:legend']['legend.order']['risk'] == 'review'
     rejected_request = order_patch(before['document'], [LAYERS[2], LAYERS[0], LAYERS[1]], key='reject-legend-order')
     pending = _cli(tmp_path, 'patch', root, rejected_request)
-    assert pending['status'] == 'needs_review' and load_head(root) == before
+    assert pending['status'] == 'needs_review' and read_managed_head_and_ir(root)[0] == before
     rejected = _cli(tmp_path, 'decide', root, {**pending['next_step']['request'], 'accept': False})
-    assert rejected['status'] == 'rejected' and load_head(root) == before
+    assert rejected['status'] == 'rejected' and read_managed_head_and_ir(root)[0] == before
     accepted_request = deepcopy(rejected_request)
     accepted_request['idempotency_key'] = 'accept-legend-order'
     accepted_request['changes'].append({'op': 'set', 'target': [LAYERS[1]], 'property': 'series.visible', 'value': False})
     review = _cli(tmp_path, 'patch', root, accepted_request)
-    assert review['status'] == 'needs_review' and load_head(root) == before
+    assert review['status'] == 'needs_review' and read_managed_head_and_ir(root)[0] == before
     accepted = _cli(tmp_path, 'decide', root, review['next_step']['request'])
     assert accepted['ready_to_use'] and accepted['revision'] == 1
     assert _cli(tmp_path, 'patch', root, accepted_request)['replayed']
     cold = _cli(tmp_path, 'open', root, arguments=('--scope', 'summary'))
     assert cold['revision'] == 1 and cold['scientific_hash'] == before['document']['scientific_hash']
-    current = load_head(root)
+    current = read_managed_head_and_ir(root)[0]
     third = figure_spec(current['document'])['views'][0]['layers'][2]
     late = {'plot_id': current['document']['plot_id'], 'base_revision': current['document']['revision'],
         'idempotency_key': 'late-curve-width', 'intent_class': 'presentation', 'changes': [{'op': 'set',
@@ -54,8 +53,7 @@ def test_cold_public_legend_order_review_reject_replay_and_native_entries_preser
     assert edited['ready_to_use'] and edited['revision'] == 2
     exported = _cli(tmp_path, 'export', root)
     assert exported['ready_to_use'] and exported['revision'] == 2
-    final = load_head(root)
-    ir = read(Path(final['binding']['ir_path']))
+    final, ir = read_managed_head_and_ir(root)
     assert ir['datasets'] == before_ir['datasets'] and ir['scales'] == before_ir['scales']
     assert final['document']['scientific_hash'] == before['document']['scientific_hash']
     assert figure_spec(final['document'])['guides'][0]['order'] == [LAYERS[2], LAYERS[0], LAYERS[1]]

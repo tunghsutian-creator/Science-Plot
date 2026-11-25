@@ -323,7 +323,7 @@ def test_append_keeps_original_revision_guard(tmp_path):
 
 
 def test_source_facts_clarification_allocates_no_transaction_and_same_key_can_continue(tmp_path, monkeypatch):
-    from sciplot_core.project_lifecycle import application as service_module
+    from sciplot_core.project_lifecycle import patch_execution as service_module
     from sciplot_core.plot_engine.service import PlotService
     from sciplot_core.plot_engine.storage import transaction_path
 

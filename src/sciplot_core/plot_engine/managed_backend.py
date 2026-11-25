@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.foundation.file_hashing import existing_file_sha256, file_sha256
 from sciplot_core.plot_backends.managed import ManagedVeuszCompiler, compiler_identity
 from sciplot_core.plot_document import validate_document
@@ -297,11 +296,11 @@ class ManagedBackend:
         ir, native = self._ensure(binding, verify_existing=False)
         result = self.compiler.export_ir(ir, native, native.parent / "exports")
         if "native_export_audit" in result:
-            from sciplot_core.source_coverage.file_snapshots import _physical_file_snapshot
             import json
+            from sciplot_core.source_coverage.file_snapshots import _physical_file_snapshot
 
             ir_path = Path(binding["ir_path"])
-            snapshot = _physical_file_snapshot(canonical_path(ir_path), literal=ir_path, label="Managed published PlotIR")
+            snapshot = _physical_file_snapshot(ir_path, literal=ir_path, label="Managed published PlotIR")
             if json.loads(snapshot["bytes"]) != ir:
                 raise EngineError("managed_ir_conflict", "The saved PlotIR differs from the audited export.")
             result["native_export_audit"].update(canonical_sha256=binding["canonical_sha256"], ir_sha256=snapshot["sha256"])

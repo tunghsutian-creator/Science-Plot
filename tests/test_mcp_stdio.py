@@ -192,7 +192,10 @@ def test_stdio_native_preview_style_apply_export_and_new_connection(tmp_path):
 @pytest.mark.parametrize("defer_export", [False, True])
 def test_stdio_local_task_creates_then_reviews_applies_and_exports_annotation(tmp_path, defer_export):
     source = tmp_path / "UVvis.csv"
-    source.write_text("Wavelength,Absorbance\nnm,a.u.\nA,A\n400,1\n450,3\n500,2\n", encoding="utf-8")
+    # This acceptance covers the still-supported prepared native editor.
+    # A two-sample UV-vis input is outside the single-curve Managed cutover.
+    source.write_text("Wavelength,Absorbance,Wavelength,Absorbance\nnm,a.u.,nm,a.u.\nA,A,B,B\n"
+                      "400,1,400,4\n450,3,450,5\n500,2,500,4\n", encoding="utf-8")
     raw = source.read_bytes()
 
     async def scenario():

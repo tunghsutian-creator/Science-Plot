@@ -1,5 +1,6 @@
 """Generated real native append acceptance through cold public CLI processes."""
 
+from managed_plot_helpers import read_managed_head_and_ir
 from socket_fixture_helpers import socket_directory
 
 from copy import deepcopy
@@ -18,7 +19,9 @@ from test_managed_source_append import append_request
 from sciplot_core._paths import REPO_ROOT
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_engine.service import PlotService
-from sciplot_core.plot_engine.storage import load_head, read, transaction_path
+from sciplot_core.plot_engine.storage import load_head, transaction_path
+from sciplot_core.project_lifecycle.context import repository_scope
+from sciplot_core.project_lifecycle.repository_router import ComposedProjectRepository
 from sciplot_core.plot_ir.figure_document import figure_spec
 
 
@@ -57,8 +60,8 @@ def test_cold_cli_append_review_tamper_reject_accept_repeat_and_export(tmp_path)
     styled = _cli(tmp_path, 'patch', plot, style)
     assert styled['ready_to_use'] and styled['revision'] == 1, styled
     before = load_head(plot)
+    _, before_ir = read_managed_head_and_ir(plot)
     before_spec = figure_spec(before['document'])
-    before_ir = read(Path(before['binding']['ir_path']))
     contract = _cli(tmp_path, 'describe', plot, arguments=('--scope', 'edit', '--target-id', 'view:A', '--property', 'source.append'))
     assert contract['next_step']['intent_class'] == 'scientific'
 
@@ -79,7 +82,9 @@ def test_cold_cli_append_review_tamper_reject_accept_repeat_and_export(tmp_path)
     pending = _cli(tmp_path, 'patch', plot, request)
     assert pending['status'] == 'needs_review' and pending['revision'] == 2, pending
     assert load_head(plot) == before
-    review = read(Path(pending['evidence']))['review']
+    selected = ComposedProjectRepository()
+    with repository_scope(selected), selected.query_scope(plot):
+        review = selected.read(Path(pending['evidence']))['review']
     assert pending['before_preview'] == review['before_preview']
     assert pending['source_append_evidence'] == {'path': pending['evidence'], 'json_pointer': '/review/source_append'}
     assert review['scientific_audit']['status'] == review['source_append']['before_scientific_audit']['status'] == 'passed'
@@ -109,8 +114,7 @@ def test_cold_cli_append_review_tamper_reject_accept_repeat_and_export(tmp_path)
     assert accepted['plot_id'] == created['plot_id']
     replay = _cli(tmp_path, 'patch', plot, accepted_request)
     assert replay['replayed'] and replay['ready_to_use'] and replay['revision'] == 2
-    current = load_head(plot)
-    ir = read(Path(current['binding']['ir_path']))
+    current, ir = read_managed_head_and_ir(plot)
     spec = figure_spec(current['document'])
     assert spec['views'][0]['layers'][0] == before_spec['views'][0]['layers'][0]
     assert spec['views'][0]['axes'] == before_spec['views'][0]['axes']
@@ -210,8 +214,10 @@ def test_public_ordinary_cooling_task_cold_append_keeps_source_and_native_arrays
             assert process.returncode == 0, process.stdout + process.stderr
             created = json.loads(process.stdout)
             assert created['status'] == 'complete', created
-            server_pid = read_owner(socket)['pid']
+            assert not socket.exists(), "An ordinary task must use its invocation-local owner."
             plot = Path(created['project'])
+            _cli(tmp_path, 'open', plot, arguments=('--scope', 'summary'), direct=False)
+            server_pid = read_owner(socket)['pid']
             initial = load_head(plot)
             assert initial['document']['scientific']['provenance']['managed']['rule_id'] == 'ordinary_xy'
             assert initial['document']['scientific']['provenance']['binding']['semantic_task']['intent'] == intent
@@ -223,9 +229,8 @@ def test_public_ordinary_cooling_task_cold_append_keeps_source_and_native_arrays
                     {'op': 'set', 'target': ['guide:legend'], 'property': 'legend.location', 'value': 'bottom-left'}]}
             styled = _cli(tmp_path, 'patch', plot, style, direct=False)
             assert styled['ready_to_use'], styled
-            before = load_head(plot)
+            before, before_ir = read_managed_head_and_ir(plot)
             before_spec = figure_spec(before['document'])
-            before_ir = read(Path(before['binding']['ir_path']))
             query = {'plot_id': initial['document']['plot_id'], 'base_revision': styled['revision'],
                 'idempotency_key': 'cooling-add-B', 'intent_class': 'scientific', 'changes': [{'op': 'set',
                 'target': ['view:main'], 'property': 'source.append', 'value': {'source': {'source_id': 'raw:B', 'path': str(source_b)}}}]}
@@ -256,9 +261,8 @@ def test_public_ordinary_cooling_task_cold_append_keeps_source_and_native_arrays
             assert cold['status'] == 'current'
             exported = _cli(tmp_path, 'export', plot, direct=False)
             assert exported['ready_to_use'] and exported['revision'] == 2
-            current = load_head(plot)
+            current, ir = read_managed_head_and_ir(plot)
             spec = figure_spec(current['document'])
-            ir = read(Path(current['binding']['ir_path']))
             assert spec['views'][0]['layers'][0] == before_spec['views'][0]['layers'][0]
             assert spec['views'][0]['axes'] == before_spec['views'][0]['axes'] and spec['scales'] == before_spec['scales']
             assert spec['guides'][0]['location'] == 'bottom-left'
