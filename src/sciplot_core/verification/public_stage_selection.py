@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-import os
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -124,10 +122,13 @@ def record_report(report: Any) -> None:
     _reports.append({"nodeid": report.nodeid, "when": report.when, "outcome": report.outcome, "skip_reason": reason})
 
 
-def write_reports(session: Any, exitstatus: Any) -> None:
-    from sciplot_core.verification.evidence import atomic_json
+def take_reports() -> list[dict[str, Any]]:
+    return list(_reports)
 
-    destination = os.environ.get("SCIPLOT_PUBLIC_STAGE_REPORT")
-    if destination:
-        atomic_json(Path(destination), {"selected_tests": [item.nodeid for item in session.items],
-                                        "exit_code": int(exitstatus), "reports": list(_reports)})
+
+def validate_profile_selectors(profile: str, targets: list[str] | None) -> None:
+    affected = profile in TARGETED_SCOPES
+    if profile not in {"public-focused", "public-comprehensive", "public-all", *TARGETED_SCOPES}:
+        raise ValueError("Only exact public profiles may execute in a source stage.")
+    if affected != bool(targets) or (targets is not None and not affected):
+        raise ValueError("Only an affected public profile requires explicit nonempty test selectors.")
