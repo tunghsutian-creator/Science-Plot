@@ -10258,7 +10258,14 @@
       "tests/test_managed_curve_project_creation.py::test_source_only_uvvis_single_and_group_keep_managed_authority_through_retry_and_cold_edit",
       "tests/test_managed_curve_project_creation.py::test_source_only_uvvis_without_a_verified_sample_uses_native_and_reports_why",
       "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/delivery/native_snapshot.py]",
-      "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/project_lifecycle/relocation.py]"
+      "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/project_lifecycle/relocation.py]",
+      "tests/test_attached_semantic_native.py::test_cold_expert_bundle_does_not_write_to_its_historical_publication",
+      "tests/test_managed_delivery.py::test_bound_export_audit_and_shared_originals_are_reused",
+      "tests/test_mcp_stdio.py::test_daily_stdio_can_redraw_and_convert_archived_xy_without_changing_it",
+      "tests/test_plot_recovery.py::test_completed_export_offers_delivery_not_an_unsupported_resume",
+      "tests/test_plot_recovery.py::test_deferred_comparison_recovery_preserves_the_export_action",
+      "tests/test_project_store.py::test_bundle_copies_reachable_history_and_installs_only_after_projection",
+      "tests/test_task_comparisons_native.py::test_managed_comparison_reuses_exact_winner_on_cold_apply"
     ],
     "private": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
@@ -20332,7 +20339,11 @@
       "tests/test_rheology_mean_suite_publication.py::test_frequency_readable_narrow_log_keeps_fixed_endpoints_and_unmarked_specs",
       "tests/test_rheology_mean_suite_publication.py::test_frequency_cli_does_not_fall_back_after_managed_science_replay_mismatch",
       "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/delivery/native_snapshot.py]",
-      "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/project_lifecycle/relocation.py]"
+      "tests/test_changed_verification.py::test_scientific_transaction_type_owner_adds_mypy_once[src/sciplot_core/project_lifecycle/relocation.py]",
+      "tests/test_managed_delivery.py::test_bound_export_audit_and_shared_originals_are_reused",
+      "tests/test_plot_recovery.py::test_completed_export_offers_delivery_not_an_unsupported_resume",
+      "tests/test_plot_recovery.py::test_deferred_comparison_recovery_preserves_the_export_action",
+      "tests/test_project_store.py::test_bundle_copies_reachable_history_and_installs_only_after_projection"
     ],
     "comprehensive": [
       "tests/test_annotation_operations_native.py::test_initial_crop_can_be_reviewed_and_exported_without_regeneration",
@@ -20850,7 +20861,10 @@
       "tests/test_managed_frequency_creation.py::test_task_create_managed_frequency_cold_resume_uses_exact_owner",
       "tests/test_managed_curve_project_creation.py::test_verified_curve_project_creates_managed_and_recovers_existing_delivery",
       "tests/test_managed_curve_project_creation.py::test_source_only_uvvis_single_and_group_keep_managed_authority_through_retry_and_cold_edit",
-      "tests/test_managed_curve_project_creation.py::test_source_only_uvvis_without_a_verified_sample_uses_native_and_reports_why"
+      "tests/test_managed_curve_project_creation.py::test_source_only_uvvis_without_a_verified_sample_uses_native_and_reports_why",
+      "tests/test_attached_semantic_native.py::test_cold_expert_bundle_does_not_write_to_its_historical_publication",
+      "tests/test_mcp_stdio.py::test_daily_stdio_can_redraw_and_convert_archived_xy_without_changing_it",
+      "tests/test_task_comparisons_native.py::test_managed_comparison_reuses_exact_winner_on_cold_apply"
     ]
   },
   "private_failure_responsibilities": [
