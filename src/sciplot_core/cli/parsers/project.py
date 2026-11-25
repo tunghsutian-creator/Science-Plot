@@ -64,6 +64,12 @@ def register_project_commands(subparsers: Any) -> None:
     capture.add_argument("--sample", action="append", help="Exact sample label; repeat for a subset. Default captures all ordinary samples.")
     capture.add_argument("--out", type=Path, required=True, help="New preset directory outside project, source and delivery.")
     capture.add_argument("--json", action="store_true")
+    save_as = actions.add_parser("save-as", help="Copy one exact current Managed plot into a new independent editable project.")
+    save_as.add_argument("target", type=Path, help="Exact Managed plot handle returned by plot describe.")
+    save_as.add_argument("--plot-id", required=True)
+    save_as.add_argument("--revision", required=True, type=int)
+    save_as.add_argument("--out", required=True, type=Path, help="An unused project path outside the original project.")
+    save_as.add_argument("--json", action="store_true")
     for name in ("annotations", "operations-preview", "peaks"):
         action = actions.add_parser(name)
         action.add_argument("target", type=Path)

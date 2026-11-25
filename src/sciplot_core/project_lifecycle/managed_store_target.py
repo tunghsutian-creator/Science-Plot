@@ -20,7 +20,6 @@ from .repository import digest
 MANAGED_STORE_CLAIM = "managed-store-claim.json"
 
 
-
 def managed_publication_target(root: Path, output: Path, sources: list[dict[str, Any]]) -> Path:
     """Admit the resolved expert destination separately from the canonical Store claim."""
     output = canonical_path(output)
@@ -47,6 +46,13 @@ def open_managed_store(root: Path, request: dict[str, Any], *,
         if path == root or path.is_relative_to(root) or root.is_relative_to(path):
             raise EngineError("managed_output_conflict", "The Managed store cannot overlap an original source.")
     claim = {"kind": "sciplot_managed_store_claim", "version": 1, "request_sha256": digest(request)}
+    return open_claimed_store(root, claim, authorize_new=authorize_new)
+
+
+def open_claimed_store(root: Path, claim: dict[str, Any], *,
+                       authorize_new: Callable[[], None] | None = None) -> FileProjectStore:
+    """Create or resume this exact first-Store claim, never adopt an unrelated root."""
+    require_data_destination(root)
     admitted = authorize_new is None
     if authorize_new is not None and not root.exists():
         authorize_new()

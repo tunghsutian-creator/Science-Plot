@@ -121,3 +121,31 @@ two independently writable identities and does not remove the previous
 location. Export rejects unadmitted project changes. Neither command replaces
 an existing destination; inspect any directory left by an interrupted
 operation before choosing a new destination.
+
+## Make a new, independently editable copy
+
+Use Save As for **one current Managed plot**, not for moving a whole project or
+packaging figures for a paper. Read that plot's exact handle, ID and revision
+first. If it is a member of a multi-figure project, identify the specific member
+rather than just its parent project.
+
+```bash
+skill/scripts/sciplot plot describe PLOT --scope summary --json
+skill/scripts/sciplot project save-as PLOT --plot-id ID --revision REVISION --out NEW_PROJECT_DIRECTORY --json
+```
+
+The destination must be unused and outside the original project, its data and
+outputs. Save As creates a new project ID and plot ID, starting at revision zero.
+It carries the selected plot's measured bytes, units, sample bindings and saved
+presentation, not the old project's revision history or its paper exports.
+The copied data stay bound even if the original files later move or change.
+Open the returned new plot handle; use the ordinary edit and export commands
+there. Retrying the exact same Save As after a lost reply returns the existing
+copy, not a second one. Choose another new path to make another copy.
+
+This command does not transfer executor permissions. Plots that declare
+external executors are refused; restore or operate on them in their original
+project. For a standalone old VSZ, use the explicit legacy conversion if the
+old figure is supported. Moving an entire project with its history and same
+identity is a different operation. MCP's `sciplot_project_save_as` takes
+`plot`, `plot_id`, `revision` and `output_dir`.

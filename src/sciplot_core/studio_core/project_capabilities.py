@@ -20,6 +20,7 @@ def project_control_capabilities() -> dict[str, Any]:
             "legacy_open": "plot open TARGET [--figure-id FIGURE_ID] --json",
             "legacy_convert": "project legacy-convert TARGET --out NEW_DIRECTORY [--figure FIGURE_ID] [--x-unit UNIT] [--y-unit UNIT] --json",
             "legacy_redraw": "project legacy-redraw TARGET --out NEW_DIRECTORY [--formats pdf,png_300] --json",
+            "save_as": "project save-as PLOT --plot-id ID --revision REVISION --out NEW_PROJECT_DIRECTORY --json",
             "inspect": "project inspect PROJECT [--figure FIGURE_ID] [--object WIDGET_PATH] --json",
             "preview": "project preview PROJECT --figure FIGURE_ID --out NEW_DIRECTORY --json",
             "edit_preview": "project edit-preview PROJECT --figure FIGURE_ID --expected-document SHA256 --changes CHANGES_JSON --out NEW_DIRECTORY --json",
