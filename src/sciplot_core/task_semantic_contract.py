@@ -4,6 +4,14 @@ from typing import Any
 from sciplot_core.plot_document.schema import closed
 
 
+def block_selection_schema() -> dict[str, Any]:
+    return {"type": "array", "minItems": 1, "maxItems": 512, "uniqueItems": True,
+            "items": closed({"source_id": {"type": "string", "pattern": "^source:[0-9]+$"},
+                             "table_id": {"type": "string", "pattern": "^table:[0-9]+$"},
+                             "block_id": {"type": "string", "pattern": "^block:[0-9]+$"}},
+                            ["source_id", "table_id", "block_id"])}
+
+
 def intent_schema() -> dict[str, Any]:
     coordinate = closed({"quantity": {"type": "string", "minLength": 1, "maxLength": 128},
                          "unit": {"type": "string", "maxLength": 64},
@@ -20,14 +28,9 @@ def intent_schema() -> dict[str, Any]:
                          "column_id": {"type": "string", "pattern": "^column:[0-9]+$"}}, ["quantity"])
     interpolation = closed({"method": {"const": "pchip"}, "subdivisions": {"type": "integer", "minimum": 2, "maximum": 32},
                             "purpose": {"const": "display"}, "boundary": {"const": "preserve_gaps"}})
-    blocks = {"type": "array", "minItems": 1, "maxItems": 512, "uniqueItems": True,
-              "items": closed({"source_id": {"type": "string", "pattern": "^source:[0-9]+$"},
-                               "table_id": {"type": "string", "pattern": "^table:[0-9]+$"},
-                               "block_id": {"type": "string", "pattern": "^block:[0-9]+$"}},
-                              ["source_id", "table_id", "block_id"])}
     selection = closed({"test_names": {"type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": True,
                                         "items": {"type": "string", "minLength": 1, "maxLength": 512}},
-                        "blocks": blocks}, [])
+                        "blocks": block_selection_schema()}, [])
     selection["minProperties"] = 1
     secondary = {**coordinate, "properties": {**{key: value for key, value in coordinate["properties"].items()
                                                  if key not in {"headers", "source_unit"}}, "quantity": {"const": "temperature"}}}
@@ -57,12 +60,26 @@ def intent_schema() -> dict[str, Any]:
 def semantic_request_schema() -> dict[str, Any]:
     from sciplot_core.task_scientific_presentation import presentation_requirement_properties
 
-    return closed({"version": {"type": "integer", "const": 1}, "action": {"const": "create"},
+    schema = closed({"version": {"type": "integer", "const": 1}, "action": {"const": "create"},
                    "sources": {"type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": True,
                                "items": {"type": "string", "minLength": 1}},
                    "intent": intent_schema(), **presentation_requirement_properties(), "out": {"type": "string", "minLength": 1},
+                   "choose_columns": {"const": True, "description": "Ask which exact observed FTIR blocks to overlay before creating a plot."},
                    "task_dir": {"type": "string", "minLength": 1, "deprecated": True}},
                   ["version", "action", "sources", "intent"])
+    schema["dependentSchemas"] = {"choose_columns": {
+        "required": ["curve_display"],
+        "properties": {"sources": {"maxItems": 1}, "curve_display": {"const": "raw_overlay"}, "intent": {
+            "required": ["rule_id"],
+            "properties": {"rule_id": {"const": "ftir_spectrum"},
+                           "x": {"properties": {"quantity": {"const": "wavenumber"}, "direction": {"const": "descending"},
+                                                "scale": {"const": "linear"}}, "required": ["direction"]},
+                           "y": {"properties": {"quantity": {"enum": ["transmittance", "absorbance"]},
+                                                "scale": {"const": "linear"}}}},
+            "not": {"anyOf": [{"required": [name]} for name in ("selection", "curve_bindings", "stages", "secondary_y")]},
+        }},
+    }}
+    return schema
 
 
 def semantic_response_schemas() -> list[dict[str, Any]]:
@@ -73,6 +90,7 @@ def semantic_response_schemas() -> list[dict[str, Any]]:
                       "stage_mode": {"const": "concatenate"},
                       "x_header": {"type": "string", "minLength": 1},
                       "y_header": {"type": "string", "minLength": 1},
+                      "blocks": block_selection_schema(),
                       "tables": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1}}}, [])
     return [closed({"expected_question_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
                     "confirm_plan": {"type": "boolean", "const": True}, "choices": choices},

@@ -21,7 +21,16 @@ not sent to the native route. Supported defaults include:
   (`%`) or absorbance (`a.u.`) response. Fully bound same-mode sample pairs
   in one file can use the default stack. It preserves each original grid,
   sample label and per-spectrum analysis; only displayed lines are shifted.
-  Stacks hide numeric Y ticks and retain a descending wavenumber axis.
+  Stacks hide numeric Y ticks and retain a descending wavenumber axis. For a
+  named paired FTIR CSV/TSV with explicit units, use
+  `task create SOURCE --rule ftir_spectrum --choose-columns --curve-display raw_overlay`
+  when the user wants an unshifted overlay but has not yet named its samples.
+  The daily MCP `task_start` accepts the same source-only fields. Ask which
+  samples match the returned original blocks, then resume the same task using
+  its `expected_question_id`, `confirm_plan:true`, and `choices.blocks`
+  (an array of the selected exact `source_id`/`table_id`/`block_id` records).
+  Unselected blocks are not plotted; omitting this opt-in does not change the
+  existing stack or explicit semantic-selection defaults.
 - **GPC–SEC:** one verified calibrated molar-mass/`dW/dLogM` distribution,
   with `g/mol` in the molar-mass header or the supported adjacent unit row.
   The exact registered `dW/dLogM` header establishes a dimensionless

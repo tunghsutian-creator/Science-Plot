@@ -15,10 +15,14 @@ def task_next_step(state: dict[str, Any]) -> dict[str, Any]:
                 "effective": blocker["effective"], "issues": blocker["issues"],
                 "message": blocker["continuation"]}
     if "intent" in state["request"] and status == "needs_input" and state.get("question", {}).get("field") == "semantic_plan":
+        decisions = state["semantic_plan"].get("decisions", [])
+        block_choice = any(d["field"] == "blocks" for d in decisions)
         return {"action": "confirm_source_plan", "task": task,
                 "response_template": {"expected_question_id": state["question"]["question_id"], "confirm_plan": True,
-                                      "choices": {decision["field"]: "CHOOSE ONE ADVERTISED OPTION" for decision in state["semantic_plan"].get("decisions", [])}},
-                "revise_template": {"expected_intent_revision": state["intent_revision"], "revise_intent": state["request"]["intent"]},
+                                      "choices": {d["field"]: [] if d["field"] == "blocks" else "CHOOSE ONE ADVERTISED OPTION"
+                                                  for d in decisions}},
+                **({} if block_choice else {"revise_template": {"expected_intent_revision": state["intent_revision"],
+                                                               "revise_intent": state["request"]["intent"]}}),
                 "cli": "task resume TASK --response ANSWER_JSON_FILE --json",
                 "message": "Confirm exact attachments, stages, coordinate quantities and any listed decisions together; the program expands source hashes, row/column IDs, units and its standard layout locally."}
     if "intent" in state["request"] and status == "blocked":

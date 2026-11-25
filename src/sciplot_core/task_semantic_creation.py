@@ -116,6 +116,10 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
             save_task(root, state)
             return
         plan = prepare_plan([Path(value) for value in state["request"]["sources"]], state["request"]["intent"])
+        if state["request"].get("choose_columns"):
+            from sciplot_core.task_ftir_block_choice import advertise_ftir_blocks
+
+            advertise_ftir_blocks(plan, state["source_hashes"])
         state["semantic_plan"] = plan
         state.pop("blocker", None)
         if plan.get("decisions"):
@@ -164,8 +168,11 @@ def _validate_choices(plan: dict[str, Any], choices: dict[str, Any]) -> None:
         field = decision["field"]
         actual = choices.get(field)
         allowed = decision["options"]
-        valid = (isinstance(actual, dict) and set(actual) == set(allowed)
-                 and all(actual[name] in options for name, options in allowed.items())) if isinstance(allowed, dict) else actual in allowed
+        if field == "blocks":
+            valid = isinstance(actual, list) and bool(actual) and all(block in allowed for block in actual)
+        else:
+            valid = (isinstance(actual, dict) and set(actual) == set(allowed)
+                     and all(actual[name] in options for name, options in allowed.items())) if isinstance(allowed, dict) else actual in allowed
         if not valid:
             error = TaskControlError("invalid_task_response", "Answer every listed scientific decision with one advertised option; no choice is inferred.")
             error.issues = [{"path": "/choices/" + field, "constraint": "advertised_option", "expected": allowed, "actual": actual}]
@@ -184,6 +191,8 @@ def resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
         run_creation(root, state)
         return
     if "revise_intent" in response:
+        if state["request"].get("choose_columns"):
+            raise TaskControlError("invalid_task_response", "Answer the exact current FTIR block question; revising intent cannot replace it.")
         if not Draft202012Validator(semantic_response_schemas()[1]).is_valid(response):
             raise TaskControlError("invalid_task_response", "Revise the complete semantic intent with its current intent_revision.")
         if response["expected_intent_revision"] != state.get("intent_revision", 1):
@@ -241,6 +250,8 @@ def resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
             _ask_plan(root, state)
             return
     state.update(semantic_choices=accumulated, semantic_plan_confirmed=True)
+    if "blocks" in choices:
+        state["plan_confirmation"] = {"mode": "explicit_source_bound_answers", "question_id": response["expected_question_id"]}
     state.pop("question", None)
     save_task(root, state)
     run_creation(root, state)

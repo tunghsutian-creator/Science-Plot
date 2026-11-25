@@ -251,6 +251,11 @@ def _plan_decisions(sources: list[dict[str, Any]], intent: dict[str, Any], choic
 
 def selected_table_plan(plan: dict[str, Any], intent: dict[str, Any], choices: dict[str, Any]) -> dict[str, Any]:
     """Resolve the current advertised choices through the same scientific owner."""
+    if "blocks" in choices and plan["selection"]["mode"] != "explicit":
+        from sciplot_core.task_semantic_selection import select_source_blocks
+
+        sources, selection = select_source_blocks(plan["sources"], {"blocks": choices["blocks"]})
+        plan = {**plan, "sources": sources, "selection": selection}
     return _resolve_plan(plan, intent, choices, scientific_adapter(intent))
 
 

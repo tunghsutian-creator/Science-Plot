@@ -26,6 +26,7 @@ from sciplot_core.task_execution import (
     can_resume_frequency_creation, record_failure, run_apply_export, run_creation, run_edit_preview, run_export,
 )
 from sciplot_core.task_column_mapping import accept_column_response, accept_table_response
+from sciplot_core.task_ftir_block_choice import normalize_ftir_block_request
 from sciplot_core.task_planning import accept_worksheet_response, assert_source_current
 from sciplot_core.task_source_execution import accept_annotation_response, run_source_apply_export, run_source_preview, validate_source_response
 from sciplot_core.task_editing import begin_preview_revision, validate_preview_response
@@ -90,6 +91,7 @@ def _start_task(
     try:
         request, task_dir, corrections = normalize_task_location(request, task_dir)
         request = validate_task_request(request)
+        request = request if defer_creation_export or native_compatibility else normalize_ftir_block_request(request)
         if type(defer_creation_export) is not bool or (defer_creation_export and request["action"] != "create"):
             raise TaskControlError("invalid_creation_mode", "Deferred native preparation is an internal create-only mode.")
         if native_compatibility and (request["action"] != "create" or "source" not in request):
