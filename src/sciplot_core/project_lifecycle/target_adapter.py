@@ -14,11 +14,11 @@ from .targets import (DecisionKind, DecisionTarget, ImportTarget, ManagedCreatio
 
 
 class FilesystemProjectTargets:
+    publish_fresh_managed_output = False
+
     def __init__(self, repository: ProjectRepository, *,
-                 resolve_figure: Callable[..., dict[str, Any]] | None = None,
-                 publish_fresh_managed_output: bool = False) -> None:
+                 resolve_figure: Callable[..., dict[str, Any]] | None = None) -> None:
         self.repository, self.resolve_figure = repository, resolve_figure
-        self.publish_fresh_managed_output = publish_fresh_managed_output
 
     def resolve_open(self, target: Path, figure_id: str | None = None) -> OpenTarget:
         target = canonical_path(target)
@@ -146,6 +146,12 @@ class FilesystemProjectTargets:
     def managed_creation(self, request: dict[str, Any]) -> ManagedCreationLocation:
         return managed_creation_target(self.repository, request,
                                        publish_fresh_managed_output=self.publish_fresh_managed_output)
+
+
+class PublicFilesystemProjectTargets(FilesystemProjectTargets):
+    """New public expert plots publish to their admitted output."""
+
+    publish_fresh_managed_output = True
 
 
 def _prepared_native_figure(store: Any, document: Path) -> bool:

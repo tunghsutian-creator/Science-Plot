@@ -13,7 +13,7 @@ from sciplot_core.project_lifecycle.application import ProjectApplication
 from sciplot_core.project_lifecycle.composition import components
 from sciplot_core.project_lifecycle.paths import canonical_path
 from sciplot_core.project_lifecycle.ports import ProjectRepository, ProjectTargets
-from sciplot_core.project_lifecycle.target_adapter import FilesystemProjectTargets
+from sciplot_core.project_lifecycle.target_adapter import FilesystemProjectTargets, PublicFilesystemProjectTargets
 
 from .backend import PlotBackend
 from .description_scope import require_selector
@@ -27,10 +27,9 @@ class PlotService(ProjectApplication):
                  read_only_legacy: bool = False) -> None:
         self.read_only_legacy = read_only_legacy
         backend, repository, capabilities, resolve_figure = components(backend, repository, capabilities, resolve_figure)
+        default_targets = PublicFilesystemProjectTargets if read_only_legacy else FilesystemProjectTargets
         super().__init__(backend, repository, capabilities=capabilities,
-                         targets=targets if targets is not None else FilesystemProjectTargets(
-                             repository, resolve_figure=resolve_figure,
-                             publish_fresh_managed_output=read_only_legacy))
+                         targets=targets if targets is not None else default_targets(repository, resolve_figure=resolve_figure))
 
     def create(self, request: dict[str, Any], *, project: Path | None = None) -> dict[str, Any]:
         from .selected_project import selected_project_creation
