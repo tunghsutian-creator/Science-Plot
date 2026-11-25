@@ -125,6 +125,19 @@ export destinations from another host. New exports stay with the moved Store;
 use a new delivery destination for a visible package. An installed paper
 snapshot still cannot recover the original Store.
 
+If the original input path is gone, open the imported project directly rather
+than using `task continue SOURCE`, which searches from a readable input:
+
+```bash
+sciplot plot open NEW_PROJECT_PATH --figure SAVED_PLOT_ID --scope summary --json
+```
+
+Use the returned plot handle to edit. The relocated Store supplies the exact
+saved source versions. If bundle verification fails, use an intact verified
+bundle. If an older project reports a missing unsaved source, restore that
+exact source version before bundling. A same-named file or a paper snapshot
+is not a substitute.
+
 Keep using one active location for the project. This operation does not give
 two independently writable identities and does not remove the previous
 location. Export rejects unadmitted project changes. Neither command replaces
