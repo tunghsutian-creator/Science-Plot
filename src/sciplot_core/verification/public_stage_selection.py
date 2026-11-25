@@ -11,6 +11,24 @@ if TYPE_CHECKING:
 TARGETED_SCOPES = {"public-affected": "public-focused", "public-affected-native": "public-comprehensive"}
 
 
+COMPREHENSIVE_SHARDS = ("public-comprehensive-first", "public-comprehensive-second")
+
+
+def comprehensive_shard(profile: str, nodes: set[str]) -> set[str]:
+    """Split the canonical tier by exact ID, independently of collection order."""
+    if profile not in COMPREHENSIVE_SHARDS:
+        return nodes
+    ordered = sorted(nodes)
+    midpoint = len(ordered) // 2
+    if not midpoint:
+        raise ValueError("Comprehensive shards require two nonempty halves.")
+    return set(ordered[:midpoint] if profile == COMPREHENSIVE_SHARDS[0] else ordered[midpoint:])
+
+
+def profile_tier(profile: str) -> str:
+    return "public-comprehensive" if profile in COMPREHENSIVE_SHARDS else TARGETED_SCOPES.get(profile, profile)
+
+
 def target_modules(targets: Sequence[str]) -> frozenset[str]:
     return frozenset(target.split("::", 1)[0] for target in targets)
 
@@ -32,12 +50,12 @@ def match_targets(nodes: Iterable[str], targets: Sequence[str]) -> set[str]:
 
 
 def selected_public_nodes(manifest: dict[str, Any], source: dict[str, str], profile: str, targets: list[str] | None) -> set[str]:
-    scope = TARGETED_SCOPES.get(profile, profile)
+    scope = profile_tier(profile)
     expected = set(manifest["scopes"]["public"])
     if scope != "public-all":
         expected.intersection_update(manifest["tiers"][scope.removeprefix("public-")])
     if targets is None:
-        return expected
+        return comprehensive_shard(profile, expected)
     if any(not filename.startswith("tests/") or filename not in source for filename in target_modules(targets)):
         raise ValueError("Affected selector must bind a current tracked test in its public tier.")
     return match_targets(expected, targets)
@@ -128,7 +146,7 @@ def take_reports() -> list[dict[str, Any]]:
 
 def validate_profile_selectors(profile: str, targets: list[str] | None) -> None:
     affected = profile in TARGETED_SCOPES
-    if profile not in {"public-focused", "public-comprehensive", "public-all", *TARGETED_SCOPES}:
+    if profile not in {"public-focused", "public-comprehensive", "public-all", *TARGETED_SCOPES, *COMPREHENSIVE_SHARDS}:
         raise ValueError("Only exact public profiles may execute in a source stage.")
     if affected != bool(targets) or (targets is not None and not affected):
         raise ValueError("Only an affected public profile requires explicit nonempty test selectors.")

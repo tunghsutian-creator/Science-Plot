@@ -42,6 +42,28 @@ def test_named_input_scopes_partition_the_same_full_collection_and_keep_tiers(tm
     assert not (selected["public-focused"] | selected["public-comprehensive"]) & selected["private-science"]
     assert set.union(*selected.values()) == set(nodes)
 
+    from sciplot_core.verification.public_stage_selection import COMPREHENSIVE_SHARDS, selected_public_nodes
+    extra = ["tests/test_public.py::test_a", "tests/test_public.py::test_m"]
+    for node in extra:
+        tiers[node] = "comprehensive"
+    manifest["scopes"]["public"].extend(extra)
+    manifest["tiers"]["comprehensive"].extend(extra)
+    collected = [extra[1], *nodes, extra[0]]
+    first, second = [select_scope(shard, manifest=manifest, collected=collected, tiers=tiers, private_nodes=private)
+                     for shard in COMPREHENSIVE_SHARDS]
+    assert first == extra[:1] and second == [extra[1], "tests/test_public.py::test_native"]
+    assert set(first).isdisjoint(second)
+    canonical = select_scope("public-comprehensive", manifest=manifest, collected=collected, tiers=tiers, private_nodes=private)
+    assert set(first + second) == set(canonical)
+    for shard, expected in zip(COMPREHENSIVE_SHARDS, (first, second), strict=True):
+        assert selected_public_nodes(manifest, {}, shard, None) == set(expected)
+        with pytest.raises(ValueError, match="Input scope drift"):
+            select_scope(shard, manifest=manifest, collected=collected[1:], tiers=tiers, private_nodes=private)
+        with pytest.raises(ValueError, match="Affected selectors require"):
+            select_scope(shard, manifest=manifest, collected=collected, tiers=tiers,
+                         private_nodes=private, targets=["tests/test_public.py"])
+
+
 
 @pytest.mark.parametrize("mutation", ("unknown", "stale", "duplicate", "private_classification", "tier"))
 def test_scope_drift_blocks_before_any_selection(mutation: str) -> None:

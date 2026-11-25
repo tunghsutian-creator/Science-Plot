@@ -323,16 +323,24 @@ were not executed by that limited layer; their separate responsibilities remain.
 See [the actual run](https://github.com/tunghsutian-creator/Science-Plot/actions/runs/42068732741).
 
 Future push runs on the same branch and pull-request runs for the same PR use
-Actions concurrency for the same workflow/job/Ubuntu/event responsibility.
-A checkout-free stdlib plan job hashes exact case-sensitive identity components
-(Actions group names themselves ignore case); manual runs/attempts remain separate.
-The required runtime-integrity job uses an always condition and a unique fallback
-group when the key is absent, then genuinely fails its first validation step on
-failed/missing key output. The owner-risk planner runs after the normal checkout;
-its failure retains the complete public path and early preflight. Superseded runs remain cancelled, never reused or PASS.
-This only affects workflows containing the new groups; do not cancel an existing
-acceptance by API. Actions scheduling is not a guarantee of chronological queue
-order, and completion still requires the latest intended candidate's actual gates.
+Actions concurrency for each Ubuntu worker separately. The lightweight planner
+hashes the exact, case-sensitive scheduling identity, checks the checkout, and
+plans the source-only, affected, full, or exact main-reference route once.
+A fallback on planner analysis failure retains the full route. Superseded runs
+remain cancelled, never reused or PASS.
+
+Full CI gives comprehensive tests two independent runner budgets. Both runners
+validate full collection against the same reviewed scopes; then they execute
+disjoint halves, assigned by sorted exact node ID and kept in collection order.
+The primary worker also runs focused tests, source-checkout wrapper bootstrap
+and the lifecycle smoke. The required `runtime-integrity` check joins both
+workers only when their successful results and the plan match the current run,
+attempt and SHA. If retrying a full CI failure, rerun all jobs, not just failed
+jobs. A skipped or partial run is not a source-approval origin. Affected and
+source-only routes use only the primary worker; exact main references need no
+native worker. Manual runs/attempts remain separate.
+This scheduling is not a guarantee of chronological queue order. Do not cancel
+an already running acceptance by API to apply these changes.
 The shared cheap source checks include the existing timestamp-ownership scan,
 whose input is all first-party Python source. A CI helper is subject to that
 same owner rule. After a change to CI environments, process guards or profile

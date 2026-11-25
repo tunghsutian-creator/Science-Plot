@@ -57,6 +57,7 @@ DOCUMENTATION_OWNER = ChangedOwner(
         {
             "AGENTS.md",
             ".github/workflows/minimal-repository.yml",
+            ".github/actions/native-runtime/action.yml",
             ".gitignore",
             "DEVELOPMENT_LOG.md",
             "DEVELOPMENT_ROADMAP.md",

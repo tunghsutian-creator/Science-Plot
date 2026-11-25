@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -55,7 +54,8 @@ def test_local_only_documentation_stays_ignored(path: str) -> None:
 
 @pytest.mark.focused
 def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeypatch, capsys) -> None:
-    paths = [".github/workflows/minimal-repository.yml", ".gitignore", "tests/test_repository_policy.py"]
+    paths = [".github/workflows/minimal-repository.yml", ".github/actions/native-runtime/action.yml",
+             ".gitignore", "tests/test_repository_policy.py"]
     plan = build_changed_verification_plan(paths, repo_root=ROOT)
     assert plan["unowned_paths"] == []
     selected = next(check["command"] for check in plan["checks"] if check["check_id"] == "pytest_changed_owners")
@@ -72,22 +72,20 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
     assert "native_regression_preflight:" in dispatch
     assert "type: boolean" in dispatch and "default: false" in dispatch
     for name, command in (
-        ("Run reviewed complete public behavior", "ci_public_profiles full"),
+        ("Run focused and comprehensive second shard", "ci_public_profiles primary"),
+        ("Run comprehensive first shard", "ci_public_profiles comprehensive-first"),
         ("Run scoped static type gate", "python3 -m mypy --platform darwin"),
         ("Run fixture-free lifecycle smoke", "skill/scripts/sciplot smoke --out"),
     ):
         step = next(step for step in steps if step.startswith(name))
         assert command in step
-        if name == "Run reviewed complete public behavior":
-            assert "public-reference" not in step
-        if name == "Run scoped static type gate":
-            assert "steps.main-admission.outcome != 'success'" in step
-            assert "steps.main-admission.outputs.referenced != 'true'" in step
-            assert "steps.native-feedback.outputs.source_only != 'true'" in step
-        else:
-            assert "steps.native-feedback.outcome != 'success'" in step
-            assert "steps.native-feedback.outputs.layer != 'affected'" in step
-            assert "github.event_name == 'workflow_dispatch'" in step
+        if name != "Run comprehensive first shard":
+            assert "needs.feedback-plan.outputs.mode == 'full'" in step
+    bootstrap = (ROOT / ".github/actions/native-runtime/action.yml").read_text()
+    for name in ("Install matching system Python and Qt toolchain", "Verify Qt build and runtime identity",
+                 "Verify Chinese glyph fallback in the system Qt runtime", "Build vendored Veusz helpers",
+                 "Verify vendored Veusz helpers"):
+        assert name in bootstrap
     from sciplot_core.verification.ci_feedback import NATIVE_PREFIX, NATIVE_EXPECTED, native_preflight_plan
     manifest = json.loads((ROOT / "src/sciplot_core/verification/input_scope_manifest.json").read_text())
     assert len(NATIVE_PREFIX) == 7 and len(NATIVE_EXPECTED) == 12
@@ -98,7 +96,8 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
     assert "expected = set(NATIVE_EXPECTED)" in diagnostic
     assert "needs: feedback-plan" in workflow
     assert "if: ${{ always() && !cancelled() }}" in workflow
-    assert "needs.feedback-plan.outputs.group || format('unplanned-{0}-{1}', github.run_id, github.run_attempt)" in workflow
+    assert "format('{0}-public-primary', needs.feedback-plan.outputs.group)" in workflow
+    assert "format('{0}-public-native-first', needs.feedback-plan.outputs.group)" in workflow
     assert "cancel-in-progress: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}" in workflow
     for paths, early in (
         (["README.md"], True), (["docs/DESIGN_PROJECT_LIFECYCLE.md"], False),
@@ -136,13 +135,9 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
     assert group(GITHUB_EVENT_NAME="workflow_dispatch", GITHUB_RUN_ATTEMPT="1") != group(GITHUB_EVENT_NAME="workflow_dispatch", GITHUB_RUN_ATTEMPT="2")
     with pytest.raises(SystemExit):
         group(GITHUB_EVENT_NAME="pull_request", SCIPLOT_PULL_REQUEST="")
-    key_job = workflow.split("  feedback-plan:", 1)[1].split("  runtime-integrity:", 1)[0]
-    assert "checkout" not in key_job and "pip install" not in key_job
-    validation = next(step for step in steps if step.startswith("Require a valid scheduling plan"))
-    command = validation.split("        run: ", 1)[1].splitlines()[0]
-    for outcome, group_value, expected_exit in (("success", "sciplot-key", 0), ("failure", "sciplot-key", 1), ("success", "", 1)):
-        result = subprocess.run(["bash", "-c", command], env={**os.environ, "SCIPLOT_PLAN_RESULT": outcome, "SCIPLOT_PLAN_GROUP": group_value}, check=False)
-        assert result.returncode == expected_exit
+    plan_job = workflow.split("  feedback-plan:", 1)[1].split("  public-primary:", 1)[0]
+    assert "checkout@v4" in plan_job and "pip install" not in plan_job
+    assert "needs: [feedback-plan, public-primary, public-native-first]" in workflow
     ci_plan = build_changed_verification_plan(["src/sciplot_core/verification/ci_feedback.py"], repo_root=ROOT)
     ci_targets = next(check["command"] for check in ci_plan["checks"] if check["check_id"] == "pytest_changed_owners")
     assert "tests/test_repository_policy.py" in ci_targets

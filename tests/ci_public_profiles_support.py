@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+from textwrap import dedent
 
 import pytest
 
@@ -19,6 +21,14 @@ def exercise_profile_stage_route(tmp_path, monkeypatch, capsys):
         directory = tmp_path / ".tmp_verify" / path
         directory.mkdir(parents=True)
         (directory / "result.json").write_text(json.dumps(result))
+    for lane, name, canonical in (
+        ("primary/public-focused", "public-focused", True),
+        ("primary/public-comprehensive-second", "public-comprehensive-second", False),
+        ("comprehensive-first", "public-comprehensive-first", False),
+    ):
+        path = tmp_path / ".tmp_verify" / f"ci_public_{lane}" / "result.json"
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps({**result, "profile": name, "canonical_profile_executed": canonical}))
     exit_code = [0]
 
     class Process:
@@ -48,6 +58,16 @@ def exercise_profile_stage_route(tmp_path, monkeypatch, capsys):
             assert calls[-1][1:5] == ["-m", "sciplot_core.verification.public_stage", "--profile", selected]
             assert calls[-1][-1] == ".tmp_verify/ci_public_" + profile
             assert (tmp_path / profiles.DIRECTORY / f"{profile}.log").read_bytes() == stdout
+        for profile, name in (("primary", "public-ci-primary"), ("comprehensive-first", "public-comprehensive-first")):
+            assert profiles.run_profile(tmp_path, profile) == 0
+            assert calls[-1][4] == name
+        mismatched = tmp_path / "wrong-profile"
+        wrong_profile = mismatched / ".tmp_verify/ci_public_comprehensive-first/result.json"
+        wrong_profile.parent.mkdir(parents=True)
+        wrong_profile.write_text(json.dumps({**result, "profile": "public-comprehensive-second",
+                                             "canonical_profile_executed": False}))
+        with pytest.raises(ValueError, match="profile or shard"):
+            profiles.run_profile(mismatched, "comprehensive-first")
         assert "complete worker stdout" not in capsys.readouterr().out
         wrong = tmp_path / "wrong-stage-head"
         wrong_result = wrong / ".tmp_verify/ci_public_focused/result.json"
@@ -277,47 +297,75 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
     assert "/public-*/command.log" in upload and "/public-*/reports.json" in upload
     assert "include-hidden-files: true" in upload and "retention-days: 14" in upload
     assert "/source/" not in upload and "/stage-diagnostics/" not in upload
-    conditional = {step.splitlines()[0]: re.search(r"        if: \$\{\{ (.*?) \}\}", step).group(1)
-                   for step in steps if "        if: ${{ " in step and step is not upload}
-    full_names = ("Run reviewed complete public behavior",
-                  "Run fixture-free lifecycle smoke")
-    def enabled(expression, outcome, layer, event, admission_outcome="success", referenced="false",
-                diagnostic=False, source_only=False):
-        values = {"steps.native-feedback.outputs.source_only": str(source_only).lower(),
-                  "steps.native-feedback.outcome": outcome, "steps.native-feedback.outputs.layer": layer,
-                  "steps.main-admission.outcome": admission_outcome,
-                  "steps.main-admission.outputs.referenced": referenced,
-                  "github.event_name": event,
-                  "inputs.native_regression_preflight": diagnostic}
-        for key, value in values.items():
+    def extract(fragment):
+        body = fragment.split("        run: |\n", 1)[1]
+        return dedent(re.match(r"(?: {10}[^\n]*\n)+", body).group(0)).strip()
+
+    route = extract(next(step for step in steps if step.startswith("Seal exact feedback route")))
+    join = extract(next(step for step in steps if step.startswith("Require an exact complete feedback result")))
+    output = tmp_path / "route-output"
+    sha = "a" * 40
+    identity = f"123:2:{sha}"
+    current = {**os.environ, "GITHUB_OUTPUT": str(output), "GITHUB_RUN_ID": "123",
+               "GITHUB_RUN_ATTEMPT": "2", "GITHUB_SHA": sha}
+    for admission, ok, source_only, layer, event, expected in (
+        ("true", "false", "", "", "push", "reference"),
+        ("false", "true", "true", "affected", "push", "source-only"),
+        ("false", "true", "false", "affected", "push", "affected"),
+        ("false", "true", "false", "affected", "pull_request", "affected"),
+        ("false", "true", "false", "affected", "workflow_dispatch", "full"),
+        ("false", "true", "false", "full", "push", "full"),
+        ("false", "false", "true", "affected", "push", "full"),
+        ("false", "true", "false", "unknown", "push", "full"),
+    ):
+        output.write_text("")
+        env = {**current, "SCIPLOT_ADMISSION": admission, "SCIPLOT_FEEDBACK_OK": ok,
+               "SCIPLOT_SOURCE_ONLY": source_only, "SCIPLOT_LAYER": layer, "GITHUB_EVENT_NAME": event}
+        subprocess.run(["bash", "-e", "-c", route], env=env, check=True)
+        assert output.read_text() == f"mode={expected}\nreceipt={identity}:plan\n"
+
+    for mode in ("reference", "source-only", "affected", "full"):
+        env = {**current, "SCIPLOT_PLAN_MODE": mode, "SCIPLOT_PLAN_GROUP": "group",
+               "SCIPLOT_PLAN_RESULT": "success", "SCIPLOT_PLAN_RECEIPT": f"{identity}:plan",
+               "SCIPLOT_PRIMARY_RESULT": "skipped" if mode == "reference" else "success",
+               "SCIPLOT_PRIMARY_RECEIPT": "" if mode == "reference" else f"{identity}:public-primary",
+               "SCIPLOT_FIRST_RESULT": "success" if mode == "full" else "skipped",
+               "SCIPLOT_FIRST_RECEIPT": f"{identity}:public-native-first" if mode == "full" else ""}
+        subprocess.run(["bash", "-c", join], env=env, check=True)
+        for key, mismatch in (("SCIPLOT_PLAN_MODE", "unknown"), ("SCIPLOT_PLAN_GROUP", ""),
+                              ("SCIPLOT_PLAN_RESULT", "failure"), ("SCIPLOT_PLAN_RECEIPT", "foreign"),
+                              ("SCIPLOT_PRIMARY_RESULT", "cancelled"),
+                              ("SCIPLOT_PRIMARY_RECEIPT", f"123:1:{sha}:public-primary"),
+                              ("SCIPLOT_FIRST_RESULT", "skipped" if mode == "full" else "success"),
+                              ("SCIPLOT_FIRST_RECEIPT", "foreign-sha-or-role")):
+            assert subprocess.run(["bash", "-c", join], env={**env, key: mismatch}, check=False).returncode != 0
+
+    native_job = workflow.split("  public-native-first:\n", 1)[1].split("  runtime-integrity:\n", 1)[0]
+    assert "if: ${{ needs.feedback-plan.outputs.mode == 'full' }}" in native_job
+    assert "Run reviewed affected public feedback" not in native_job
+    primary_job = workflow.split("  public-primary:\n", 1)[1].split("  public-native-first:\n", 1)[0]
+    assert "if: ${{ needs.feedback-plan.outputs.mode != 'reference' }}" in primary_job
+    conditionals = {step.splitlines()[0]: re.search(r"        if: \$\{\{ (.*?) \}\}", step).group(1)
+                    for step in primary_job.split("      - name: ")[1:] if "        if: ${{ " in step}
+    def enabled(name, mode, event="push", diagnostic=False):
+        expression = conditionals[name]
+        for key, value in {"needs.feedback-plan.outputs.mode": mode, "github.event_name": event,
+                           "inputs.native_regression_preflight": diagnostic}.items():
             expression = expression.replace(key, repr(value))
         return eval(expression.replace("&&", " and ").replace("||", " or ").replace("== true", "== True"),
                     {"__builtins__": {}}, {})
-    for outcome, layer, event, full in (
-        ("success", "affected", "push", False), ("success", "affected", "pull_request", False),
-        ("success", "full", "push", True), ("failure", "affected", "push", True),
-        ("", "", "push", True), ("success", "", "push", True),
-        ("success", "unknown", "push", True), ("success", "affected", "workflow_dispatch", True),
-    ):
-        assert enabled(conditional["Run reviewed affected public feedback"], outcome, layer, event) is not full
-        for name in full_names:
-            assert enabled(conditional[name], outcome, layer, event) is full, name
-    preflight = conditional["Check known native CI regressions before the public suites"]
-    assert not enabled(preflight, "success", "full", "push", diagnostic=True)
-    assert not enabled(preflight, "success", "full", "workflow_dispatch")
-    assert enabled(preflight, "success", "full", "workflow_dispatch", diagnostic=True)
-    assert enabled(conditional["Run source-only documentation feedback"], "success", "affected", "push", source_only=True)
-    assert not enabled(conditional["Run reviewed affected public feedback"], "success", "affected", "push", source_only=True)
-    assert not enabled(conditional["Run shared source contracts"], "success", "affected", "push")
-    assert enabled(conditional["Run shared source contracts"], "success", "full", "push")
-    for name in ("Run lint gate", "Run scoped static type gate", "Build vendored Veusz helpers",
-                 "Verify vendored Veusz helpers", "Verify minimal wheel surface", "Verify Qt build and runtime identity"):
-        expression = conditional[name]
-        for admission_outcome, referenced, executes in (("success", "true", False), ("success", "false", True),
-                                                        ("failure", "true", True), ("", "", True)):
-            assert enabled(expression, "success", "affected", "push", admission_outcome, referenced) is executes
-            assert enabled(expression, "failure", "", "workflow_dispatch", admission_outcome, referenced) is executes
-            assert not enabled(expression, "success", "affected", "push", source_only=True)
+    for mode in ("source-only", "affected", "full"):
+        assert enabled("Run reviewed affected public feedback", mode) is (mode == "affected")
+        assert enabled("Run source-only documentation feedback", mode) is (mode == "source-only")
+        for name in ("Run focused and comprehensive second shard", "Run shared source contracts", "Run fixture-free lifecycle smoke"):
+            assert enabled(name, mode) is (mode == "full")
+        for name in ("Run lint gate", "Run scoped static type gate", "Prepare native test runtime",
+                     "Verify minimal wheel surface", "Verify source-checkout wrapper bootstrap"):
+            assert enabled(name, mode) is (mode != "source-only")
+    preflight = "Check known native CI regressions before the public suites"
+    assert not enabled(preflight, "full", "push", diagnostic=True)
+    assert not enabled(preflight, "full", "workflow_dispatch")
+    assert enabled(preflight, "full", "workflow_dispatch", diagnostic=True)
 
     with monkeypatch.context() as context:
         context.setattr(ci_feedback, "changed_paths", lambda *_args: ["src/sciplot_core/task_contract.py"])

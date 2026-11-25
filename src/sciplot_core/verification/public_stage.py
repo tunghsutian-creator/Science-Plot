@@ -17,6 +17,7 @@ import tempfile
 from typing import Any, cast, overload
 
 from sciplot_core.verification.public_stage_selection import (
+    COMPREHENSIVE_SHARDS,
     PLATFORM_SKIPS as PLATFORM_SKIPS,
     TARGETED_SCOPES,
     record_report as pytest_runtest_logreport,  # noqa: F401 (pytest hook)
@@ -252,6 +253,7 @@ def run_public_profiles(
     """Share the source copy, never the pytest process, order or phase evidence."""
     if tuple(profile for profile, _ in profiles) not in {
         ("public-focused", "public-comprehensive"), ("public-affected", "public-affected-native"),
+        ("public-focused", COMPREHENSIVE_SHARDS[1]),
     }:
         raise ValueError("Grouped public stages require the reviewed profile order.")
     for profile, targets in profiles:
@@ -309,6 +311,7 @@ def _run_public_stage(
     *, pytest_root: str | None,
 ) -> dict[str, Any]:
     affected = profile in TARGETED_SCOPES
+    sharded = profile in COMPREHENSIVE_SHARDS
     from sciplot_core.verification.input_scope import load_manifest
     manifest = load_manifest(stage / "src/sciplot_core/verification/input_scope_manifest.json")
     scope = TARGETED_SCOPES.get(profile, profile)
@@ -350,9 +353,11 @@ def _run_public_stage(
     issues.extend(review_stage_reports(marker, reports, platform=sys.platform))
     if set(marker.get("selected_tests", [])) != expected:
         issues.append("Actual execution omitted or added an exact selected public node.")
+    claim = ("limited_affected_public_behavior_not_canonical_profile" if affected else
+             "partial_comprehensive_profile_after_complete_collection" if sharded else CLAIM)
     result = {"kind": "sciplot_public_source_stage_execution", "profile": profile,
-              "claim": "limited_affected_public_behavior_not_canonical_profile" if affected else CLAIM,
-              "selection_targets": targets, "canonical_profile_executed": not affected,
+              "claim": claim,
+              "selection_targets": targets, "canonical_profile_executed": not (affected or sharded),
               "collection_scope": "affected_modules" if affected else "complete_suite",
               "status": "PASS" if process.returncode == 0 and not issues else "BLOCKED",
               "actual_exit_code": process.returncode, "execution_argv": command, "stage_root": str(stage),
@@ -376,16 +381,17 @@ def pytest_sessionfinish(session: Any, exitstatus: Any) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", required=True, type=Path)
-    parser.add_argument("--profile", choices=("public-focused", "public-comprehensive", "public-all", "public-ci-full", *TARGETED_SCOPES), default="public-comprehensive")
+    parser.add_argument("--profile", choices=("public-focused", "public-comprehensive", "public-all",
+                        "public-ci-full", "public-ci-primary", *COMPREHENSIVE_SHARDS, *TARGETED_SCOPES), default="public-comprehensive")
     parser.add_argument("--target", action="append", dest="targets")
     arguments = parser.parse_args()
     root = Path(__file__).resolve().parents[3]
     try:
-        if arguments.profile == "public-ci-full":
+        if arguments.profile in {"public-ci-full", "public-ci-primary"}:
             if arguments.targets:
                 raise ValueError("Full public CI does not take target selectors.")
-            results = run_public_profiles(root, arguments.out, [
-                ("public-focused", None), ("public-comprehensive", None)])
+            comprehensive = "public-comprehensive" if arguments.profile == "public-ci-full" else COMPREHENSIVE_SHARDS[1]
+            results = run_public_profiles(root, arguments.out, [("public-focused", None), (comprehensive, None)])
             result = {"status": results[-1]["status"], "profiles": results}
         else:
             result = run_public_stage(root, arguments.out, arguments.profile, targets=arguments.targets)

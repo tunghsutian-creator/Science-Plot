@@ -736,9 +736,7 @@ def test_reviewed_strict_additions_extend_the_preserved_residual_scope_once():
     shared_step = workflow.split("      - name: Run shared source contracts\n", 1)[1].split("      - name:", 1)[0]
     assert "source_contracts import CHEAP_SOURCE_TARGETS" in shared_step
     assert "*CHEAP_SOURCE_TARGETS], check=True)" in shared_step
-    assert "steps.main-admission.outputs.referenced != 'true'" in shared_step
-    assert "steps.native-feedback.outputs.layer != 'affected'" in shared_step
-    assert "steps.native-feedback.outcome != 'success'" in shared_step
+    assert "needs.feedback-plan.outputs.mode == 'full'" in shared_step
     assert workflow.index("Run lint gate") < workflow.index("Run shared source contracts")
     assert workflow.index("Run shared source contracts") < workflow.index("Run scoped static type gate")
     for changed in ("pyproject.toml", *sorted(CI_FEEDBACK_STRICT_ADDITIONS)):

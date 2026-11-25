@@ -47,7 +47,9 @@ def _isolated_recorded_host(
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
-    parser.addoption("--input-scope", choices=("public-focused", "public-comprehensive", "public-all", "private-science"),
+    from sciplot_core.verification.input_scope import PROFILES
+
+    parser.addoption("--input-scope", choices=PROFILES,
                      help="Exact reviewed test-input scope; default pytest retains the complete suite.")
 
 

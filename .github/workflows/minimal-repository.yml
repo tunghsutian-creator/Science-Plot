@@ -24,6 +24,9 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       group: ${{ steps.key.outputs.group }}
+      mode: ${{ steps.route.outputs.mode }}
+      base: ${{ steps.native-feedback.outputs.base }}
+      receipt: ${{ steps.route.outputs.receipt }}
     steps:
       - name: Isolate future obsolete-run scheduling
         id: key
@@ -48,23 +51,6 @@ jobs:
           with Path(os.environ["GITHUB_OUTPUT"]).open("a") as stream:
               stream.write("group=" + group + "\n")
           PY
-  runtime-integrity:
-    needs: feedback-plan
-    # A broken/unavailable planner must not silently skip the required full job.
-    if: ${{ always() && !cancelled() }}
-    runs-on: ubuntu-24.04
-    concurrency:
-      group: ${{ needs.feedback-plan.outputs.group || format('unplanned-{0}-{1}', github.run_id, github.run_attempt) }}
-      cancel-in-progress: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
-    env:
-      QT_QPA_PLATFORM: offscreen
-      PYTHONNOUSERSITE: "1"
-    steps:
-      - name: Require a valid scheduling plan
-        env:
-          SCIPLOT_PLAN_RESULT: ${{ needs.feedback-plan.result }}
-          SCIPLOT_PLAN_GROUP: ${{ needs.feedback-plan.outputs.group }}
-        run: test "$SCIPLOT_PLAN_RESULT" = success && test -n "$SCIPLOT_PLAN_GROUP"
       - uses: actions/checkout@v4
       - name: Verify exact workflow checkout
         run: python3 src/sciplot_core/verification/main_commit_admission.py --verify-checkout
@@ -83,8 +69,41 @@ jobs:
           SCIPLOT_EVENT_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           SCIPLOT_EVENT_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref && format('refs/heads/{0}', github.event.pull_request.base.ref) || github.ref }}
         run: python3 -m sciplot_core.verification.ci_feedback --base "$SCIPLOT_EVENT_BASE" --candidate-base
+      - name: Seal exact feedback route
+        id: route
+        env:
+          SCIPLOT_ADMISSION: ${{ steps.main-admission.outcome == 'success' && steps.main-admission.outputs.referenced == 'true' }}
+          SCIPLOT_FEEDBACK_OK: ${{ steps.native-feedback.outcome == 'success' }}
+          SCIPLOT_SOURCE_ONLY: ${{ steps.native-feedback.outputs.source_only }}
+          SCIPLOT_LAYER: ${{ steps.native-feedback.outputs.layer }}
+        run: |
+          if [[ "$SCIPLOT_ADMISSION" == true ]]; then
+            mode=reference
+          elif [[ "$SCIPLOT_FEEDBACK_OK" == true && "$SCIPLOT_SOURCE_ONLY" == true ]]; then
+            mode=source-only
+          elif [[ "$SCIPLOT_FEEDBACK_OK" == true && "$SCIPLOT_LAYER" == affected && "$GITHUB_EVENT_NAME" != workflow_dispatch ]]; then
+            mode=affected
+          else
+            mode=full
+          fi
+          printf 'mode=%s\nreceipt=%s:%s:%s:plan\n' "$mode" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+  public-primary:
+    needs: feedback-plan
+    if: ${{ needs.feedback-plan.outputs.mode != 'reference' }}
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: ${{ format('{0}-public-primary', needs.feedback-plan.outputs.group) }}
+      cancel-in-progress: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
+    outputs:
+      receipt: ${{ steps.receipt.outputs.receipt }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONNOUSERSITE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact workflow checkout
+        run: python3 src/sciplot_core/verification/main_commit_admission.py --verify-checkout
       - name: Enforce minimal runtime distribution
-        if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -115,113 +134,29 @@ jobs:
             exit 1
           fi
       - name: Compile SciPlot-owned Python
-        if: ${{ steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true' }}
         run: python3 -m compileall -q src/sciplot_core src/sciplot_recipes
       - name: Run source-only documentation feedback
-        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome == 'success' && steps.native-feedback.outputs.source_only == 'true') }}
+        if: ${{ needs.feedback-plan.outputs.mode == 'source-only' }}
         env:
           PYTHONPATH: src
-          SCIPLOT_EVENT_BASE: ${{ steps.native-feedback.outputs.base }}
+          SCIPLOT_EVENT_BASE: ${{ needs.feedback-plan.outputs.base }}
           SCIPLOT_EVENT_REF: ${{ github.event_name == 'pull_request' && format('refs/heads/{0}', github.event.pull_request.base.ref) || github.ref }}
         run: |
           python3 -m venv .venv
           .venv/bin/python -m pip install 'pytest>=9,<10' platformdirs
           .venv/bin/python -m sciplot_core.verification.ci_feedback --base "$SCIPLOT_EVENT_BASE" --run-source-only
-      - name: Install matching system Python and Qt toolchain
-        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.source_only != 'true') }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends \
-            build-essential qt6-base-dev qt6-image-formats-plugins python3-dev python3-venv zsh \
-            python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev pyqt6-dev-tools \
-            fonts-noto-cjk
-          # Ubuntu's PyQt6 and qmake use the same distribution Qt libraries.
-          # A PyPI PyQt6 wheel carries a separate Qt runtime, so keep the
-          # distribution interpreter and expose its bindings to this venv.
-          /usr/bin/python3 -m venv --system-site-packages .venv
-          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
-          .venv/bin/python -m pip install --upgrade pip setuptools wheel
-      - name: Install local runtime
-        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.source_only != 'true') }}
-        # Explicit Linux/Python 3.12 validation anchor; keep pandas 3.1 exercised.
-        # This is not a universal freeze for the Python 3.11 language floor.
-        run: >-
-          python3 -m pip install -e '.[studio,dev,mcp]'
-          'numpy==2.4.6' 'pandas==3.1.0' 'scipy==1.18.1'
-          'Pillow==13.0.0' 'PyMuPDF==2.0'
-      - name: Verify Qt build and runtime identity
-        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.source_only != 'true') }}
-        run: |
-          python3 - <<'PY'
-          import subprocess
-          import shutil
-          import sys
-          import json
-          import sysconfig
-          import tempfile
-          from pathlib import Path
-          import PyQt6
-          from PyQt6 import QtCore, QtGui, QtWidgets, QtPrintSupport, QtSvg, QtSvgWidgets, sip, uic
-          from PyQt6.uic import loadUi
-
-          qmake = subprocess.check_output(["qmake6", "-query", "QT_VERSION"], text=True).strip()
-          runtime = QtCore.qVersion()
-          binding = Path(PyQt6.__file__).resolve()
-          assert sys.version_info[:2] == (3, 12), sys.version
-          assert binding.is_relative_to("/usr/lib/python3/dist-packages"), binding
-          assert qmake == runtime, (qmake, runtime)
-          assert (binding.parent / "bindings/QtCore/QtCore.toml").is_file(), binding
-          assert Path(uic.__file__).resolve().is_relative_to(binding.parent), uic.__file__
-          assert callable(loadUi) and all((QtGui, QtWidgets, QtPrintSupport, QtSvg, QtSvgWidgets, sip))
-          assert shutil.which("zsh"), "Delivery launchers require zsh"
-          formats = {bytes(name).decode("ascii").lower() for name in QtGui.QImageWriter.supportedImageFormats()}
-          assert {"png", "tiff"} <= formats, sorted(formats)
-          with tempfile.TemporaryDirectory(prefix="sciplot-qt-tiff-") as temporary:
-              path = Path(temporary) / "probe.tiff"
-              image = QtGui.QImage(1, 1, QtGui.QImage.Format.Format_RGB32)
-              image.fill(QtGui.QColor("red"))
-              writer = QtGui.QImageWriter(str(path), b"tiff")
-              assert writer.write(image), writer.errorString()
-              assert path.is_file() and path.stat().st_size > 0
-              reopened = QtGui.QImage(str(path))
-              assert not reopened.isNull() and (reopened.width(), reopened.height()) == (1, 1)
-              assert reopened.pixelColor(0, 0) == image.pixelColor(0, 0)
-          print(f"Python {sys.version.split()[0]}; PyQt {QtCore.PYQT_VERSION_STR}; Qt build/runtime {runtime}; {binding}")
-          from sciplot_core.verification.private_process_boundaries import executable_hash, runtime_identity
-          observation_runtime = runtime_identity()
-          executable_sha256 = executable_hash(sys.executable)
-          assert executable_sha256 is not None
-          print(json.dumps({
-              "observation_runtime": observation_runtime,
-              "python_executable_sha256": executable_sha256,
-              "executable_owns_observation_core": executable_sha256 in observation_runtime["loaded_core_sha256"],
-              "py_enable_shared_build_flag": sysconfig.get_config_var("Py_ENABLE_SHARED"),
-          }, sort_keys=True))
-          PY
-      - name: Verify Chinese glyph fallback in the system Qt runtime
-        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.source_only != 'true') }}
-        run: |
-          python3 - <<'PYFONT'
-          from PyQt6.QtGui import QFont, QGuiApplication, QTextLayout
-          app = QGuiApplication([])
-          text = "\u4f4e\u6e29\u6297\u51b2\u51fb\u80fd\u529b"
-          layout = QTextLayout(text, QFont("Arial", 8))
-          layout.beginLayout()
-          line = layout.createLine()
-          layout.endLayout()
-          runs = layout.glyphRuns()
-          assert runs and all(index != 0 for run in runs for index in run.glyphIndexes()), "Missing Chinese glyph fallback"
-          print({"text": text, "fallback_families": [run.rawFont().familyName() for run in runs]})
-          PYFONT
+      - name: Prepare native test runtime
+        if: ${{ needs.feedback-plan.outputs.mode == 'full' || needs.feedback-plan.outputs.mode == 'affected' }}
+        uses: ./.github/actions/native-runtime
       - name: Run lint gate
-        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.source_only != 'true') }}
+        if: ${{ needs.feedback-plan.outputs.mode == 'full' || needs.feedback-plan.outputs.mode == 'affected' }}
         env:
-          SCIPLOT_FEEDBACK_LAYER: ${{ steps.native-feedback.outcome == 'success' && steps.native-feedback.outputs.layer == 'affected' && 'affected' || 'full' }}
-          SCIPLOT_EVENT_BASE: ${{ steps.native-feedback.outputs.base }}
+          SCIPLOT_FEEDBACK_LAYER: ${{ needs.feedback-plan.outputs.mode }}
+          SCIPLOT_EVENT_BASE: ${{ needs.feedback-plan.outputs.base }}
           SCIPLOT_EVENT_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref && format('refs/heads/{0}', github.event.pull_request.base.ref) || github.ref }}
         run: python3 -m sciplot_core.verification.ci_feedback --base "$SCIPLOT_EVENT_BASE" --lint "$SCIPLOT_FEEDBACK_LAYER"
       - name: Run shared source contracts
-        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected') }}
+        if: ${{ needs.feedback-plan.outputs.mode == 'full' }}
         run: |
           python3 - <<'PYCONTRACTS'
           import subprocess
@@ -230,21 +165,12 @@ jobs:
           subprocess.run([sys.executable, "-m", "pytest", "-q", *CHEAP_SOURCE_TARGETS], check=True)
           PYCONTRACTS
       - name: Run scoped static type gate
-        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.source_only != 'true') }}
+        if: ${{ needs.feedback-plan.outputs.mode == 'full' || needs.feedback-plan.outputs.mode == 'affected' }}
         run: |
           python3 -m mypy --platform linux
           python3 -m mypy --platform darwin
-      - name: Build vendored Veusz helpers
-        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.source_only != 'true') }}
-        working-directory: third_party/veusz
-        run: QMAKE_EXE="$(command -v qmake6)" python3 setup.py build_ext --inplace
-      - name: Verify vendored Veusz helpers
-        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.source_only != 'true') }}
-        env:
-          PYTHONPATH: third_party/veusz
-        run: python3 -c 'from veusz.helpers import _nc_cntr, qtmml, qtloops, recordpaint, threed; assert all((qtloops, qtmml, recordpaint, threed, _nc_cntr))'
       - name: Verify minimal wheel surface
-        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.source_only != 'true') }}
+        if: ${{ needs.feedback-plan.outputs.mode == 'full' || needs.feedback-plan.outputs.mode == 'affected' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -252,9 +178,9 @@ jobs:
             --wheel-dir /tmp/sciplot-wheel
           python3 tests/test_wheel_surface.py /tmp/sciplot-wheel/*.whl
       - name: Check known native CI regressions before the public suites
+        if: ${{ needs.feedback-plan.outputs.mode == 'full' && github.event_name == 'workflow_dispatch' && inputs.native_regression_preflight == true }}
         # The comprehensive profile already executes these nodes. Only an
         # explicit manual diagnostic request repeats them as an early check.
-        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && github.event_name == 'workflow_dispatch' && inputs.native_regression_preflight == true }}
         run: |
           python3 - <<'PY'
           import hashlib
@@ -337,31 +263,31 @@ jobs:
           raise SystemExit(result.returncode if result.returncode else (4 if issues else 0))
           PY
       - name: Run reviewed affected public feedback
+        if: ${{ needs.feedback-plan.outputs.mode == 'affected' }}
         id: affected-public
-        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome == 'success' && steps.native-feedback.outputs.layer == 'affected' && github.event_name != 'workflow_dispatch') && (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.source_only != 'true') }}
         env:
-          SCIPLOT_EVENT_BASE: ${{ steps.native-feedback.outputs.base }}
+          SCIPLOT_EVENT_BASE: ${{ needs.feedback-plan.outputs.base }}
           SCIPLOT_EVENT_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref && format('refs/heads/{0}', github.event.pull_request.base.ref) || github.ref }}
         run: python3 -m sciplot_core.verification.ci_feedback --base "$SCIPLOT_EVENT_BASE" --run-affected
-      - name: Run reviewed complete public behavior
+      - name: Run focused and comprehensive second shard
+        if: ${{ needs.feedback-plan.outputs.mode == 'full' }}
         id: complete-public
-        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && ((steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch')) }}
-        run: python3 -m sciplot_core.verification.ci_public_profiles full
+        run: python3 -m sciplot_core.verification.ci_public_profiles primary
       - name: Preserve public failure evidence
-        if: ${{ failure() && (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.complete-public.outcome == 'failure' || steps.affected-public.outcome == 'failure') }}
+        if: ${{ failure() && (steps.complete-public.outcome == 'failure' || steps.affected-public.outcome == 'failure') }}
         uses: actions/upload-artifact@v4
         with:
-          name: public-failure-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          name: public-failure-primary-${{ github.sha }}-attempt-${{ github.run_attempt }}
           retention-days: 14
           include-hidden-files: true
           if-no-files-found: warn
           path: |
             .tmp_verify/ci-public-profiles/*.log
-            .tmp_verify/ci_public_full/public-*/command.log
-            .tmp_verify/ci_public_full/public-*/finish.json
-            .tmp_verify/ci_public_full/public-*/reports.json
-            .tmp_verify/ci_public_full/public-*/result.json
-            .tmp_verify/ci_public_full/public-*/pytest-progress.json
+            .tmp_verify/ci_public_primary/public-*/command.log
+            .tmp_verify/ci_public_primary/public-*/finish.json
+            .tmp_verify/ci_public_primary/public-*/reports.json
+            .tmp_verify/ci_public_primary/public-*/result.json
+            .tmp_verify/ci_public_primary/public-*/pytest-progress.json
             .tmp_verify/ci_public_affected/feedback-result.json
             .tmp_verify/ci_public_affected/command.log
             .tmp_verify/ci_public_affected/finish.json
@@ -374,8 +300,89 @@ jobs:
             .tmp_verify/ci_public_affected/public-*/result.json
             .tmp_verify/ci_public_affected/public-*/pytest-progress.json
       - name: Verify source-checkout wrapper bootstrap
-        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.source_only != 'true') }}
+        if: ${{ needs.feedback-plan.outputs.mode == 'full' || needs.feedback-plan.outputs.mode == 'affected' }}
         run: env -u PYTHONPATH SCIPLOT_PYTHON=python3 skill/scripts/sciplot --help >/dev/null
       - name: Run fixture-free lifecycle smoke
-        if: ${{ (steps.main-admission.outcome != 'success' || steps.main-admission.outputs.referenced != 'true') && (steps.native-feedback.outcome != 'success' || steps.native-feedback.outputs.layer != 'affected' || github.event_name == 'workflow_dispatch') }}
+        if: ${{ needs.feedback-plan.outputs.mode == 'full' }}
         run: skill/scripts/sciplot smoke --out "$RUNNER_TEMP/sciplot-runtime-smoke" --json
+      - name: Seal public-primary result
+        id: receipt
+        run: printf 'receipt=%s:%s:%s:public-primary\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+  public-native-first:
+    needs: feedback-plan
+    if: ${{ needs.feedback-plan.outputs.mode == 'full' }}
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: ${{ format('{0}-public-native-first', needs.feedback-plan.outputs.group) }}
+      cancel-in-progress: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
+    outputs:
+      receipt: ${{ steps.receipt.outputs.receipt }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONNOUSERSITE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact workflow checkout
+        run: python3 src/sciplot_core/verification/main_commit_admission.py --verify-checkout
+      - name: Prepare native test runtime
+        uses: ./.github/actions/native-runtime
+      - name: Run comprehensive first shard
+        id: comprehensive-first
+        run: python3 -m sciplot_core.verification.ci_public_profiles comprehensive-first
+      - name: Preserve first-shard failure evidence
+        if: ${{ failure() && steps.comprehensive-first.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-failure-native-first-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          retention-days: 14
+          include-hidden-files: true
+          if-no-files-found: warn
+          path: |
+            .tmp_verify/ci-public-profiles/comprehensive-first.log
+            .tmp_verify/ci_public_comprehensive-first/command.log
+            .tmp_verify/ci_public_comprehensive-first/finish.json
+            .tmp_verify/ci_public_comprehensive-first/reports.json
+            .tmp_verify/ci_public_comprehensive-first/result.json
+            .tmp_verify/ci_public_comprehensive-first/pytest-progress.json
+      - name: Seal public-native-first result
+        id: receipt
+        run: printf 'receipt=%s:%s:%s:public-native-first\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+  runtime-integrity:
+    needs: [feedback-plan, public-primary, public-native-first]
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require an exact complete feedback result
+        env:
+          SCIPLOT_PLAN_RESULT: ${{ needs.feedback-plan.result }}
+          SCIPLOT_PLAN_GROUP: ${{ needs.feedback-plan.outputs.group }}
+          SCIPLOT_PLAN_MODE: ${{ needs.feedback-plan.outputs.mode }}
+          SCIPLOT_PLAN_RECEIPT: ${{ needs.feedback-plan.outputs.receipt }}
+          SCIPLOT_PRIMARY_RESULT: ${{ needs.public-primary.result }}
+          SCIPLOT_PRIMARY_RECEIPT: ${{ needs.public-primary.outputs.receipt }}
+          SCIPLOT_FIRST_RESULT: ${{ needs.public-native-first.result }}
+          SCIPLOT_FIRST_RECEIPT: ${{ needs.public-native-first.outputs.receipt }}
+        run: |
+          set -eu
+          receipt="$GITHUB_RUN_ID:$GITHUB_RUN_ATTEMPT:$GITHUB_SHA"
+          test "$SCIPLOT_PLAN_RESULT" = success
+          test -n "$SCIPLOT_PLAN_GROUP"
+          test "$SCIPLOT_PLAN_RECEIPT" = "$receipt:plan"
+          case "$SCIPLOT_PLAN_MODE" in
+            reference)
+              test "$SCIPLOT_PRIMARY_RESULT" = skipped
+              test -z "$SCIPLOT_PRIMARY_RECEIPT"
+              ;;
+            source-only|affected|full)
+              test "$SCIPLOT_PRIMARY_RESULT" = success
+              test "$SCIPLOT_PRIMARY_RECEIPT" = "$receipt:public-primary"
+              ;;
+            *) exit 1 ;;
+          esac
+          if [[ "$SCIPLOT_PLAN_MODE" == full ]]; then
+            test "$SCIPLOT_FIRST_RESULT" = success
+            test "$SCIPLOT_FIRST_RECEIPT" = "$receipt:public-native-first"
+          else
+            test "$SCIPLOT_FIRST_RESULT" = skipped
+            test -z "$SCIPLOT_FIRST_RECEIPT"
+          fi

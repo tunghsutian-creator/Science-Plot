@@ -9,6 +9,8 @@ import subprocess
 import sys
 from typing import Any
 
+from sciplot_core.verification.public_stage_selection import COMPREHENSIVE_SHARDS
+
 DIRECTORY = ".tmp_verify/ci-public-profiles"
 PROGRESS_INTERVAL_SECONDS = 120
 
@@ -70,10 +72,13 @@ def run_profile(root: Path, profile: str) -> int:
         raise ValueError("CI evidence roots cannot follow aliases.")
     environment = dict(os.environ)
     output = ".tmp_verify/ci_public_" + profile
+    grouped = {"full": ("public-ci-full", "public-comprehensive"),
+               "primary": ("public-ci-primary", COMPREHENSIVE_SHARDS[1])}
+    name, comprehensive = grouped.get(profile, ("public-" + profile, ""))
     command = [sys.executable, "-m", "sciplot_core.verification.public_stage",
-               "--profile", "public-ci-full" if profile == "full" else "public-" + profile, "--out", output]
-    result_directories = ([root / output / ("public-" + tier) for tier in ("focused", "comprehensive")]
-                          if profile == "full" else [root / output])
+               "--profile", name, "--out", output]
+    result_directories = ([root / output / tier for tier in ("public-focused", comprehensive)]
+                          if comprehensive else [root / output])
     directory.mkdir(parents=True, exist_ok=True)
     log = directory / f"{profile}.log"
     with log.open("xb") as stream, subprocess.Popen(
@@ -93,8 +98,15 @@ def run_profile(root: Path, profile: str) -> int:
             report_profile(path, result)
         else:
             missing_results.append(path.name)
-        if code == 0 and expected_head and result.get("origin_head") != expected_head:
-            raise ValueError("Actual public stage source differs from GITHUB_SHA.")
+        if code == 0:
+            if expected_head and result.get("origin_head") != expected_head:
+                raise ValueError("Actual public stage source differs from GITHUB_SHA.")
+            if result.get("status") != "PASS":
+                raise ValueError("Successful public command is missing an exact passing stage result.")
+            if profile in {"primary", "comprehensive-first"}:
+                expected = path.name if comprehensive else name
+                if result.get("profile") != expected or result.get("canonical_profile_executed") is not (expected == "public-focused"):
+                    raise ValueError("Actual public stage does not prove the expected profile or shard.")
     if code:
         failure = _read_object(log)
         detail = failure.get("error")
@@ -109,7 +121,7 @@ def run_profile(root: Path, profile: str) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("profile", choices=("focused", "comprehensive", "full"))
+    parser.add_argument("profile", choices=("focused", "comprehensive", "full", "primary", "comprehensive-first"))
     args = parser.parse_args()
     return run_profile(Path(__file__).resolve().parents[3], args.profile)
 

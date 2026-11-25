@@ -1,0 +1,100 @@
+name: SciPlot native test runtime
+description: Install and verify Ubuntu's matching Python and Qt runtime
+runs:
+  using: composite
+  steps:
+    - name: Install matching system Python and Qt toolchain
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install --yes --no-install-recommends \
+          build-essential qt6-base-dev qt6-image-formats-plugins python3-dev python3-venv zsh \
+          python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev pyqt6-dev-tools \
+          fonts-noto-cjk
+        # Ubuntu's PyQt6 and qmake use the same distribution Qt libraries.
+        # A PyPI PyQt6 wheel carries a separate Qt runtime, so keep the
+        # distribution interpreter and expose its bindings to this venv.
+        /usr/bin/python3 -m venv --system-site-packages .venv
+        echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+        .venv/bin/python -m pip install --upgrade pip setuptools wheel
+    - name: Install local runtime
+      # Explicit Linux/Python 3.12 validation anchor; keep pandas 3.1 exercised.
+      # This is not a universal freeze for the Python 3.11 language floor.
+      shell: bash
+      run: >-
+        python3 -m pip install -e '.[studio,dev,mcp]'
+        'numpy==2.4.6' 'pandas==3.1.0' 'scipy==1.18.1'
+        'Pillow==13.0.0' 'PyMuPDF==2.0'
+    - name: Verify Qt build and runtime identity
+      shell: bash
+      run: |
+        python3 - <<'PY'
+        import subprocess
+        import shutil
+        import sys
+        import json
+        import sysconfig
+        import tempfile
+        from pathlib import Path
+        import PyQt6
+        from PyQt6 import QtCore, QtGui, QtWidgets, QtPrintSupport, QtSvg, QtSvgWidgets, sip, uic
+        from PyQt6.uic import loadUi
+
+        qmake = subprocess.check_output(["qmake6", "-query", "QT_VERSION"], text=True).strip()
+        runtime = QtCore.qVersion()
+        binding = Path(PyQt6.__file__).resolve()
+        assert sys.version_info[:2] == (3, 12), sys.version
+        assert binding.is_relative_to("/usr/lib/python3/dist-packages"), binding
+        assert qmake == runtime, (qmake, runtime)
+        assert (binding.parent / "bindings/QtCore/QtCore.toml").is_file(), binding
+        assert Path(uic.__file__).resolve().is_relative_to(binding.parent), uic.__file__
+        assert callable(loadUi) and all((QtGui, QtWidgets, QtPrintSupport, QtSvg, QtSvgWidgets, sip))
+        assert shutil.which("zsh"), "Delivery launchers require zsh"
+        formats = {bytes(name).decode("ascii").lower() for name in QtGui.QImageWriter.supportedImageFormats()}
+        assert {"png", "tiff"} <= formats, sorted(formats)
+        with tempfile.TemporaryDirectory(prefix="sciplot-qt-tiff-") as temporary:
+            path = Path(temporary) / "probe.tiff"
+            image = QtGui.QImage(1, 1, QtGui.QImage.Format.Format_RGB32)
+            image.fill(QtGui.QColor("red"))
+            writer = QtGui.QImageWriter(str(path), b"tiff")
+            assert writer.write(image), writer.errorString()
+            assert path.is_file() and path.stat().st_size > 0
+            reopened = QtGui.QImage(str(path))
+            assert not reopened.isNull() and (reopened.width(), reopened.height()) == (1, 1)
+            assert reopened.pixelColor(0, 0) == image.pixelColor(0, 0)
+        print(f"Python {sys.version.split()[0]}; PyQt {QtCore.PYQT_VERSION_STR}; Qt build/runtime {runtime}; {binding}")
+        from sciplot_core.verification.private_process_boundaries import executable_hash, runtime_identity
+        observation_runtime = runtime_identity()
+        executable_sha256 = executable_hash(sys.executable)
+        assert executable_sha256 is not None
+        print(json.dumps({
+            "observation_runtime": observation_runtime,
+            "python_executable_sha256": executable_sha256,
+            "executable_owns_observation_core": executable_sha256 in observation_runtime["loaded_core_sha256"],
+            "py_enable_shared_build_flag": sysconfig.get_config_var("Py_ENABLE_SHARED"),
+        }, sort_keys=True))
+        PY
+    - name: Verify Chinese glyph fallback in the system Qt runtime
+      shell: bash
+      run: |
+        python3 - <<'PYFONT'
+        from PyQt6.QtGui import QFont, QGuiApplication, QTextLayout
+        app = QGuiApplication([])
+        text = "\u4f4e\u6e29\u6297\u51b2\u51fb\u80fd\u529b"
+        layout = QTextLayout(text, QFont("Arial", 8))
+        layout.beginLayout()
+        line = layout.createLine()
+        layout.endLayout()
+        runs = layout.glyphRuns()
+        assert runs and all(index != 0 for run in runs for index in run.glyphIndexes()), "Missing Chinese glyph fallback"
+        print({"text": text, "fallback_families": [run.rawFont().familyName() for run in runs]})
+        PYFONT
+    - name: Build vendored Veusz helpers
+      working-directory: third_party/veusz
+      shell: bash
+      run: QMAKE_EXE="$(command -v qmake6)" python3 setup.py build_ext --inplace
+    - name: Verify vendored Veusz helpers
+      env:
+        PYTHONPATH: third_party/veusz
+      shell: bash
+      run: python3 -c 'from veusz.helpers import _nc_cntr, qtmml, qtloops, recordpaint, threed; assert all((qtloops, qtmml, recordpaint, threed, _nc_cntr))'

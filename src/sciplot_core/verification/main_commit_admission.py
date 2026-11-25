@@ -15,19 +15,25 @@ import urllib.request
 REPOSITORY = "tunghsutian-creator/Science-Plot"
 WORKFLOW = ".github/workflows/minimal-repository.yml"
 NATIVE_DIAGNOSTIC_STEP = "Check known native CI regressions before the public suites"
-REQUIRED_STEPS = (
-    "Require a valid scheduling plan", "Run actions/checkout@v4", "Verify exact workflow checkout",
-    "Check main commit admission", "Plan bounded public feedback", "Enforce minimal runtime distribution",
-    "Compile SciPlot-owned Python", "Install matching system Python and Qt toolchain", "Install local runtime",
-    "Verify Qt build and runtime identity", "Verify Chinese glyph fallback in the system Qt runtime",
-    "Run lint gate", "Run shared source contracts", "Run scoped static type gate", "Build vendored Veusz helpers",
-    "Verify vendored Veusz helpers", "Verify minimal wheel surface",
-    NATIVE_DIAGNOSTIC_STEP, "Run reviewed complete public behavior", "Verify source-checkout wrapper bootstrap",
-    "Run fixture-free lifecycle smoke",
-)
+_CHECKOUT = ("Run actions/checkout@v4", "Verify exact workflow checkout")
+REQUIRED_JOB_STEPS = {
+    "feedback-plan": ("Isolate future obsolete-run scheduling", *_CHECKOUT, "Check main commit admission",
+                      "Plan bounded public feedback", "Seal exact feedback route"),
+    "public-primary": (*_CHECKOUT, "Enforce minimal runtime distribution", "Compile SciPlot-owned Python",
+                       "Prepare native test runtime", "Run lint gate", "Run shared source contracts",
+                       "Run scoped static type gate", "Verify minimal wheel surface", NATIVE_DIAGNOSTIC_STEP,
+                       "Run focused and comprehensive second shard", "Verify source-checkout wrapper bootstrap",
+                       "Run fixture-free lifecycle smoke", "Seal public-primary result"),
+    "public-native-first": (*_CHECKOUT, "Prepare native test runtime", "Run comprehensive first shard",
+                            "Seal public-native-first result"),
+    "runtime-integrity": ("Require an exact complete feedback result",),
+}
 PLATFORM_STEPS = {"Set up job", "Complete job", "Post Run actions/checkout@v4"}
-SKIPPED_FULL_STEPS = {"Run reviewed affected public feedback", "Run source-only documentation feedback",
-                      "Preserve public failure evidence"}
+SKIPPED_FULL_STEPS = {
+    "public-primary": {"Run reviewed affected public feedback", "Run source-only documentation feedback",
+                       "Preserve public failure evidence"},
+    "public-native-first": {"Preserve first-shard failure evidence"},
+}
 RUN_STATE = ("id", "run_number", "run_attempt", "status", "conclusion", "head_sha", "event", "path")
 
 
@@ -112,6 +118,38 @@ def _origin(run: dict[str, Any], sha: str) -> bool:
                     and run[key].get("fork") is False for key in ("repository", "head_repository")))
 
 
+def verify_origin_jobs(jobs: list[dict[str, Any]], run: dict[str, Any], sha: str) -> None:
+    by_role = {job.get("name"): job for job in jobs if isinstance(job.get("name"), str)}
+    if len(by_role) != len(jobs) or set(by_role) != set(REQUIRED_JOB_STEPS):
+        raise Unavailable("missing_or_unexpected_source_check_jobs")
+    for role, required in REQUIRED_JOB_STEPS.items():
+        job = by_role[role]
+        if not _successful(job):
+            raise Unavailable("missing_or_unsuccessful_source_check_job")
+        if any(type(job.get(key)) is not int or job[key] != run[source]
+               for key, source in (("run_id", "id"), ("run_attempt", "run_attempt"))) or job.get("head_sha") != sha:
+            raise Unavailable("wrong_job_attempt_or_source")
+        steps = job.get("steps")
+        if (not isinstance(steps, list) or any(not isinstance(step, dict) or not isinstance(step.get("name"), str)
+                or type(step.get("number")) is not int or step["number"] <= 0 for step in steps)
+                or any(len({step[key] for step in steps}) != len(steps) for key in ("name", "number"))):
+            raise Unavailable("unknown_or_duplicate_steps")
+        by_name = {step["name"]: step for step in steps}
+        # Only the early diagnostic may be skipped. The same nodes still run
+        # in the canonical comprehensive partition.
+        if not all(name in by_name and (_successful(by_name[name]) or (
+                name == NATIVE_DIAGNOSTIC_STEP and by_name[name].get("status") == "completed"
+                and by_name[name].get("conclusion") == "skipped")) for name in required):
+            raise Unavailable("full_source_checks_not_executed_successfully")
+        if [by_name[name]["number"] for name in required] != sorted(by_name[name]["number"] for name in required):
+            raise Unavailable("required_steps_out_of_order")
+        skipped = SKIPPED_FULL_STEPS.get(role, set())
+        if any(not _successful(step) if name in PLATFORM_STEPS else
+               name not in skipped or step.get("status") != "completed" or step.get("conclusion") != "skipped"
+               for name, step in by_name.items() if name not in required):
+            raise Unavailable("unknown_or_nonfull_step")
+
+
 def admit(environment: Mapping[str, str], read: Callable[[str], dict[str, Any]] = api_get) -> dict[str, Any]:
     if environment.get("GITHUB_EVENT_NAME") != "push" or environment.get("GITHUB_REF") != "refs/heads/main":
         return {"referenced": False, "reason": "fresh_event_or_branch"}
@@ -125,30 +163,7 @@ def admit(environment: Mapping[str, str], read: Callable[[str], dict[str, Any]] 
         related = _related(read(path), int(current), sha)
         run = max(related, key=lambda row: row["run_number"])
         jobs = _page(read(f"/repos/{REPOSITORY}/actions/runs/{run['id']}/attempts/{run['run_attempt']}/jobs?per_page=100"), "jobs")
-        runtime = [job for job in jobs if job.get("name") == "runtime-integrity"]
-        if len(runtime) != 1 or not _successful(runtime[0]):
-            raise Unavailable("missing_or_unsuccessful_runtime_job")
-        job = runtime[0]
-        if any(type(job.get(key)) is not int or job[key] != run[source] for key, source in (("run_id", "id"), ("run_attempt", "run_attempt"))) or job.get("head_sha") != sha:
-            raise Unavailable("wrong_job_attempt_or_source")
-        steps = job.get("steps")
-        if (not isinstance(steps, list) or any(not isinstance(step, dict) or not isinstance(step.get("name"), str)
-                or type(step.get("number")) is not int or step["number"] <= 0 for step in steps)
-                or any(len({step[key] for step in steps}) != len(steps) for key in ("name", "number"))):
-            raise Unavailable("unknown_or_duplicate_steps")
-        by_name = {step["name"]: step for step in steps}
-        # Only the early duplicate may be skipped. Its original nodes are
-        # still required by the comprehensive stage, whose success is mandatory.
-        if not all(name in by_name and (_successful(by_name[name]) or (
-                name == NATIVE_DIAGNOSTIC_STEP and by_name[name].get("status") == "completed"
-                and by_name[name].get("conclusion") == "skipped")) for name in REQUIRED_STEPS):
-            raise Unavailable("full_source_checks_not_executed_successfully")
-        if [by_name[name]["number"] for name in REQUIRED_STEPS] != sorted(by_name[name]["number"] for name in REQUIRED_STEPS):
-            raise Unavailable("required_steps_out_of_order")
-        if any(not _successful(step) if name in PLATFORM_STEPS else
-               name not in SKIPPED_FULL_STEPS or step.get("status") != "completed" or step.get("conclusion") != "skipped"
-               for name, step in by_name.items() if name not in REQUIRED_STEPS):
-            raise Unavailable("unknown_or_nonfull_step")
+        verify_origin_jobs(jobs, run, sha)
         final = _related(read(path), int(current), sha)
         if [[row[key] for key in RUN_STATE] for row in final] != [[row[key] for key in RUN_STATE] for row in related]:
             raise Unavailable("same_head_checks_changed_during_admission")

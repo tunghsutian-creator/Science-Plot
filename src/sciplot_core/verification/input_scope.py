@@ -7,10 +7,12 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.verification.public_stage_selection import match_targets, target_modules
+from sciplot_core.verification.public_stage_selection import (
+    COMPREHENSIVE_SHARDS, comprehensive_shard, match_targets, profile_tier, target_modules,
+)
 
 MANIFEST = Path(__file__).with_name("input_scope_manifest.json")
-PROFILES = ("public-focused", "public-comprehensive", "public-all", "private-science")
+PROFILES = ("public-focused", "public-comprehensive", "public-all", "private-science", *COMPREHENSIVE_SHARDS)
 
 
 def load_manifest(path: Path = MANIFEST) -> dict[str, Any]:
@@ -86,8 +88,10 @@ def select_scope(profile: str, *, manifest: dict[str, Any], collected: list[str]
             raise ValueError("Lifecycle tier drift; input scope cannot reclassify lifecycle tiers.")
     scope = "private" if profile == "private-science" else "public"
     selected = declared.intersection(manifest["scopes"][scope])
-    if profile in {"public-focused", "public-comprehensive"}:
-        selected.intersection_update(manifest["tiers"][profile.removeprefix("public-")])
+    tier = profile_tier(profile)
+    if tier in {"public-focused", "public-comprehensive"}:
+        selected.intersection_update(manifest["tiers"][tier.removeprefix("public-")])
+    selected = comprehensive_shard(profile, selected)
     if targets:
         selected = match_targets(selected, targets)
     return [node for node in collected if node in selected]

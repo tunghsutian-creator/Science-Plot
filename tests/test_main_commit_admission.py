@@ -45,41 +45,43 @@ def future_origin():
         "repository": {"full_name": gate.REPOSITORY, "fork": False},
         "head_repository": {"full_name": gate.REPOSITORY, "fork": False},
     }
-    job = copy.deepcopy(RECORDED_AFFECTED_JOB)
-    job.update(run_id=100, run_attempt=1, head_sha=SHA)
-    # Literal complete workflow obligations, independent of the production list.
-    names = [
-        "Require a valid scheduling plan",
-        "Run actions/checkout@v4",
-        "Verify exact workflow checkout",
-        "Check main commit admission",
-        "Plan bounded public feedback",
-        "Enforce minimal runtime distribution",
-        "Compile SciPlot-owned Python",
-        "Install matching system Python and Qt toolchain",
-        "Install local runtime",
-        "Verify Qt build and runtime identity",
-        "Verify Chinese glyph fallback in the system Qt runtime",
-        "Run lint gate",
-        "Run shared source contracts",
-        "Run scoped static type gate",
-        "Build vendored Veusz helpers",
-        "Verify vendored Veusz helpers",
-        "Verify minimal wheel surface",
-        "Check known native CI regressions before the public suites",
-        "Run reviewed complete public behavior",
-        "Verify source-checkout wrapper bootstrap",
-        "Run fixture-free lifecycle smoke",
+    # Independent literal job and step shape for a complete sharded attempt.
+    roles = {
+        "public-primary": (
+            "Run actions/checkout@v4", "Verify exact workflow checkout",
+            "Enforce minimal runtime distribution", "Compile SciPlot-owned Python",
+            "Run source-only documentation feedback", "Prepare native test runtime",
+            "Run lint gate", "Run shared source contracts", "Run scoped static type gate",
+            "Verify minimal wheel surface", "Check known native CI regressions before the public suites",
+            "Run reviewed affected public feedback", "Run focused and comprehensive second shard",
+            "Preserve public failure evidence", "Verify source-checkout wrapper bootstrap",
+            "Run fixture-free lifecycle smoke", "Seal public-primary result",
+        ),
+        "public-native-first": (
+            "Run actions/checkout@v4", "Verify exact workflow checkout", "Prepare native test runtime",
+            "Run comprehensive first shard", "Preserve first-shard failure evidence",
+            "Seal public-native-first result",
+        ),
+        "feedback-plan": (
+            "Isolate future obsolete-run scheduling", "Run actions/checkout@v4", "Verify exact workflow checkout",
+            "Check main commit admission", "Plan bounded public feedback", "Seal exact feedback route",
+        ),
+        "runtime-integrity": ("Require an exact complete feedback result",),
+    }
+    skipped = {
+        "Run source-only documentation feedback", "Run reviewed affected public feedback",
+        "Preserve public failure evidence", "Preserve first-shard failure evidence",
+    }
+    jobs = [
+        {"name": role, "run_id": 100, "run_attempt": 1, "head_sha": SHA, "status": "completed",
+         "conclusion": "success", "steps": [
+             {"name": name, "number": number, "status": "completed",
+              "conclusion": "skipped" if name in skipped else "success"}
+             for number, name in enumerate(names, 1)
+         ]}
+        for role, names in roles.items()
     ]
-    job["steps"] = [
-        {"name": name, "number": number, "status": "completed", "conclusion": "success"}
-        for number, name in enumerate(names, 1)
-    ]
-    job["steps"].extend(
-        {"name": name, "number": len(names) + offset, "status": "completed", "conclusion": "skipped"}
-        for offset, name in enumerate(("Run reviewed affected public feedback", "Preserve public failure evidence"), 1)
-    )
-    return {"total_count": 1, "workflow_runs": [run]}, {"total_count": 1, "jobs": [job]}
+    return {"total_count": 1, "workflow_runs": [run]}, {"total_count": len(jobs), "jobs": jobs}
 
 
 def reader(runs, jobs, final=None):
@@ -114,10 +116,17 @@ def test_complete_source_check_is_referenced_without_current_execution():
     diagnostic = next(step for step in steps if step["name"] == gate.NATIVE_DIAGNOSTIC_STEP)
     diagnostic["conclusion"] = "skipped"
     assert gate.admit(context(), reader(runs, jobs)[0])["referenced"] is True
-    comprehensive = next(step for step in steps if step["name"] == "Run reviewed complete public behavior")
-    comprehensive["conclusion"] = "skipped"
-    assert gate.admit(context(), reader(runs, jobs)[0])["referenced"] is False
-    comprehensive["conclusion"] = "success"
+    for job, name in (
+        (jobs["jobs"][0], "Run focused and comprehensive second shard"),
+        (jobs["jobs"][1], "Run comprehensive first shard"),
+        (jobs["jobs"][0], "Verify source-checkout wrapper bootstrap"),
+        (jobs["jobs"][0], "Run fixture-free lifecycle smoke"),
+        (jobs["jobs"][3], "Require an exact complete feedback result"),
+    ):
+        step = next(row for row in job["steps"] if row["name"] == name)
+        step["conclusion"] = "skipped"
+        assert gate.admit(context(), reader(runs, jobs)[0])["referenced"] is False
+        step["conclusion"] = "success"
     diagnostic["conclusion"] = "failure"
     assert gate.admit(context(), reader(runs, jobs)[0])["referenced"] is False
 
@@ -173,20 +182,21 @@ def test_ineligible_or_unknown_original_evidence_executes_fresh(mutation):
     elif mutation == "in_progress":
         run.update(status="in_progress", conclusion=None)
     elif mutation == "partial":
-        job["conclusion"] = "failure"
+        jobs["jobs"][1]["conclusion"] = "cancelled"
     elif mutation == "wrong_attempt":
-        job["run_attempt"] = 2
+        jobs["jobs"][1]["run_attempt"] = 2
     elif mutation == "wrong_job_sha":
-        job["head_sha"] = "b" * 40
+        jobs["jobs"][1]["head_sha"] = "b" * 40
     elif mutation == "missing_job":
-        jobs.update(total_count=0, jobs=[])
+        jobs["jobs"].pop(1)
+        jobs["total_count"] -= 1
     elif mutation == "duplicate_job":
         jobs["jobs"].append(copy.deepcopy(job))
-        jobs["total_count"] = 2
+        jobs["total_count"] += 1
     elif mutation == "missing_step":
         job["steps"].pop(2)
     elif mutation == "skipped_full_step":
-        job["steps"][18]["conclusion"] = "skipped"
+        next(step for step in job["steps"] if step["name"] == "Run focused and comprehensive second shard")["conclusion"] = "skipped"
     elif mutation == "duplicate_step":
         job["steps"].append(copy.deepcopy(job["steps"][0]))
     elif mutation == "unknown_step":
@@ -227,7 +237,7 @@ def test_latest_or_changed_push_never_falls_back_to_an_older_green(latest_state)
     if latest_state == "changed_attempt":
         latest["workflow_runs"][0]["run_attempt"] = 2
     elif latest_state == "reference_only":
-        jobs["jobs"][0]["steps"][18]["conclusion"] = "skipped"
+        next(step for step in jobs["jobs"][0]["steps"] if step["name"] == "Run focused and comprehensive second shard")["conclusion"] = "skipped"
     else:
         run = copy.deepcopy(runs["workflow_runs"][0])
         run.update(id=101, run_number=11)
@@ -269,12 +279,12 @@ def test_all_visible_same_head_attempts_must_be_successful_and_stable(state):
 def test_real_recorded_successful_affected_job_is_not_a_full_source_origin():
     runs, _jobs = future_origin()
     job = copy.deepcopy(RECORDED_AFFECTED_JOB)
-    # Match only the envelope so the original skip statuses are the rejection.
+    # A pre-split limited run cannot provide both verified worker roles.
     job.update(run_id=100, head_sha=SHA)
     read, _calls = reader(runs, {"total_count": 1, "jobs": [job]})
     assert (
         gate.admit(context(), read)["reason"]
-        == "full_source_checks_not_executed_successfully"
+        == "missing_or_unexpected_source_check_jobs"
     )
 
 
@@ -391,21 +401,18 @@ def test_current_workflow_keeps_hard_identity_and_fresh_fallback():
         and "GH_TOKEN: ${{ github.token }}" in admission
     )
     names = {s.splitlines()[0] for s in parts[1:]}
-    assert set(gate.REQUIRED_STEPS) - {"Run actions/checkout@v4"} <= names
-    for step in parts[1:]:
-        if step.splitlines()[0] in names - {
-            "Isolate future obsolete-run scheduling",
-            "Require a valid scheduling plan",
-            "Verify exact workflow checkout",
-            "Check main commit admission",
-        }:
-            assert "steps.main-admission.outcome != 'success'" in step
-            assert "steps.main-admission.outputs.referenced != 'true'" in step
+    assert all(
+        set(required) - {"Run actions/checkout@v4"} <= names
+        for required in gate.REQUIRED_JOB_STEPS.values()
+    )
+    assert workflow.count("python3 src/sciplot_core/verification/main_commit_admission.py --verify-checkout") == 3
+    assert workflow.count('uses: ./.github/actions/native-runtime') == 2
     assert (
         workflow.index("Verify exact workflow checkout")
         < workflow.index("Check main commit admission")
-        < workflow.index("Install matching")
+        < workflow.index("Prepare native test runtime")
     )
+
 
 
 @pytest.mark.parametrize("referenced", [True, False])
