@@ -289,6 +289,7 @@ def test_managed_discovery_and_continuation_use_existing_seals_without_native_or
     assert continued["status"] == "current"
     assert continued["next_step"]["arguments"] == {"target": str(root)}
     assert continued["ready_to_use"] is None and not continued["readiness_evaluated"]
+    assert continued["current"]["export_current"]["current"] is False
     assert inventory(tmp_path) == before
     from sciplot_core.plot_engine.service import PlotService
     service = PlotService()

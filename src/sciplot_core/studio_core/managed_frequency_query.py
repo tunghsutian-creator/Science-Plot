@@ -51,9 +51,66 @@ def is_frequency_project_request(request: Path) -> bool:
     return request.name == "plot_request.json" and (request.parent / FREQUENCY_RECORD).is_file()
 
 
+def _recorded_group(manifest: dict[str, Any] | None, project: Path) -> dict[str, Any] | None:
+    result = manifest.get("result") if manifest is not None else None
+    group = result.get("managed_frequency") if isinstance(result, dict) else None
+    return group if isinstance(group, dict) and group.get("project") == str(project) else None
+
+
+def _inspect_selected_figure(project: Path, request_path: Path, *, figure_id: str | None,
+                             document: Path | None, manifest: dict[str, Any] | None,
+                             output: Path) -> dict[str, Any]:
+    from sciplot_core.task_semantic_owner import inspect_managed_publication
+
+    initial = _recorded_group(manifest, project)
+    if document is not None:
+        delivery = manifest.get("delivery_package") if initial is not None and manifest is not None else None
+        documents = delivery.get("project_documents", []) if isinstance(delivery, dict) else []
+        registered = [item["figure_id"] for item in documents
+                      if isinstance(item, dict) and item.get("path") == str(document)]
+        if len(registered) != 1:
+            raise ValueError(f"The selected VSZ is not bound to a saved figure: {document}")
+        if figure_id is not None and registered[0] != figure_id:
+            raise ValueError("The requested figure ID does not match the selected delivery VSZ.")
+        figure_id = registered[0]
+    observed = observe_frequency_figures(project)
+    member = next((item for item in observed.figures if item["figure_id"] == figure_id), None)
+    if member is None:
+        raise ValueError(f"Unknown figure_id: {figure_id}")
+
+    # Membership gives the stable identity, not the current revision's export.
+    # Ask only this plot's existing publication owner, even if the group is cold,
+    # a sibling is damaged, or the visible group package is no longer current.
+    current = inspect_managed_publication(Path(member["plot"]), plot_id=member["plot_id"])
+    after = observe_frequency_figures(project)
+    if (after.primary_figure_id, after.figures) != (observed.primary_figure_id, observed.figures):
+        raise ValueError("The Managed frequency membership changed during inspection; query again.")
+    evidence = current["export_current"]
+    publication = evidence.get("publication") or {}
+    ready = evidence["current"] is True and publication.get("ready_to_use") is True
+    selected = {**member, **{key: current[key] for key in ("revision", "scientific_hash", "presentation_hash")},
+                "document": current["artifact"], "document_sha256": publication.get("document_sha256"),
+                "document_authority": "managed_model", "status": "ready" if ready else current["status"],
+                "exports": publication.get("exports", []), "export_current": evidence}
+    return {"kind": "sciplot_project_inspection", "version": 1, "status": "ok",
+            "project": str(project), "request": str(request_path),
+            "primary_figure_id": observed.primary_figure_id, "figures": observed.figures,
+            "selected_figure": selected, "document_authority": "managed_figure_group",
+            "publication_scope": "selected_managed_revision",
+            "source": {"current": current["status"] == "current", "scope": "selected_managed_binding"},
+            "qa": {"current": ready, "status": publication.get("publication_qa", {}).get("status")},
+            "delivery": {"current": ready, "scope": "selected_managed_export_files", "package_included": False},
+            "initial_group_publication": {"manifest": str(output / "manifest.json"),
+                "recorded": initial is not None,
+                "generation": initial.get("generation") if initial is not None else None,
+                "recorded_ready_to_use": manifest.get("ready_to_use") if initial is not None and manifest is not None else None,
+                "currentness_evaluated": False},
+            "readiness_evaluated": True, "ready_to_use": ready, "live_gui_state_evaluated": False}
+
+
 @observe_existing_store()
-def inspect_frequency_creation(project: Path) -> dict[str, Any] | None:
-    """Project the original publication's readiness, not the current figure catalogue."""
+def inspect_frequency_creation(project: Path, *, figure_id: str | None = None) -> dict[str, Any] | None:
+    """Keep the selected member's current publication separate from the original group."""
     observed = locate_frequency_project(project)
     if observed is None:
         return None
@@ -61,25 +118,25 @@ def inspect_frequency_creation(project: Path) -> dict[str, Any] | None:
     request = creation["request"]
     output = Path(request["output"])
     manifest = read_json_object(output / "manifest.json")
-    if manifest is None or manifest.get("result", {}).get("managed_frequency", {}).get("project") != str(project):
+    if figure_id is not None or document is not None:
+        return _inspect_selected_figure(project, canonical_request, figure_id=figure_id,
+                                        document=document, manifest=manifest, output=output)
+
+    initial = _recorded_group(manifest, project)
+    if manifest is None or initial is None:
         raise ValueError("The Managed frequency project is not yet delivered. Repeat the exact creation.")
     receipt = frequency_receipt(canonical_request, output, manifest)
-    if document is not None:
-        selected = next((item for item in receipt["figures"] if item["document"] == str(document)), None)
-        if selected is None:
-            raise ValueError(f"The selected VSZ is not bound to a saved figure: {document}")
-        receipt["selected_figure"] = selected
     current = observe_frequency_figures(project, projection=True)
     if [(item["figure_id"], item["plot"]) for item in receipt["figures"]] != [
             (item["figure_id"], item["plot"]) for item in current.figures]:
         raise ValueError("The published figures no longer identify this Managed frequency project.")
-    original = manifest["result"]["managed_frequency"]["generation"]
     source_current = source_tree_sha256(Path(request["input"])) == creation["source_sha256"]
-    qa_current = (current.generation == original and current.projection_status == "current"
+    qa_current = (current.generation == initial["generation"] and current.projection_status == "current"
                   and manifest["publication_qa"]["status"] == "passed")
     delivery = verify_delivery_package(manifest["delivery_package"], expected_root=Path(request[REQUEST_DELIVERY_ROOT_KEY]),
                                        expected_manifest=manifest)
     return {**receipt, "kind": "sciplot_project_inspection", "status": "ok", "project": str(project),
+            "publication_scope": "initial_managed_group_delivery",
             "source": {"current": source_current}, "qa": {"current": qa_current},
             "delivery": {"current": delivery["passed"] is True},
             "readiness_evaluated": True, "ready_to_use": source_current and qa_current and delivery["passed"] is True,

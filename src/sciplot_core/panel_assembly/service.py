@@ -130,4 +130,22 @@ def compose(request: dict[str, Any]) -> dict[str, Any]:
 
         for panel in document["panels"]:
             assert_source_current(panel["source"])
-    return _summary(document, path, sources_checked=checked)
+    result = _summary(document, path, sources_checked=checked)
+    if checked:
+        from sciplot_core.task_semantic_owner import inspect_managed_publication
+
+        # Reflow has its own QA; prior source exports are only information.
+        for panel, row in zip(document["panels"], result["panels"], strict=True):
+            source = panel["source"]
+            if source["kind"] != "managed":
+                continue
+            revision = source["binding"]["revision"]
+            try:
+                evidence = inspect_managed_publication(Path(source["project"]), plot_id=source["plot_id"],
+                                                       revision=revision)["export_current"]
+            except (OSError, ValueError, RuntimeError, KeyError, TypeError) as exc:
+                if getattr(exc, "reason_code", None) == "managed_publication_selection_changed":
+                    raise AssemblyError("assembly_source_stale", str(exc)) from exc
+                evidence = {"current": False, "validation": "unknown"}
+            row["source_publication"] = {"plot_id": source["plot_id"], "revision": revision, **evidence}
+    return result

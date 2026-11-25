@@ -330,6 +330,7 @@ class FrequencyFigureObservation:
 
     generation: str
     projection_status: str | None
+    primary_figure_id: str
     figures: list[dict[str, Any]]
 
 
@@ -356,7 +357,7 @@ def observe_frequency_figures(project: Path, *, projection: bool = False) -> Fre
     figures = [{"figure_id": task.figure_id, "title": task.title, "plot_id": entries[task.figure_id].entry["plot_id"],
                 "plot": str(entries[task.figure_id].root)} for task in plan.tasks]
     status = observation.projection["projection_status"] if observation.projection is not None else None
-    return FrequencyFigureObservation(observation.selected["generation"], status, figures)
+    return FrequencyFigureObservation(observation.selected["generation"], status, plan.primary_figure_id, figures)
 
 
 def observe_managed_curve(value: Path, *, figure_id: str | None = None

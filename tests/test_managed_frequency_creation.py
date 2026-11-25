@@ -33,6 +33,12 @@ def test_project_create_managed_frequency_keeps_external_delivery_and_reopens(tm
     assert main(["project", "inspect", result["project_dir"], "--figure", result["primary_figure_id"], "--full"]) == 0
     current = json.loads(capsys.readouterr().out)
     assert current["ready_to_use"] and current["selected_figure"]["plot"] == result["figures"][0]["plot"]
+    assert current["publication_scope"] == "selected_managed_revision"
+    assert current["initial_group_publication"]["currentness_evaluated"] is False
+    selected = current["selected_figure"]
+    assert selected["revision"] == 0 and selected["export_current"]["byte_inventory_verified"] is True
+    assert selected["document"] != result["figures"][0]["document"]
+    assert [artifact["format"] for artifact in selected["exports"]][:2] == ["pdf", "tiff_300"]
     assert main(["project", "inspect", str(out), "--full"]) == 0
     assert json.loads(capsys.readouterr().out)["project"] == result["project_dir"]
     secondary = result["figures"][1]
@@ -52,17 +58,63 @@ def test_project_create_managed_frequency_keeps_external_delivery_and_reopens(tm
     def no_native(*args, **kwargs):
         pytest.fail("The exact project retry must reuse its delivered group.")
 
-    monkeypatch.setattr(ManagedVeuszCompiler, "compile_ir", no_native)
-    monkeypatch.setattr(ManagedVeuszCompiler, "export_ir", no_native)
-    assert main(create) == 0
-    assert json.loads(capsys.readouterr().out) == result and store.snapshot()["generation"] == generation
-    document = Path(result["document"])
-    manual = document.read_bytes() + b"\n# user edit\n"
-    document.write_bytes(manual)
-    assert main(create) != 0
-    assert "Saved Veusz copy has local edits" in capsys.readouterr().out
-    assert document.read_bytes() == manual
+    with monkeypatch.context() as no_render:
+        no_render.setattr(ManagedVeuszCompiler, "compile_ir", no_native)
+        no_render.setattr(ManagedVeuszCompiler, "export_ir", no_native)
+        assert main(create) == 0
+        assert json.loads(capsys.readouterr().out) == result and store.snapshot()["generation"] == generation
+        document = Path(result["document"])
+        original = document.read_bytes()
+        manual = original + b"\n# user edit\n"
+        document.write_bytes(manual)
+        try:
+            assert main(create) != 0
+            assert "Saved Veusz copy has local edits" in capsys.readouterr().out
+            assert document.read_bytes() == manual
+        finally:
+            document.write_bytes(original)
 
+        # The archive of the selected secondary is still exact when the
+        # primary member's saved publication is not.
+        primary_pdf, = (store.root / "figures" / result["primary_figure_id"]).glob("*.pdf")
+        original_pdf = primary_pdf.read_bytes()
+        primary_pdf.unlink()
+        try:
+            assert main(["project", "inspect", str(store.root), "--full"]) == 0
+            historical = json.loads(capsys.readouterr().out)
+            assert historical["publication_scope"] == "initial_managed_group_delivery"
+            assert not historical["qa"]["current"]
+            assert main(["project", "inspect", str(store.root), "--figure", secondary["figure_id"], "--full"]) == 0
+            exact = json.loads(capsys.readouterr().out)
+            assert exact["ready_to_use"] and exact["selected_figure"]["revision"] == 0
+            assert all(Path(item["path"]).is_relative_to(store.root)
+                       for item in exact["selected_figure"]["exports"])
+            assert not primary_pdf.exists()
+        finally:
+            primary_pdf.write_bytes(original_pdf)
+
+    # An interactive export of a newer head is current even though the
+    # archived initial group is still generation zero for this plot.
+    from sciplot_core.plot_engine.service import PlotService
+
+    service = PlotService()
+    try:
+        head = service.describe(Path(secondary["plot"]), description={"scope": "summary"})
+        patch = service.patch(Path(secondary["plot"]), {"plot_id": head["plot_id"], "base_revision": 0,
+            "idempotency_key": "current-secondary-axis-label", "intent_class": "presentation",
+            "changes": [{"op": "set", "target": ["axis:x"], "property": "axis.label", "value": "Angular frequency (rad/s)"}]})
+        assert patch["revision"] == 1 and patch["ready_to_use"]
+    finally:
+        service.close()
+    current_generation = store.snapshot()["generation"]
+    assert current_generation != generation
+    assert main(["project", "inspect", str(store.root), "--full"]) == 0
+    assert not json.loads(capsys.readouterr().out)["qa"]["current"]
+    assert main(["project", "inspect", secondary["document"], "--full"]) == 0
+    exact = json.loads(capsys.readouterr().out)
+    assert exact["ready_to_use"] and exact["selected_figure"]["revision"] == 1
+    assert exact["initial_group_publication"]["generation"] == generation
+    assert store.snapshot()["generation"] == current_generation
 
 def _cold_task(root: Path, crash: bool) -> int:
     import os

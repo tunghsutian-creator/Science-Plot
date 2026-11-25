@@ -19,9 +19,9 @@ from sciplot_core.project_lifecycle.paths import canonical_path
 from sciplot_core.project_lifecycle.context import external_project_session, project_query
 
 from sciplot_core.plot_engine.backend import PlotBackend
-from sciplot_core.plot_engine.cache_identity import build_key
 from sciplot_core.plot_engine.content_store import intern_document, referenced_files, verify_document_content
-from sciplot_core.plot_engine.current import changed_inputs, dependency_state, evidence_current, require_current
+from sciplot_core.plot_engine.current import changed_inputs, dependency_state, require_current
+from sciplot_core.plot_engine.export_status import cached_export, current_export
 from sciplot_core.plot_engine.description_scope import require_selector
 from sciplot_core.project_lifecycle.errors import EngineError
 from sciplot_core.project_lifecycle.execution import advance, replay
@@ -144,9 +144,8 @@ class ProjectApplication(CommandDispatch):
         project_recovery(result, root, pending)
         if document.get("plot_type") == "ManagedPlot":
             from sciplot_core.plot_engine.managed_description import describe_managed
-            from sciplot_core.plot_engine.export_status import current_export
 
-            result["export_current"] = current_export(root, head, eligible=not changed and result["pending"] is None, cached_export=self._cached_export)
+            result["export_current"] = current_export(root, head, eligible=not changed and result["pending"] is None)
             return attach_object_operations(describe_managed(root, head, result, self.backend, description=description), document)
         from sciplot_core.plot_engine.external_mutation import authority_status
 
@@ -215,7 +214,7 @@ class ProjectApplication(CommandDispatch):
     def _patch(self, root: Path, request: RequestInput, *, rollback_request: dict[str, Any] | None = None) -> dict[str, Any]:
         from .patch_execution import execute_patch
 
-        return execute_patch(root, request, self.backend, self._cached_export, rollback_request=rollback_request)
+        return execute_patch(root, request, self.backend, cached_export, rollback_request=rollback_request)
 
     @usecase
     def decide(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
@@ -269,16 +268,6 @@ class ProjectApplication(CommandDispatch):
             if load_head(root)["document"].get("plot_type") == "ManagedPlot":
                 return rollback_managed(root, request, self.backend)
             return rollback_legacy(root, request, self.backend, self._patch)
-
-    def _cached_export(self, root: Path, head: dict[str, Any]) -> dict[str, Any] | None:
-        path = root / "export-cache.json"
-        if not exists(path):
-            return None
-        cache = read(path)
-        document = head["document"]
-        key = build_key(document, head["binding"])
-        return cache if (cache["build_key"] == key and evidence_current(
-            cache["artifact_files"], cache.get("evidence_inventories"))) else None
 
     @usecase
     def export(self, plot: Path) -> dict[str, Any]:

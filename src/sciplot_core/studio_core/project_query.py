@@ -20,7 +20,6 @@ from sciplot_core.project_lifecycle.figure_observation import (
     LegacyFigureObservation,
     observe_legacy_project,
     observe_managed_curve,
-    select_figure,
 )
 from sciplot_core.veusz_runtime import veusz_worker_environment
 from sciplot_core.native_process import run_worker
@@ -176,7 +175,7 @@ def inspect_project(project: Path, **options: Any) -> dict[str, Any]:
         if any(options.get(key) for key in ("object_path", "native", "include_annotations", "include_axes")):
             raise ValueError("Managed figures expose their current objects through plot open; use the reported canonical plot path.")
         return _curve_project_status(curve)
-    managed = inspect_frequency_creation(project)
+    managed = inspect_frequency_creation(project, figure_id=options.get("figure_id"))
     if managed is None:
         observation = observe_legacy_project(project)
         if (observation.project / ".sciplot_store").exists():
@@ -185,8 +184,6 @@ def inspect_project(project: Path, **options: Any) -> dict[str, Any]:
         return _inspect_legacy_project(observation, **options)
     if any(options.get(key) for key in ("object_path", "native", "include_annotations", "include_axes")):
         raise ValueError("Managed figures expose their current objects through plot open; use the reported figure plot path.")
-    if options.get("figure_id") is not None:
-        managed["selected_figure"] = select_figure(project, managed["primary_figure_id"], managed["figures"], options["figure_id"])
     return managed
 
 
