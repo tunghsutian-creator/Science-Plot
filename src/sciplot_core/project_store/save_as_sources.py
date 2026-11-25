@@ -15,7 +15,7 @@ def bind_staged_source_copies(store: FileProjectStore, command: ProjectCommand) 
     This is only the host locator binding; source IDs, versions and bytes still
     enter the new Store's canonical generation through the existing publisher.
     """
-    with store._locked(allow_pending=True) as (io, current):
+    with store._locked(allow_pending=True, writer=True) as (io, current):
         record = state.command(io, command.key, command.command_digest)
         if (record is None or record["phase"] not in {"needs_review", "accepted"}
                 or record.get("metadata") != command.to_payload()

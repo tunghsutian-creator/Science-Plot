@@ -17,7 +17,7 @@ import sciplot_core.project_store.publication as publication
 import sciplot_core.project_store.state as state
 import sciplot_core.project_store.native_work as native_work
 from .errors import ProjectConflict, ProjectRecoveryRequired, ProjectStoreError
-from .io import STORE, StoreIO, directory, install, observing_existing_store, owned_io, parts, read_file, sha
+from .io import STORE, StoreIO, directory, install, owned_io, parts, read_file, sha
 from .resources import ResourceRoot
 from .member_observation import MemberObservation, observe
 
@@ -63,8 +63,8 @@ class FileProjectStore:
 
     @contextmanager
     def _locked(self, *, import_legacy: bool = False, repair: bool = False,
-                allow_pending: bool = False) -> Iterator[tuple[StoreIO, dict[str, Any]]]:
-        with self._checked_locked(import_legacy=import_legacy, repair=repair, allow_pending=allow_pending) as (io, current, _checked):
+                allow_pending: bool = False, writer: bool = False) -> Iterator[tuple[StoreIO, dict[str, Any]]]:
+        with self._checked_locked(import_legacy=import_legacy, repair=repair, allow_pending=allow_pending, writer=writer) as (io, current, _checked):
             yield io, current
 
     @contextmanager
@@ -75,11 +75,9 @@ class FileProjectStore:
 
     @contextmanager
     def _checked_locked(self, *, import_legacy: bool = False, repair: bool = False,
-                        allow_pending: bool = False) -> Iterator[tuple[StoreIO, dict[str, Any], state.CheckedHead]]:
+                        allow_pending: bool = False, writer: bool = False) -> Iterator[tuple[StoreIO, dict[str, Any], state.CheckedHead]]:
         from .namespace_transfers import augment_controls
 
-        if observing_existing_store() and (import_legacy or repair):
-            raise ProjectStoreError("A saved-state observation cannot import or repair project state.")
         # Admission-local proof; capability evolution starts a fresh window.
         with ExitStack() as proofs:
             active = owned_io(self.root)
@@ -95,7 +93,8 @@ class FileProjectStore:
                     if members != active.location_members:
                         checked.close()
                         checked = None
-            with StoreIO(self.root, self.locations, self.location_members, self.namespace_backups).locked() as io:
+            with StoreIO(self.root, self.locations, self.location_members, self.namespace_backups).locked(
+                    writer=writer or import_legacy or repair) as io:
                 if checked is None:
                     checked = state.checked_head(io)
                     if checked is not None:
@@ -148,7 +147,7 @@ class FileProjectStore:
             validated = True
 
         with StoreIO(self.root, self.locations, self.location_members,
-                     self.namespace_backups).locked(before_create=validate) as io:
+                     self.namespace_backups).locked(writer=True, before_create=validate) as io:
             if io.created_store and not os.listdir(io.fd) and not validated:
                 validate()
             return self.snapshot(import_legacy=io.created_store and not os.listdir(io.fd))
@@ -211,7 +210,7 @@ class FileProjectStore:
                                    checked=checked if io.validation_epoch == epoch else None)
 
     def decide(self, command_id: str, command_digest: str, *, decision_id: str, accept: bool) -> dict[str, Any]:
-        with self._checked_locked(allow_pending=True) as (io, _current, checked):
+        with self._checked_locked(allow_pending=True, writer=True) as (io, _current, checked):
             record = state.command(io, command_id, command_digest, checked=checked)
             if record is None:
                 raise ProjectStoreError("The frozen candidate does not exist.")
@@ -263,7 +262,7 @@ class FileProjectStore:
             return commands.public(io, record, projection_pending=projection.pending(io, current), checked=checked) if record else None
 
     def claim_native_workspace(self, command_id: str, command_digest: str, adapter: str) -> Path:
-        with self._checked_locked(allow_pending=True) as (io, _current, checked):
+        with self._checked_locked(allow_pending=True, writer=True) as (io, _current, checked):
             record = state.command(io, command_id, command_digest, checked=checked)
             if record is None:
                 raise ProjectStoreError("An admitted exact command must own native execution evidence.")
@@ -271,7 +270,7 @@ class FileProjectStore:
 
     def append_native_failure(self, command_id: str, command_digest: str, *, original_error: str,
                               renderer_dispatch_entered: bool, owned_invocation_closed: bool) -> dict[str, Any]:
-        with self._checked_locked(allow_pending=True) as (io, _current, checked):
+        with self._checked_locked(allow_pending=True, writer=True) as (io, _current, checked):
             record = state.command(io, command_id, command_digest, checked=checked)
             if record is None:
                 raise ProjectStoreError("No admitted command owns this native failure evidence.")
@@ -336,7 +335,7 @@ class FileProjectStore:
     def resolve_source(self, source_id: str, version: str, *, generation: str | None = None) -> Path:
         if not re.fullmatch(r"[0-9a-f]{32}", source_id) or not re.fullmatch(r"[0-9a-f]{64}", version):
             raise ProjectStoreError("Source and version identifiers must match their frozen project identity.")
-        with self._locked() as (io, current):
+        with self._locked(writer=True) as (io, current):
             if generation is not None:
                 state.reachable(io, current, generation)
             entry = current["sources"].get(source_id, {}).get(version)
