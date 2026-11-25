@@ -5,12 +5,12 @@
 CLI 和 MCP 使用包内 `Contents/MacOS/sciplot`；用户按欢迎页生成的连接配置操作。
 程序不安装内部模型，不写入 Codex 或其它 AI 工具的配置。
 
-在当前已通过 Doctor 的 macOS 开发环境中构建：
+在当前已通过 Doctor 的 macOS 开发环境中构建。把产物和验证输出放在仓库外。准备发行时先只构建，由下面的 release 命令统一验证搬移后的最终包：
 
 ```bash
-.venv/bin/python -m distribution.macos.build \
-  --out .tmp_verify/macos_distribution/build/SciPlot.app \
-  --verify .tmp_verify/macos_distribution/verification --smoke
+artifact_root=$(mktemp -d "$HOME/SciPlot-release.XXXXXX")
+"${SCIPLOT_PYTHON:-.venv/bin/python}" -m distribution.macos.build \
+  --out "$artifact_root/SciPlot.app"
 ```
 
 构建器不下载依赖，也不复制整台机器或整个仓库。它读取 `pyproject.toml` 的运行依赖与
@@ -44,9 +44,9 @@ runtime smoke，不重复跑 quick。验证不调用模型，也不等于真实 
 公测候选归档使用独立的新目录：
 
 ```bash
-.venv/bin/python -m distribution.macos.release \
-  --app .tmp_verify/macos_distribution/build/SciPlot.app \
-  --out .tmp_verify/macos_distribution/candidate
+"${SCIPLOT_PYTHON:-.venv/bin/python}" -m distribution.macos.release \
+  --app "$artifact_root/SciPlot.app" \
+  --out "$artifact_root/candidate"
 ```
 
 此命令复制应用、核对身份、在搬移后的副本执行全部本地验证和 runtime smoke，随后生成 ZIP，
@@ -59,8 +59,9 @@ runtime smoke，不重复跑 quick。验证不调用模型，也不等于真实 
 要验证搬移后的包：
 
 ```bash
-.venv/bin/python -m distribution.macos.build --verify-existing \
-  --out '/新位置/SciPlot.app' --verify .tmp_verify/macos_distribution/moved
+verify_root=$(mktemp -d "$HOME/SciPlot-verify.XXXXXX")
+"${SCIPLOT_PYTHON:-.venv/bin/python}" -m distribution.macos.build --verify-existing \
+  --out '/新位置/SciPlot.app' --verify "$verify_root/moved"
 ```
 
 首次放置应用后双击它；或以 `Contents/MacOS/sciplot --welcome --no-open --out DIR`

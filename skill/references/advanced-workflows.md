@@ -504,14 +504,16 @@ environment:
 
 ```bash
 skill/scripts/sciplot doctor --json
-skill/scripts/sciplot smoke --out .tmp_verify/runtime_smoke --json
+smoke_root=$(mktemp -d "$HOME/SciPlot-smoke.XXXXXX")
+skill/scripts/sciplot smoke --out "$smoke_root/full" --json
 git diff --check
 ```
 
 Intermediate bounded native feedback is available:
 
 ```bash
-skill/scripts/sciplot smoke --profile quick --out .tmp_verify/quick_smoke --json
+smoke_root=$(mktemp -d "$HOME/SciPlot-smoke.XXXXXX")
+skill/scripts/sciplot smoke --profile quick --out "$smoke_root/quick" --json
 ```
 
 Quick runs one actual native creation/export, source/document/artifact seals,

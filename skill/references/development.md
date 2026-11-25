@@ -483,8 +483,18 @@ canonical path only within its current request; preserve all live identity check
 and test rename, descriptor reuse and relative-child aliases. Pure controls do
 not replace exact-candidate native deadlines or full access reconciliation.
 
-For bounded native feedback use `skill/scripts/sciplot smoke --profile quick
---out .tmp_verify/quick_smoke --json`. It performs one real source-bound native
+For bounded native feedback, place the generated output outside the software
+checkout. Confirm Doctor resolves the intended source and supported runtime;
+on a worktree without a local environment, set `SCIPLOT_RUNTIME_REPO` to the
+existing checkout that has the verified runtime, or set `SCIPLOT_PYTHON` to
+that runtime's Python explicitly.
+
+```bash
+smoke_root=$(mktemp -d "$HOME/SciPlot-smoke.XXXXXX")
+skill/scripts/sciplot smoke --profile quick --out "$smoke_root/quick" --json
+```
+
+This performs one real source-bound native
 creation/export/QA/delivery path and explicitly defers the complete lifecycle.
 Default/full smoke retains the final milestone coverage. Actual native TTS
 cases are comprehensive; pure input/request/compile/publication-fault checks
