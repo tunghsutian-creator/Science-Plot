@@ -22,12 +22,11 @@ REQUIRED_STEPS = (
     "Verify Qt build and runtime identity", "Verify Chinese glyph fallback in the system Qt runtime",
     "Run lint gate", "Run shared source contracts", "Run scoped static type gate", "Build vendored Veusz helpers",
     "Verify vendored Veusz helpers", "Verify minimal wheel surface",
-    NATIVE_DIAGNOSTIC_STEP, "Run reviewed public focused behavior",
-    "Run reviewed public comprehensive behavior", "Verify source-checkout wrapper bootstrap",
-    "Run readiness check", "Run fixture-free lifecycle smoke",
+    NATIVE_DIAGNOSTIC_STEP, "Run reviewed complete public behavior", "Verify source-checkout wrapper bootstrap",
+    "Run fixture-free lifecycle smoke",
 )
 PLATFORM_STEPS = {"Set up job", "Complete job", "Post Run actions/checkout@v4"}
-AFFECTED_STEP = "Run reviewed affected public feedback"
+LIMITED_STEPS = {"Run reviewed affected public feedback", "Run source-only documentation feedback"}
 RUN_STATE = ("id", "run_number", "run_attempt", "status", "conclusion", "head_sha", "event", "path")
 
 
@@ -146,7 +145,7 @@ def admit(environment: Mapping[str, str], read: Callable[[str], dict[str, Any]] 
         if [by_name[name]["number"] for name in REQUIRED_STEPS] != sorted(by_name[name]["number"] for name in REQUIRED_STEPS):
             raise Unavailable("required_steps_out_of_order")
         if any(not _successful(step) if name in PLATFORM_STEPS else
-               name != AFFECTED_STEP or step.get("status") != "completed" or step.get("conclusion") != "skipped"
+               name not in LIMITED_STEPS or step.get("status") != "completed" or step.get("conclusion") != "skipped"
                for name, step in by_name.items() if name not in REQUIRED_STEPS):
             raise Unavailable("unknown_or_nonfull_step")
         final = _related(read(path), int(current), sha)

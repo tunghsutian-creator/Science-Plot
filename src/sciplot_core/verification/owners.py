@@ -158,6 +158,7 @@ CHANGED_OWNERS = (
                 "src/sciplot_core/analysis_contract_probe.py",
                 "src/sciplot_core/materials_rules/analysis.py",
                 "src/sciplot_core/materials_rules/impact_metrics.py",
+                "src/sciplot_core/materials_rules/thermal_metrics.py",
             }
         ),
         owned_test_paths=frozenset(
@@ -167,6 +168,8 @@ CHANGED_OWNERS = (
             "tests/test_dtg_analysis.py",
             "tests/test_impact_unit_evidence.py",
             "tests/test_analysis_metric_observation.py",
+            "tests/test_dsc_cycle_workflow.py",
+            "tests/test_tga_scientific_transform.py",
         ),
         release_gates=("full_pytest",),
     ),
@@ -182,6 +185,7 @@ CHANGED_OWNERS = (
         exact_paths=frozenset(
             {
                 "src/sciplot_core/plan_preview.py",
+                "src/sciplot_core/plan_admission.py",
                 "src/sciplot_core/scientific_review.py",
                 "src/sciplot_core/scientific_review_ledger.py",
                 "src/sciplot_core/semantic.py",
@@ -198,6 +202,7 @@ CHANGED_OWNERS = (
                 "src/sciplot_core/semantic_contract_probe.py",
                 "src/sciplot_core/semantic_sources/impact_sources.py",
                 "src/sciplot_core/semantic_sources/prepare_curve_families.py",
+                "src/sciplot_core/semantic_sources/curve_output.py",
                 "src/sciplot_core/semantic_sources/prepare_mechanical.py",
                 "src/sciplot_core/semantic_sources/swelling_identity.py",
                 "src/sciplot_core/semantic_sources/swelling_pair_run.py",

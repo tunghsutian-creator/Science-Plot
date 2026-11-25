@@ -154,6 +154,12 @@ NATIVE_PROJECT_PATHS = frozenset({
     'src/sciplot_core/studio_core/project_export.py',
     'src/sciplot_core/studio_core/project_publication_commands.py',
     'src/sciplot_core/studio_core/project_query.py',
+    'src/sciplot_core/project_lifecycle/head_observation.py',
+    'src/sciplot_core/project_lifecycle/managed_figure_observation.py',
+    'src/sciplot_core/studio_core/managed_curve_observation.py',
+    # These retired read paths must still select their replacement regressions on deletion.
+    'src/sciplot_core/studio_core/managed_curve_query.py',
+    'src/sciplot_core/studio_core/project_query_paths.py',
     'src/sciplot_core/studio_core/project_query_evidence.py',
     'src/sciplot_core/studio_core/project_query_sources.py',
     'src/sciplot_core/studio_core/project_session.py',
