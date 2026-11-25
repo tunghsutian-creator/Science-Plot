@@ -7,7 +7,6 @@ import re
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any
 
-from sciplot_core.foundation.project_session_lease import external_project_session
 from sciplot_core.foundation.source_locations import selected_source_resolver
 from sciplot_core.plot_document import seal_document
 from sciplot_core.plot_engine.content_store import capture_document_content
@@ -218,19 +217,18 @@ def save_managed_as(plot: Path, destination: Path, *, plot_id: str, revision: in
         captured = _capture(owner, source, root, plot_id, revision) if not root.exists() else None
         store = open_claimed_store(root, claim)
         app = ProjectCommands(store)
-        with external_project_session(root):
-            prior = app.query(key)
-            if prior is not None and prior["phase"] != "reserved":
-                return _resume(store, app, prior, context)
-            if captured is None:
-                captured = _capture(owner, source, root, plot_id, revision)
-            snapshot = store.snapshot()
-            prepared = _prepare(store, owner, snapshot, key, captured)
-            command = ProjectCommand.create("semantic_record", key, project_id=snapshot["project_id"],
-                expected_generation=snapshot["generation"], read_set={name: None for name in prepared.writes},
-                write_set=sorted(prepared.writes), request={"prepared_digest": prepared.prepared_digest,
-                    "adapter": SAVE_AS_ADAPTER, "save_as": context})
-            staged = app.stage_prepared(command, prepared)
-            return _resume(store, app, staged, context)
+        prior = app.query(key)
+        if prior is not None and prior["phase"] != "reserved":
+            return _resume(store, app, prior, context)
+        if captured is None:
+            captured = _capture(owner, source, root, plot_id, revision)
+        snapshot = store.snapshot()
+        prepared = _prepare(store, owner, snapshot, key, captured)
+        command = ProjectCommand.create("semantic_record", key, project_id=snapshot["project_id"],
+            expected_generation=snapshot["generation"], read_set={name: None for name in prepared.writes},
+            write_set=sorted(prepared.writes), request={"prepared_digest": prepared.prepared_digest,
+                "adapter": SAVE_AS_ADAPTER, "save_as": context})
+        staged = app.stage_prepared(command, prepared)
+        return _resume(store, app, staged, context)
     finally:
         owner.close()
