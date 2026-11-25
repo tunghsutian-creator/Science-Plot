@@ -1,6 +1,5 @@
 """Plan or resume exactly one admitted patch through the original transaction engine."""
 
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +7,7 @@ from sciplot_core.plot_document import apply_patch, seal_document
 from sciplot_core.plot_document.requests import RequestInput, admit_patch
 from sciplot_core.plot_engine.backend import PlotBackend
 from sciplot_core.plot_engine.current import require_current
+from sciplot_core.plot_engine.export_status import cached_export
 
 from .context import digest, exists, load_head, persist, read, transaction_path, validate_saved_command
 from .contracts import RevisionToken
@@ -16,7 +16,6 @@ from .execution import advance, replay
 
 
 def execute_patch(root: Path, request: RequestInput, backend: PlotBackend,
-                  cached_export: Callable[[Path, dict[str, Any]], dict[str, Any] | None],
                   *, rollback_request: dict[str, Any] | None = None,
                   comparison: dict[str, Any] | None = None) -> dict[str, Any]:
     patch = admit_patch(request)

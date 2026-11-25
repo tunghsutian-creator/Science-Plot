@@ -124,7 +124,7 @@ def _finish(owner: "ProjectApplication", plot: Path, baseline: dict[str, Any], *
         if compiler_identity() != proof["compiler_identity"]:
             raise EngineError("comparison_compiler_changed", "The renderer changed; start a new comparison before editing the plot.")
     with admitted(plot, "patch", owned), scientific_source_scope(plot, owned.to_payload()):
-        return execute_patch(plot, owned, owner.backend, owner._cached_export, comparison={
+        return execute_patch(plot, owned, owner.backend, comparison={
             "baseline": baseline, "export": export, "operation_id": proof["operation_id"],
             "ir_hash": proof["ir_hash"], "native_state_hash": proof["native_state_hash"],
             "compiler_identity": proof["compiler_identity"], "presentation_hash": proof["presentation_hash"],

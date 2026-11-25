@@ -20,7 +20,7 @@ from sciplot_core.project_lifecycle.context import external_project_session, pro
 from sciplot_core.plot_engine.backend import PlotBackend
 from sciplot_core.plot_engine.content_store import intern_document, referenced_files, verify_document_content
 from sciplot_core.plot_engine.current import changed_inputs, dependency_state, require_current
-from sciplot_core.plot_engine.export_status import cached_export, current_export
+from sciplot_core.plot_engine.export_status import current_export
 from sciplot_core.plot_engine.description_scope import require_selector
 from sciplot_core.project_lifecycle.errors import EngineError
 from sciplot_core.project_lifecycle.execution import advance, replay
@@ -222,7 +222,7 @@ class ProjectApplication(CommandDispatch):
     def _patch(self, root: Path, request: RequestInput, *, rollback_request: dict[str, Any] | None = None) -> dict[str, Any]:
         from .patch_execution import execute_patch
 
-        return execute_patch(root, request, self.backend, cached_export, rollback_request=rollback_request)
+        return execute_patch(root, request, self.backend, rollback_request=rollback_request)
 
     @usecase
     def decide(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
