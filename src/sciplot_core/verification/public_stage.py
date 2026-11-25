@@ -20,11 +20,11 @@ from sciplot_core.verification.public_stage_selection import (
     PLATFORM_SKIPS as PLATFORM_SKIPS,
     TARGETED_SCOPES,
     record_report as pytest_runtest_logreport,  # noqa: F401 (pytest hook)
-    write_reports as pytest_sessionfinish,  # noqa: F401 (pytest hook)
+    take_reports,
     reset_reports as pytest_sessionstart,  # noqa: F401 (pytest hook)
     review_stage_reports as review_stage_reports,
     selected_public_nodes as _selected_public_nodes,
-    target_modules,
+    target_modules, validate_profile_selectors,
 )
 
 PRIVATE_NAMES = ("real_world", "polymer_corpus", "archived_output_raw_data", "rendering_profiles")
@@ -242,16 +242,8 @@ def create_stage(root: Path, output: Path, environment: dict[str, str]) -> tuple
 
 def run_public_stage(root: Path, output: Path, profile: str, *, targets: list[str] | None = None) -> dict[str, Any]:
     """Run one existing public profile with its own fresh source stage."""
-    _require_selector(profile, targets)
+    validate_profile_selectors(profile, targets)
     return _run_public_profiles(root, output, [(profile, targets)], grouped=False)[0]
-
-
-def _require_selector(profile: str, targets: list[str] | None) -> None:
-    affected = profile in TARGETED_SCOPES
-    if profile not in {"public-focused", "public-comprehensive", "public-all", *TARGETED_SCOPES}:
-        raise ValueError("Only exact public profiles may execute in a source stage.")
-    if affected != bool(targets) or (targets is not None and not affected):
-        raise ValueError("Only an affected public profile requires explicit nonempty test selectors.")
 
 
 def run_public_profiles(
@@ -263,7 +255,7 @@ def run_public_profiles(
     }:
         raise ValueError("Grouped public stages require the reviewed profile order.")
     for profile, targets in profiles:
-        _require_selector(profile, targets)
+        validate_profile_selectors(profile, targets)
     return _run_public_profiles(root, output, profiles, grouped=True)
 
 
@@ -370,6 +362,15 @@ def _run_public_stage(
               "scientific_acceptance": False, "access_capture_complete": False}
     (output / "result.json").write_text(json.dumps(result, sort_keys=True, indent=2) + "\n")
     return result
+
+
+def pytest_sessionfinish(session: Any, exitstatus: Any) -> None:
+    from sciplot_core.verification.evidence import atomic_json
+
+    destination = os.environ.get("SCIPLOT_PUBLIC_STAGE_REPORT")
+    if destination:
+        atomic_json(Path(destination), {"selected_tests": [item.nodeid for item in session.items],
+                                       "exit_code": int(exitstatus), "reports": take_reports()})
 
 
 def main() -> int:
