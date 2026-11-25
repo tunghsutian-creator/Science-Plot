@@ -66,3 +66,13 @@ def patch_schema() -> dict[str, Any]:
         "intent_class": {"enum": RISKS},
         "changes": {"type": "array", "minItems": 1, "maxItems": 100, "items": change},
     })}
+
+
+def figure_handoff_schema() -> dict[str, Any]:
+    return closed({
+        "output_dir": {"type": "string", "pattern": "^/"},
+        "plot_id": IDENTIFIER,
+        "revision": {"type": "integer", "minimum": 0},
+        "formats": {"type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": True,
+                    "contains": {"const": "pdf"}, "items": {"enum": ["pdf", "tiff_300"]}},
+    })

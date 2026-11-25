@@ -20,6 +20,11 @@ def register_plot_commands(subparsers: Any) -> None:
             action.add_argument("--property", help="Property name for --scope edit.")
         if name in {"create", "patch", "resume", "intent", "rollback", "decide", "deliver"}:
             action.add_argument("--request", type=Path, required=True)
+        if name == "export":
+            action.add_argument("--output-dir", type=Path, help="Copy only the current audited PDF into a fresh directory (requires exact plot ID and revision).")
+            action.add_argument("--plot-id", help="Exact current Managed v2 identity for --output-dir.")
+            action.add_argument("--revision", type=int, help="Exact current Managed v2 revision for --output-dir.")
+            action.add_argument("--tiff", action="store_true", help="Also copy the audited 300 dpi TIFF.")
         if name == "create":
             action.add_argument("--project", type=Path, help="Explicit existing project for Managed Template/Binding creation; outside the scientific request.")
         action.add_argument("--json", action="store_true")

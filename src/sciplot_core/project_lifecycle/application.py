@@ -214,8 +214,12 @@ class ProjectApplication(ManagedPlotApplication, CommandDispatch):
             return rollback_legacy(root, request, self.backend, self._patch)
 
     @usecase
-    def export(self, plot: Path) -> dict[str, Any]:
+    def export(self, plot: Path, *, handoff: dict[str, Any] | None = None) -> dict[str, Any]:
         root = canonical_path(plot)
+        if handoff is not None:
+            from .figure_handoff import handoff_figure
+
+            return handoff_figure(root, handoff, self.backend)
         with external_project_session(root):
             return self._export(root)
 

@@ -68,7 +68,7 @@ def object_schema(properties: dict[str, Any], required: list[str]) -> dict[str, 
 
 
 def tool_definitions(profile: ToolProfile = "expert") -> list[Tool]:
-    from sciplot_core.plot_document.schema import patch_schema
+    from sciplot_core.plot_document.schema import figure_handoff_schema, patch_schema
     from sciplot_core.plot_engine.contracts import (
         create_schema,
         decide_schema,
@@ -162,8 +162,8 @@ def tool_definitions(profile: ToolProfile = "expert") -> list[Tool]:
         {**semantic_plot, "request": resume_schema()}, ["plot", "request"], idempotent=True, destructive=True)
     add("plot_render", "Render the current semantic document through its native backend; reuses valid current cache and preserves the saved scientific state.",
         semantic_plot, ["plot"], idempotent=True)
-    add("plot_export", "Export the current selected object through its authority owner. A supported bound native figure exports independently of optional suite figures. A prior export failure continues without applying a patch again. Handoff requires ready evidence.",
-        semantic_plot, ["plot"], idempotent=True, destructive=True)
+    add("plot_export", "Without handoff, export or recover the current selected object through its authority owner. For an already audited current Managed v2 figure, optional handoff selects the exact plot ID, revision, fresh output_dir and formats [pdf] or [pdf, tiff_300]. Only those files are copied. Nothing is overwritten; full editable snapshots are a separate plot_deliver operation.",
+        {**semantic_plot, "handoff": figure_handoff_schema()}, ["plot"], idempotent=True, destructive=True)
     add("plot_rollback", "Restore an explicit historical presentation as a new revision, bound to base_revision and idempotency_key. Preserves revision history and scientific state.",
         {**semantic_plot, "request": rollback_schema()}, ["plot", "request"], idempotent=True, destructive=True)
     add("plot_decide", "Answer the specific current local decision. A review uses decision_id and base_revision; a creation question carries its existing source-bound response. Never invent scientific choices.",

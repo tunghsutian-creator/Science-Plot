@@ -143,7 +143,9 @@ class PlotService(ProjectApplication):
             self._require_saved_continuation(plot, validate_resume(request), decision=False)
         return super().resume(plot, request)
 
-    def export(self, plot: Path) -> dict[str, Any]:
+    def export(self, plot: Path, *, handoff: dict[str, Any] | None = None) -> dict[str, Any]:
+        if handoff is not None:
+            return super().export(plot, handoff=handoff)
         native = native_dispatch("export", canonical_path(plot))
         if native is not None:
             return native

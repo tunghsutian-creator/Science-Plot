@@ -6,6 +6,26 @@ not promote a legacy figure just to use this route. Legacy deliveries retain
 their existing task/paper routes. A Managed v1 export lacking native publication
 QA is explicitly unsupported here; absence is never treated as a pass.
 
+## Copy one current figure without its editable or source files
+
+For an already audited Managed v2 figure, take the `plot`, `plot_id` and
+`revision` from its current summary. Use a fresh output directory outside the
+project:
+
+```bash
+skill/scripts/sciplot plot export PLOT --plot-id PLOT_ID --revision REVISION --output-dir NEW_DIR --json
+```
+
+This copies only the PDF. Add `--tiff` to include the audited 300 dpi TIFF.
+In daily MCP, call `sciplot_plot_export` with `plot` and a `handoff` object
+containing `plot_id`, `revision`, `output_dir` and `formats` (either
+`["pdf"]` or `["pdf","tiff_300"]`). This never overwrites a directory,
+rebuilds a publication, or copies a VSZ or data file. If the publication is
+missing, finish the existing `plot export PLOT` operation first. On a stale
+revision, read the current summary again before selecting new files.
+
+## Package editable snapshots for handoff
+
 Reuse each plot's current `plot`, `plot_id` and `revision`. Labels below are
 display names for the delivery index and safe file naming; they never rename a
 scientific sample, source column or original CSV. Request array order is the
