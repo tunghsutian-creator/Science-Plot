@@ -130,6 +130,43 @@ def test_product_generates_index_originals_and_archive_without_manual_launcher(c
     assert len(calls) == len(heads) == 2
 
 
+def test_bound_export_audit_and_shared_originals_are_reused(case, monkeypatch):
+    from sciplot_core.plot_engine import managed_delivery_publication as publication
+
+    service, request, heads, calls, _ = case
+    renderer = {"test_runtime": "stable"}
+    monkeypatch.setattr(publication, "compiler_identity", lambda: renderer)
+    monkeypatch.setattr(publication, "build_key", lambda _document, _binding: "current")
+    for index, (plot, head) in enumerate(heads.items()):
+        path = Path(plot) / "export-cache.json"
+        cache = json.loads(path.read_text())
+        binding = head["binding"]
+        binding["canonical_sha256"] = "b" * 64
+        sha = file_sha256(Path(binding["ir_path"]))
+        cache["artifact_files"][binding["ir_path"]] = sha
+        cache["build_key"] = "current"
+        cache["export"]["scientific_audit"] = {"status": "passed"}
+        cache["export"]["native_export_audit"] = {
+            "native_state_hash": "a" * 64, "compiler_identity": renderer,
+            "document_sha256": cache["artifact_files"][binding["document"]],
+            "canonical_sha256": binding["canonical_sha256"] if not index else "x" * 64,
+            "ir_hash": binding["ir_hash"], "ir_sha256": sha,
+        }
+        path.write_text(json.dumps(cache))
+
+    result = service.deliver(request)
+    assert result["status"] == "complete", result
+    assert calls == {request["items"][1]["plot"]: 1}  # A mismatched canonical seal still needs an audit.
+    checkpoint = Path(result["checkpoint"])
+    assert len(list((checkpoint / "data" / "originals").iterdir())) == 1
+    assert not list((checkpoint / "attempts").rglob("originals"))
+    out = Path(request["out"])
+    manifest = json.loads((out / "index.json").read_text())
+    shared, duplicate = [item["sources"][0] for item in manifest["items"]]
+    assert shared["path"] == duplicate["path"] and shared["source_id"] != duplicate["source_id"]
+    assert file_sha256(out / shared["path"]) == shared["sha256"]
+
+
 def test_partial_retry_only_audits_unsealed_plot_and_completed_replay_is_read_only(case):
     service, request, _, calls, failures = case
     second = request["items"][1]["plot"]

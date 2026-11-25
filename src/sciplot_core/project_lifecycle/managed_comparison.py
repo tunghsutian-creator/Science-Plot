@@ -13,7 +13,7 @@ from sciplot_core.plot_engine.current_unit_admission import prepare_current_upda
 from sciplot_core.plot_engine.managed_state import resolved_ir
 
 from .admission import admitted
-from .context import active, exists, external_project_session, load_head, project_query, repository_scope, scientific_source_scope, transaction_path
+from .context import active, exists, external_project_session, load_head, project_query, read, repository_scope, scientific_source_scope, transaction_path
 from .contracts import RevisionToken
 from .errors import EngineError
 from .exports import export_head, export_key
@@ -119,14 +119,18 @@ def _finish(owner: "ProjectApplication", plot: Path, baseline: dict[str, Any], *
                 "plot_id": baseline["plot_id"], "revision": baseline["revision"],
                 "changed": False, "export_status": "not_requested", "ready_to_use": False}
     owned = admit_patch(patch)
-    if not exists(transaction_path(plot, owned.to_payload()["idempotency_key"])):
+    saved = transaction_path(plot, owned.to_payload()["idempotency_key"])
+    prior = read(saved).get("comparison_selection") if exists(saved) else None
+    if prior is None:
         _head(owner, plot, baseline=baseline)
         if compiler_identity() != proof["compiler_identity"]:
             raise EngineError("comparison_compiler_changed", "The renderer changed; start a new comparison before editing the plot.")
+    selection: dict[str, Any] = {"baseline": baseline, "export": export, "operation_id": proof["operation_id"],
+                 "ir_hash": proof["ir_hash"], "native_state_hash": proof["native_state_hash"],
+                 "compiler_identity": proof["compiler_identity"], "presentation_hash": proof["presentation_hash"],
+                 "changed": bool(proof["changes"])}
+    if prior is None or "assets" in prior:
+        selection["assets"] = {"directory": str(Path(proof["review_path"]).parent), "files": proof["files"],
+                               "preview": proof["preview"], "scientific_audit": proof["scientific_audit"]}
     with admitted(plot, "patch", owned), scientific_source_scope(plot, owned.to_payload()):
-        return execute_patch(plot, owned, owner.backend, comparison={
-            "baseline": baseline, "export": export, "operation_id": proof["operation_id"],
-            "ir_hash": proof["ir_hash"], "native_state_hash": proof["native_state_hash"],
-            "compiler_identity": proof["compiler_identity"], "presentation_hash": proof["presentation_hash"],
-            "changed": bool(proof["changes"]),
-        })
+        return execute_patch(plot, owned, owner.backend, comparison=selection)

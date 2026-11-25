@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import closing
 import json
 import os
 from pathlib import Path
@@ -105,3 +106,80 @@ def test_compare_native_alternatives_from_one_baseline_then_select_only_one(tmp_
         for field in ('label', 'x_values', 'y_values'):
             assert new[field] == old[field]
     assert file_sha256(Path(figure['document'])) == final['selection_outcome']['document_sha256']
+
+
+@pytest.mark.comprehensive
+def test_managed_comparison_reuses_exact_winner_on_cold_apply(tmp_path, monkeypatch):
+    from test_figure_document import request_for_figure
+
+    from sciplot_core.plot_backends.managed import ManagedVeuszCompiler
+    from sciplot_core.plot_engine.managed_backend import ManagedBackend
+    from sciplot_core.plot_engine.service import PlotService
+    from sciplot_core.task_comparisons import resume_comparison, select_comparison, start_comparison
+    from sciplot_core.task_contract import TaskControlError
+
+    native_compile = ManagedVeuszCompiler.compile_ir
+    compilations = []
+
+    def compile_counted(self, ir, output):
+        compilations.append(ir["ir_hash"])
+        return native_compile(self, ir, output)
+
+    monkeypatch.setattr(ManagedVeuszCompiler, "compile_ir", compile_counted)
+
+    with closing(PlotService()) as service:
+        request = request_for_figure(tmp_path)
+        base = service.create(request)
+        assert base["ready_to_use"], base
+        plot = Path(base["plot"])
+        before = service.describe(plot, description={"scope": "summary"})
+        source = Path(request["data_binding"]["data_sources"][0]["path"])
+        original = source.read_bytes()
+        root = tmp_path / "comparison"
+        comparison = start_comparison({
+            "version": 2, "title": "Axis text alternatives", "plot": str(plot), "plot_id": base["plot_id"],
+            "base_revision": 0, "candidates": [
+                {"id": name, "label": name, "changes": [
+                    {"op": "set", "target": ["axis:xb"], "property": "axis.label", "value": label}]}
+                for name, label in [("a", "First revision"), ("b", "Selected revision")]
+            ]}, comparison_dir=root)
+        assert comparison["status"] == "needs_selection", comparison
+        assert len(compilations) == 4 and service.describe(plot, description={"scope": "summary"})["revision"] == 0
+        selected = next(item for item in comparison["candidates"] if item["id"] == "b")
+        selected_native = Path(selected["review_path"]).with_name("document.vsz")
+        exact = file_sha256(selected_native)
+        choice = {"candidate_id": "b", "expected_comparison_id": comparison["comparison_id"]}
+        real_apply = ManagedBackend.apply
+
+        with monkeypatch.context() as fault:
+            def interrupted(self, binding, review):
+                assert file_sha256(Path(review["_managed_binding"]["document"])) == exact
+                raise SystemExit("cold apply interruption")
+            fault.setattr(ManagedBackend, "apply", interrupted)
+            with pytest.raises(SystemExit, match="cold apply interruption"):
+                select_comparison(root, choice)
+        assert service.describe(plot, description={"scope": "summary"})["revision"] == 0
+        assert len(compilations) == 4
+        with pytest.raises(TaskControlError) as different:
+            select_comparison(root, {**choice, "candidate_id": "a"})
+        assert different.value.reason_code == "comparison_already_selected"
+        sealed_bytes = selected_native.read_bytes()
+        selected_native.write_bytes(b"not the selected native asset")
+        blocked = resume_comparison(root)
+        assert blocked["status"] == "blocked" and len(compilations) == 4
+        assert service.describe(plot, description={"scope": "summary"})["revision"] == 0
+        selected_native.write_bytes(sealed_bytes)
+
+        with monkeypatch.context() as check:
+            applications = []
+            def counted(self, binding, review):
+                applications.append(review["_selected_native_sha256"])
+                return real_apply(self, binding, review)
+            check.setattr(ManagedBackend, "apply", counted)
+            assert resume_comparison(root)["status"] == "complete"
+            assert resume_comparison(root)["status"] == "complete"
+        assert applications == [exact] and len(compilations) == 4
+        final = service.describe(plot, description={"scope": "summary"})
+        assert final["revision"] == 1 and file_sha256(Path(final["artifact"])) == exact
+        assert final["scientific_hash"] == before["scientific_hash"] and source.read_bytes() == original
+        assert final["presentation_hash"] != before["presentation_hash"]

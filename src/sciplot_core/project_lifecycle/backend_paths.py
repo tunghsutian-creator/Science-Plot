@@ -66,6 +66,13 @@ class RepositoryBackendPaths:
             result = self.backend.preview(document, binding, new_document, diff, destination)
             return result
 
+    def preview_comparison(self, binding: dict[str, Any], document: dict[str, Any], output: Path,
+                           selected: dict[str, Any]) -> dict[str, Any]:
+        with self.repository.binding_scope(binding):
+            result: dict[str, Any] = self.backend.preview_comparison(
+                binding, document, self.repository.runtime_path(output), selected)
+            return result
+
     def render(self, binding: dict[str, Any], output: Path) -> dict[str, Any]:
         with self.repository.binding_scope(binding):
             destination = self.repository.runtime_path(output)

@@ -1,7 +1,7 @@
 """The minimal backend contract; no protocol or persistence dependencies."""
 
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 from sciplot_core.plot_document.requests import RequestInput
 
 
@@ -39,3 +39,10 @@ class PlotBackend(Protocol):
     def export(self, binding: dict[str, Any]) -> dict[str, Any]: ...
 
     def render(self, binding: dict[str, Any], output: Path) -> dict[str, Any]: ...
+
+
+
+@runtime_checkable
+class ComparisonBackend(Protocol):
+    def preview_comparison(self, binding: dict[str, Any], document: dict[str, Any], output: Path,
+                           selected: dict[str, Any]) -> dict[str, Any]: ...

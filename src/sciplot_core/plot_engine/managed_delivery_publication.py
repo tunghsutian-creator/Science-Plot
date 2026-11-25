@@ -11,8 +11,11 @@ import zipfile
 
 from sciplot_core.delivery import native_snapshot
 from sciplot_core.plot_engine.errors import EngineError
+from sciplot_core.plot_engine.managed_delivery_sources import shared_original
 from sciplot_core.plot_engine.storage import digest
 from sciplot_core.studio_core.source_update_files import file_inventory
+from sciplot_core.plot_backends.managed import compiler_identity
+from sciplot_core.plot_engine.cache_identity import build_key
 from sciplot_core.veusz_runtime import veusz_worker_environment
 
 
@@ -31,6 +34,25 @@ def inspect_managed_native(binding: dict[str, Any]) -> dict[str, Any]:
     return dict(payload)
 
 
+def cached_native_audit(record: dict[str, Any], head: dict[str, Any], native_sha256: str,
+                        ir_sha256: str) -> dict[str, Any] | None:
+    """Reuse only the complete native export proof for this exact render recipe."""
+    exported, binding = record["export"], head["binding"]
+    proof = exported.get("native_export_audit")
+    if not isinstance(proof, dict) or not proof.get("native_state_hash"):
+        return None  # Old exports did not seal the complete runtime and native facts.
+    renderer = compiler_identity()
+    if (proof.get("compiler_identity") != renderer or proof.get("document_sha256") != native_sha256
+            or proof.get("canonical_sha256") != binding["canonical_sha256"]
+            or proof.get("ir_hash") != binding["ir_hash"] or proof.get("ir_sha256") != ir_sha256
+            or record["artifact_files"].get(binding["ir_path"]) != ir_sha256
+            or exported.get("scientific_audit", {}).get("status") != "passed"
+            or exported.get("publication_qa", {}).get("status") != "passed"
+            or record.get("build_key") != build_key(head["document"], binding)):
+        return None
+    return {"document_sha256": native_sha256, "publication_qa": exported["publication_qa"]}
+
+
 def publish(root: Path, state: dict[str, Any], *, checkpoint: Callable[[], None], validate: Callable[[], None]) -> dict[str, str]:
     out = Path(state["request"]["out"])
     candidate = root / "candidates" / uuid4().hex
@@ -43,6 +65,12 @@ def publish(root: Path, state: dict[str, Any], *, checkpoint: Callable[[], None]
         layout = {name: name for name in item["files"] if Path(name).parts[0] in ("project", "pdf", "tiff", "data")}
         stem = item["stem"]
         try:
+            for source in item["sources"]:
+                path = shared_original(root, item, source)
+                name, sha = source["path"], source["sha256"]
+                if path is not None and name not in assembled:
+                    native_snapshot.copy_sealed_file(path, candidate / name, sha)
+                    assembled[name] = sha
             native_snapshot.stage_native(Path(item["attempt"]), candidate, item["files"],
                                          layout=layout, assembled=assembled, stem=stem, portable=item["portable"])
         except native_snapshot.SnapshotSealChanged as exc:

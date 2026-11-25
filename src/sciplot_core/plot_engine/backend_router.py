@@ -42,6 +42,10 @@ class BackendRouter:
                 diff: list[dict[str, Any]], output: Path) -> dict[str, Any]:
         return dict(self._owner(binding).preview(document, binding, new_document, diff, output))
 
+    def preview_comparison(self, binding: dict[str, Any], document: dict[str, Any], output: Path,
+                           selected: dict[str, Any]) -> dict[str, Any]:
+        return self.managed.preview_comparison(binding, document, output, selected)
+
     def apply(self, binding: dict[str, Any], review: dict[str, Any]) -> dict[str, Any]:
         return dict(self._owner(binding).apply(binding, review))
 

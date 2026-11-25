@@ -10,7 +10,7 @@ from typing import Any
 from uuid import uuid4
 
 from sciplot_core.plot_engine.export_status import export_cache_record
-from sciplot_core.plot_engine.backend import PlotBackend
+from sciplot_core.plot_engine.backend import ComparisonBackend, PlotBackend
 from sciplot_core.plot_engine.cache_identity import build_key
 from sciplot_core.plot_engine.content_store import verify_document_content
 from sciplot_core.plot_engine.current import artifact_files, evidence_current, require_current
@@ -131,14 +131,20 @@ def advance(root: Path, tx: dict[str, Any], backend: PlotBackend) -> dict[str, A
             stage = "preview"
             require_current(backend, tx["binding"], input_document=tx["document"])
             if tx["diff"]:
+                selected = tx.get("comparison_selection")
+
                 def preview() -> dict[str, Any]:
                     require_current(backend, tx["binding"], input_document=tx["document"])
-                    return backend.preview(tx["before"], tx["binding"], tx["document"], tx["diff"],
-                                           root / "transactions" / tx["id"] / ("preview-" + uuid4().hex))
+                    output = root / "transactions" / tx["id"] / ("preview-" + uuid4().hex)
+                    if selected is not None and "assets" in selected:
+                        if not isinstance(backend, ComparisonBackend):
+                            raise EngineError("comparison_candidate_unavailable", "This backend cannot adopt the exact selected review.")
+                        return backend.preview_comparison(tx["binding"], tx["document"], output, selected)
+                    return backend.preview(tx["before"], tx["binding"], tx["document"], tx["diff"], output)
+
                 stage = "preview"
                 tx["review"] = _attempt(root, tx, "preview", preview)
                 _require_audit(tx["review"])
-                selected = tx.get("comparison_selection")
                 if selected is not None:
                     review = tx["review"]
                     if ((review.get("_managed_binding") or {}).get("ir_hash") != selected["ir_hash"]
