@@ -69,6 +69,27 @@ def test_public_managed_delivery_relocated_native_open_edit_save_and_export(tmp_
         connected = service.open(out, figure_id=index["items"][0]["id"], description={"scope": "summary"})
         assert connected["plot"] == selected[0]["plot"] and connected["plot_type"] == "ManagedPlot"
         assert connected["delivery_continuation"]["mode"] == "original_local_managed"
+        from sciplot_core.plot_engine.errors import EngineError
+        from sciplot_core.studio_core.project_query import inspect_project
+
+        secondary = index["items"][1]
+        secondary_path = out / secondary["files"]["editable"]
+        public = PlotService(read_only_legacy=True)
+        try:
+            for display, selector in ((out, secondary["id"]), (out / "index.json", secondary["id"]),
+                                      (secondary_path, None)):
+                opened = public.open(display, figure_id=selector, description={"scope": "summary"})
+                inspected = inspect_project(display, figure_id=selector)
+                assert opened["plot"] == selected[1]["plot"] == inspected["project"]
+                assert opened["plot_type"] == "ManagedPlot"
+                assert inspected["selected_figure"]["figure_id"] == secondary["id"]
+                assert inspected["selected_snapshot"] == {"path": str(secondary_path), "item_id": secondary["id"], "current": True}
+            with pytest.raises(EngineError, match="same exact delivery member"):
+                public.open(secondary_path, figure_id=index["items"][0]["id"])
+            with pytest.raises(EngineError, match="same exact delivery member"):
+                inspect_project(secondary_path, figure_id=index["items"][0]["id"])
+        finally:
+            public.close()
         with zipfile.ZipFile(out / "Figures.zip") as archive:
             assert len([name for name in archive.namelist() if name.endswith(".vsz")]) == 2
             assert all(archive.read(name) == (out / name).read_bytes() for name in archive.namelist())

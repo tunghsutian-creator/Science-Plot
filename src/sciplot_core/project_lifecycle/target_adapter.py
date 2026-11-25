@@ -3,7 +3,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.foundation.json_io import read_json_object
+from .contracts import RevisionToken
 from .errors import EngineError
 from .paths import canonical_path
 from .ports import ProjectRepository
@@ -28,13 +28,14 @@ class FilesystemProjectTargets:
             attached = resolve_attached_open(self.repository, target, figure_id, self.resolve_figure)
             if attached is not None:
                 return attached
-        delivery_index = target / "index.json"
-        package = read_json_object(delivery_index) if delivery_index.is_file() and not delivery_index.is_symlink() else None
-        if package is not None and package.get("kind") == "sciplot_managed_delivery":
-            from sciplot_core.plot_engine.managed_delivery_continuation import local_managed_target
+        from sciplot_core.plot_engine.managed_delivery_continuation import local_managed_target, managed_delivery_location
 
-            selected = local_managed_target(target, figure_id)
-            return ManagedDeliveryTarget(selected["plot"], selected["item_id"], selected["native_snapshot"])
+        delivery = managed_delivery_location(target)
+        if delivery is not None:
+            root, snapshot, manifest = delivery
+            selected = local_managed_target(root, figure_id, native_snapshot=snapshot, manifest=manifest)
+            return ManagedDeliveryTarget(selected["plot"], selected["item_id"], selected["native_snapshot"],
+                                         RevisionToken.of(selected["head"]["document"]))
         if self.repository.has_head(target):
             return StoredTarget(target)
         resolve = self.resolve_figure
@@ -48,6 +49,7 @@ class FilesystemProjectTargets:
 
     def read_legacy_saved(self, target: Path, figure_id: str | None) -> tuple[Path, Path] | None:
         """Resolve read-only authority by selection, before any attach or import."""
+        from sciplot_core.plot_engine.managed_delivery_continuation import managed_delivery_location
         from .attachment_index import read_index
         from .figure_observation import observe_plot_head
         from .store_composition import existing_store
@@ -83,6 +85,9 @@ class FilesystemProjectTargets:
                         raise EngineError("legacy_delivery_figure_required", "Pass the exact saved VSZ for a portable secondary figure.")
                     return canonical_path(delivery), canonical_path(Path(resolved["document"]))
                 return self.read_legacy_saved(canonical_path(Path(resolved["project_dir"])), figure_id)
+
+        if managed_delivery_location(target) is not None:
+            return None
 
         explicit_vsz = target.is_file() and target.suffix.lower() == ".vsz"
         if explicit_vsz:

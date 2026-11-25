@@ -258,3 +258,50 @@ def test_attached_public_native_cold_lifecycle(tmp_path, kind):
 
 if __name__ == "__main__":
     scenario(sys.argv[1], Path(sys.argv[2]).resolve())
+
+
+def test_cold_expert_bundle_does_not_write_to_its_historical_publication(tmp_path):
+    from managed_plot_helpers import patch, request_for_source
+
+    from sciplot_core.plot_engine.service import PlotService
+    from sciplot_core.project_lifecycle.relocation import export_project_bundle, import_project_bundle
+    from sciplot_core.studio_core.project_query import inspect_project
+
+    sources = tmp_path / "original-input"
+    sources.mkdir()
+    request = request_for_source(sources)
+    raw = Path(request["data_binding"]["data_sources"][0]["path"])
+    raw_bytes = raw.read_bytes()
+    output = tmp_path / "historical-exports"
+    request["out"] = str(output)
+    with_service = PlotService(read_only_legacy=True)
+    try:
+        created = with_service.create(request)
+        assert created["ready_to_use"] and created["revision"] == 0, created
+        assert all(Path(item["path"]).is_relative_to(output) for item in created["exports"])
+        plot = Path(created["plot"])
+        store = plot.parent.parent
+        snapshot = {path.relative_to(output): path.read_bytes() for path in output.rglob("*") if path.is_file()}
+        result = export_project_bundle(store, tmp_path / "bundle")
+    finally:
+        with_service.close()
+    offline = tmp_path / "offline"
+    sources.rename(offline)
+    moved = tmp_path / "new-location"
+    relocated = import_project_bundle(tmp_path / "bundle", moved)
+    assert (relocated["project_id"], relocated["generation"]) == (result["project_id"], result["generation"])
+    cold = PlotService(read_only_legacy=True)
+    try:
+        opened = cold.open(moved, figure_id=created["plot_id"], description={"scope": "summary"})
+        assert opened["plot_id"] == created["plot_id"] and opened["revision"] == 0
+        latest = cold.patch(Path(opened["plot"]), patch(opened, "cold-style", "style.line.width", "1.3pt", "series:A"))
+        assert latest["ready_to_use"] and latest["revision"] == 1, latest
+        assert latest["scientific_hash"] == created["scientific_hash"]
+        assert all(Path(item["path"]).is_relative_to(moved) for item in latest["exports"])
+        inspected = inspect_project(Path(opened["plot"]), figure_id=created["plot_id"])
+        assert inspected["selected_figure"]["revision"] == 1 and inspected["ready_to_use"] is True
+        assert inspected["delivery"]["current"] and inspected["qa"]["current"] is False
+        assert {path.relative_to(output): path.read_bytes() for path in output.rglob("*") if path.is_file()} == snapshot
+        assert (offline / raw.relative_to(sources)).read_bytes() == raw_bytes
+    finally:
+        cold.close()

@@ -80,6 +80,18 @@ def test_verified_curve_project_creates_managed_and_recovers_existing_delivery(t
                 inspected = json.loads(capsys.readouterr().out)
                 assert inspected["project"] == str(plot) and inspected["ready_to_use"] is True
                 assert inspected["selected_figure"]["figure_id"] == result["primary_figure_id"]
+            # Current figure evidence is independent of its creation task.
+            journal = Path(result["request"])
+            parked_journal = journal.with_name("parked-task.json")
+            journal.rename(parked_journal)
+            try:
+                assert main(["project", "inspect", str(plot), "--full", "--json"]) == 0
+                inspected = json.loads(capsys.readouterr().out)
+                assert inspected["request"] is None and inspected["ready_to_use"] is True
+                assert inspected["figures"][0]["plot_id"] == head["document"]["plot_id"]
+                assert inspected["publication_scope"] == "selected_managed_revision"
+            finally:
+                parked_journal.rename(journal)
             missing = Path(result["document"]).with_name("missing.vsz")
             assert main(["project", "inspect", str(missing), "--full", "--json"]) != 0
             assert "does not exist" in capsys.readouterr().out

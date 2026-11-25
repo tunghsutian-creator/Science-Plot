@@ -186,7 +186,7 @@ def test_deferred_comparison_recovery_preserves_the_export_action(tmp_path):
     from sciplot_core.plot_engine.storage import active, persist
     from sciplot_core.project_lifecycle.receipts import receipt
 
-    service, root, backend, doc = _legacy(tmp_path)
+    service, root, backend, _ = _legacy(tmp_path)
     # The accepted comparison uses this same receipt form without starting
     # publication. Record it at the journal boundary, not in a mock describe.
     assert service.patch(root, request())["revision"] == 1

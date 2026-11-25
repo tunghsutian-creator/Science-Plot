@@ -19,7 +19,7 @@ from sciplot_core.studio_core.project_query_evidence import (
 from sciplot_core.project_lifecycle.figure_observation import (
     LegacyFigureObservation,
     observe_legacy_project,
-    observe_managed_curve,
+    observe_plot_head,
 )
 from sciplot_core.veusz_runtime import veusz_worker_environment
 from sciplot_core.native_process import run_worker
@@ -146,22 +146,85 @@ def _inspect_legacy_project(
     return payload
 
 
-def _curve_project_status(observed: tuple[dict[str, Any], dict[str, Any], bool]) -> dict[str, Any]:
-    from sciplot_core.task_semantic_creation import current_result
+def _creation_history(plot: Path, document: dict[str, Any]) -> tuple[Path | None, dict[str, Any] | None]:
+    from sciplot_core.task_storage import load_task
 
-    item, state, selected = observed
-    plot = item["plot"]
-    result = current_result(state)
-    current = result.get("current_project") or {}
-    if current.get("plot_id") is not None and (current["plot_id"], current["revision"]) != (item["plot_id"], item["revision"]):
-        raise ValueError("The selected Managed project advanced during inspection; query again.")
-    cache = current.get("export_current") or {}
+    source = document["scientific"]["provenance"].get("binding", {}).get("semantic_task", {}).get("task")
+    if not isinstance(source, str):
+        return None, None
+    journal = Path(source)
+    try:
+        state = load_task(journal) if (journal / "task.json").is_file() else {}
+    except (ValueError, OSError, RuntimeError):
+        return journal, None  # A creation receipt is not the current figure authority.
+    task = state.get("project_creation_figure")
+    return journal, task if isinstance(task, dict) and state.get("project") == str(plot) else None
+
+
+def _inspect_managed_project(project: Path, *, figure_id: str | None) -> dict[str, Any] | None:
+    from sciplot_core.foundation.canonical_paths import canonical_path
+    from sciplot_core.plot_engine.managed_delivery_continuation import local_managed_target, managed_delivery_location
+    from sciplot_core.project_lifecycle.repository_router import ComposedProjectRepository
+    from sciplot_core.task_semantic_owner import inspect_managed_publication
+    from sciplot_core.task_storage import load_task
+
+    value = canonical_path(project)
+    delivery = managed_delivery_location(value)
+    snapshot = native = selected_journal = None
+    if delivery is not None:
+        root, snapshot, manifest = delivery
+        # The one-figure project-create receipt historically advertised the
+        # plan's figure ID, not the package's item ID. Validate that alias
+        # against the matched original below rather than forgetting it.
+        native = local_managed_target(root, figure_id if len(manifest["items"]) != 1 else None,
+                                      native_snapshot=snapshot, manifest=manifest, owner=ComposedProjectRepository())
+        plot, head = native["plot"], native["head"]
+    elif (value.parent.name == "managed" and value.parent.parent.name == ".sciplot_documents"
+          or value.parent.name == ".sciplot_semantic"):
+        plot, head = value, observe_plot_head(value, optional=True)
+    elif value.name == "task.json" and value.parent.name == "creation" and value.is_file():
+        state = load_task(value.parent)
+        if not isinstance(state.get("project_creation_figure"), dict) or not isinstance(state.get("project"), str):
+            return None
+        selected_journal = value.parent
+        plot = canonical_path(Path(state["project"]))
+        head = observe_plot_head(plot, optional=True)
+    else:
+        return None
+    if head is None or head["document"].get("plot_type") != "ManagedPlot":
+        return None
+    document = head["document"]
+    journal, original = _creation_history(plot, document)
+    if selected_journal is not None and (journal != selected_journal or original is None):
+        raise ValueError("The selected creation journal does not own this Managed plot.")
+    package_id = native["item_id"] if native else None
+    plot_id = document["plot_id"]
+    identity = original["figure_id"] if original is not None else package_id or plot_id
+    identifiers = {identity, package_id} if native is not None else {identity, plot_id}
+    if figure_id is not None and figure_id not in identifiers:
+        raise ValueError(f"Unknown figure_id for this Managed project: {figure_id}")
+    if figure_id == package_id and package_id is not None:
+        identity = package_id
+    current = inspect_managed_publication(plot, plot_id=plot_id, revision=document["revision"])
+    cache = current["export_current"]
+    publication = cache.get("publication") or {}
+    qa = publication.get("publication_qa", {}).get("status")
+    ready = cache["current"] is True and (publication.get("ready_to_use") is True
+                                         or publication.get("native_export_ready") is True)
+    item = {"figure_id": identity, "title": original["title"] if original else native["label"] if native else plot_id,
+            "status": "ready" if ready else current["status"], "plot": str(plot), "plot_id": plot_id,
+            **{key: current[key] for key in ("revision", "scientific_hash", "presentation_hash")},
+            "document": current["artifact"], "exports": publication.get("exports", []), "export_current": cache}
     return {"kind": "sciplot_project_inspection", "version": 1, "status": "ok", "project": str(plot),
-            "request": str(Path(state["task_dir"]) / "task.json"), "primary_figure_id": item["figure_id"], "figures": [item],
-            **({"selected_figure": item} if selected else {}),
-            "source": {"current": current.get("status") == "current"},
-            "qa": {"current": cache.get("current") is True and cache.get("byte_inventory_verified") is True},
-            "delivery": {"current": result.get("native_delivery_current") is True}, "ready_to_use": result.get("ready_to_use") is True,
+            "request": str(journal / "task.json") if original is not None and journal is not None else None,
+            "primary_figure_id": identity, "figures": [item],
+            **({"selected_figure": item} if figure_id is not None or snapshot is not None else {}),
+            "source": {"current": current["status"] == "current"},
+            "qa": {"current": ready and qa == "passed", "status": qa},
+            "delivery": {"current": ready, "scope": "selected_managed_export_files"},
+            **({"selected_snapshot": {"path": native["native_snapshot"], "item_id": package_id, "current": True}}
+                if native is not None else {}),
+            "publication_scope": "selected_managed_revision", "ready_to_use": ready,
             "readiness_evaluated": True, "document_authority": "managed_plot", "live_gui_state_evaluated": False,
             "next_step": {"action": "open_managed_plot", "cli_argv": ["sciplot", "plot", "open", str(plot), "--json"]}}
 
@@ -170,11 +233,11 @@ def _curve_project_status(observed: tuple[dict[str, Any], dict[str, Any], bool])
 def inspect_project(project: Path, **options: Any) -> dict[str, Any]:
     from sciplot_core.studio_core.managed_frequency_query import inspect_frequency_creation
 
-    curve = observe_managed_curve(project, figure_id=options.get("figure_id"))
+    curve = _inspect_managed_project(project, figure_id=options.get("figure_id"))
     if curve is not None:
         if any(options.get(key) for key in ("object_path", "native", "include_annotations", "include_axes")):
             raise ValueError("Managed figures expose their current objects through plot open; use the reported canonical plot path.")
-        return _curve_project_status(curve)
+        return curve
     managed = inspect_frequency_creation(project, figure_id=options.get("figure_id"))
     if managed is None:
         observation = observe_legacy_project(project)
