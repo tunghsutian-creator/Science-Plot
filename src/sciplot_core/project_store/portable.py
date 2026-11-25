@@ -80,7 +80,7 @@ def _copy_member(source: int, target: int, name: str, *, mode: int | None = None
 
 
 def _closure(io: StoreIO, current: dict[str, Any], paths: set[str]) -> tuple[set[str], dict[str, int]]:
-    from . import state
+    import sciplot_core.project_store.state as state
 
     # Keep command receipts (including unknown outcomes) and native work exactly
     # as admitted. Only prune abandoned generations, unbound draft descriptors,
