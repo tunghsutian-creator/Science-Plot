@@ -7,7 +7,7 @@ from sciplot_core.plot_transforms import require_builtin, validate_node
 from sciplot_core.source_inspection.rheology_evidence import instrument_candidate
 from sciplot_core.source_inspection.semantic_evidence import _column
 from sciplot_core.task_semantic_coordinates import resolved_binding
-from sciplot_core.task_semantic_figure import _select_column
+from sciplot_core.task_semantic_curve_bindings import _select_column
 from sciplot_core.task_semantic_frequency import frequency_condition, frequency_derivation
 
 from .errors import EngineError

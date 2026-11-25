@@ -145,7 +145,7 @@ def publish_managed_artifacts(binding: dict[str, Any], output: Path, exported: d
                 return str(target / path.relative_to(private))
         return value
 
-    result = path_metadata_view(exported, relocate)
+    result = dict(path_metadata_view(exported, relocate))
     # The native delivery owner still verifies the canonical local VSZ. Public
     # cache currentness also requires every visible projection byte.
     result["evidence_files"] = {**exported["evidence_files"],

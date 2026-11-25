@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -106,7 +106,7 @@ def owned_source_view(io: StoreIO, value: dict[str, Any], actual: Path, *,
     return actual, str(entry["locator"])
 
 
-def logical_path(root: Path, locations: Mapping[str, Path], location_members: Mapping[str, frozenset[str] | None],
+def logical_path(root: Path, locations: Mapping[str, Path], location_members: Mapping[str, Collection[str] | None],
                  path: Path) -> str:
     """Classify an external path only under its registered physical roots."""
     candidate = Path(path).expanduser().absolute()

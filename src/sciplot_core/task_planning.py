@@ -241,7 +241,7 @@ def plan_task(root: Path, state: dict[str, Any]) -> PlanPreviewResolution | None
         if inspected_plan is not None and plan_request == {"rule_id": selected["rule_id"]}
         else resolve_plan_preview(source, request=plan_request)
     )
-    plan = observed.payload
+    plan = dict(observed.payload)
     atomic_write_json(root / "plan.json", plan)
     state["selection"] = {"rule_id": plan["rule_id"], "template": plan["template"]}
     blocker_snapshot = plan.get("blocker")

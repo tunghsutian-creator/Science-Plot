@@ -82,7 +82,7 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
         plan = plan_categorical_task(state)
     else:
         observed = plan_task(root, state)
-        plan = observed.payload if observed is not None else None
+        plan = dict(observed.payload) if observed is not None else None
         if observed is not None:
             save_profile(root, state)
     if plan is None:

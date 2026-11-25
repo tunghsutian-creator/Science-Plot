@@ -73,7 +73,7 @@ def create_project(
         source, expected_plan, rule_id=expected_plan.get("rule_id"),
         template=expected_plan.get("template"), observed=_observed_plan,
     )
-    verified = observed.payload
+    verified = dict(observed.payload)
     layout = resolve_user_output_layout(source, requested_delivery_root=output_dir)
     if publish and verified["rule_id"] == "rheology_frequency_sweep":
         from .managed_frequency_creation import create_frequency_project
@@ -104,10 +104,12 @@ def create_project(
     else:
         payload = prepare_studio_document(
             source, output_root=layout.workspace_root / "projects",
-            delivery_root=layout.delivery_root, rule_id=verified["rule_id"],
-            template=verified["template"], _scientific_source=observed.scientific_source,
+            delivery_root=layout.delivery_root, rule_id=observed.payload["rule_id"],
+            template=observed.payload["template"], _scientific_source=observed.scientific_source,
         )
-    if source_tree_sha256(source) != verified["preview_identity"]["source_tree_sha256"]:
+    identity = observed.payload["preview_identity"]
+    assert identity is not None  # The admission above rejects an unbound preview.
+    if source_tree_sha256(source) != identity["source_tree_sha256"]:
         raise ValueError(
             "Source changed during project preparation. The candidate is preserved; "
             "no delivery was published. Start a new source-bound plan."

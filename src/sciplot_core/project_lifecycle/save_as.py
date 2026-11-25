@@ -144,9 +144,9 @@ def _prepare(store: FileProjectStore, owner: "ProjectApplication", snapshot: dic
     # These private source views are only for the first binding admission.
     # Normal later operations resolve the new Store's own sealed source versions.
     with TemporaryDirectory(prefix=".save-as-sources-", dir=store.root / STORE) as temporary:
-        pending = []
-        for index, source in enumerate(sources):
-            path = Path(temporary) / (str(index) + Path(source.locator).suffix)
+        pending: list[dict[str, str]] = []
+        for ordinal, source in enumerate(sources):
+            path = Path(temporary) / (str(ordinal) + Path(source.locator).suffix)
             with path.open("xb") as stream:
                 stream.write(source.data)
             path.chmod(0o400)

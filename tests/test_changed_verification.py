@@ -562,7 +562,10 @@ def test_scientific_transaction_type_owner_has_the_exact_scoped_paths() -> None:
         )
 
 
-@pytest.mark.parametrize("path", sorted(SCIENTIFIC_TRANSACTION_TYPE_PATHS))
+@pytest.mark.parametrize("path", sorted(SCIENTIFIC_TRANSACTION_TYPE_PATHS | {
+    "src/sciplot_core/project_lifecycle/figure_observation.py",
+    "src/sciplot_core/project_lifecycle/relocation.py",
+}))
 def test_scientific_transaction_type_owner_adds_mypy_once(path: str) -> None:
     payload = build_changed_verification_plan([path], repo_root=REPO_ROOT)
 

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from importlib import import_module
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pandas as pd
 
@@ -268,10 +269,9 @@ def compute_resolved_curve_metrics(
         raise ValueError("Resolved curve metrics require the same scientific family.")
     # Legacy normalized tables have text-valued metadata plus decimal cells.
     # Keep that same projection, including the same to_numeric policy, in memory.
-    from pandas._libs.parsers import STR_NA_VALUES
-
+    parser_na = cast(set[str], import_module("pandas._libs.parsers").STR_NA_VALUES)
     frame = curve_table_frame(transform.series).map(str)
-    return _single_curve_metrics(frame.replace(list(STR_NA_VALUES), float("nan")), semantic)
+    return _single_curve_metrics(frame.replace(list(parser_na), float("nan")), semantic)
 
 
 def _single_curve_metrics(source: Path | pd.DataFrame, semantic: dict[str, Any]) -> list[dict[str, Any]]:

@@ -70,7 +70,8 @@ def prepare_preview(owner: "ProjectApplication", compiler: ManagedVeuszCompiler,
         with project_query(plot):
             head, _ = _head(owner, plot, baseline=baseline)
             saved = head["document"]
-            candidate, diff = saved, []
+            candidate = saved
+            diff: list[dict[str, Any]] = []
             if patch is not None:
                 from sciplot_core.plot_engine.managed_updates import SPECIAL
 

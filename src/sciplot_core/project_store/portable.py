@@ -184,7 +184,7 @@ def _capture_bundle(source: Path, candidate: Path) -> dict[str, Any]:
     try:
         raw, _mode = read_file(source_fd, "bundle.json")
         header = json.loads(raw)
-        if header.get("kind") != "sciplot_project_bundle" or header.get("version") != 1:
+        if not isinstance(header, dict) or header.get("kind") != "sciplot_project_bundle" or header.get("version") != 1:
             raise ProjectStoreError("Unsupported complete project bundle.")
         locations = _locations(candidate, header)
         expected = header["members"]

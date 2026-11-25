@@ -50,16 +50,16 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
         return call(semantic_methods[name], arguments)
     if name in {"sciplot_project_legacy_redraw", "sciplot_project_legacy_convert"}:
-        target, output = Path(arguments["target"]), Path(arguments["output_dir"])
+        legacy_target, output = Path(arguments["target"]), Path(arguments["output_dir"])
         figure_id = arguments.get("figure_id")
         if name == "sciplot_project_legacy_redraw":
             from sciplot_core.studio_core.legacy_saved_plot import redraw_legacy_plot
 
-            return redraw_legacy_plot(target, output=output, formats=arguments.get("formats", ["pdf"]),
+            return redraw_legacy_plot(legacy_target, output=output, formats=arguments.get("formats", ["pdf"]),
                                       figure_id=figure_id)
         from sciplot_core.studio_core.legacy_conversion import convert_legacy_plot
 
-        return convert_legacy_plot(target, output=output, figure_id=figure_id,
+        return convert_legacy_plot(legacy_target, output=output, figure_id=figure_id,
                                    x_unit=arguments.get("x_unit"), y_unit=arguments.get("y_unit"))
     if name == "sciplot_project_save_as":
         from sciplot_core.project_lifecycle.save_as import save_managed_as

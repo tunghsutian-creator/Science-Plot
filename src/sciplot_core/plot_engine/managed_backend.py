@@ -244,7 +244,7 @@ class ManagedBackend:
             preview_path = output / "preview.png"
             preview_path.write_bytes(pixels)
             preview = {**built, "preview": {**image, "path": str(preview_path)}}
-        review = {"scientific_audit": preview["scientific_audit"], "preview": preview.get("preview", preview),
+        review: dict[str, Any] = {"scientific_audit": preview["scientific_audit"], "preview": preview.get("preview", preview),
                   "_managed_binding": candidate,
                   **{key: preview[key] for key in ("native_state_hash", "compiler_identity") if key in preview}}
         if any(item["property"] == "source.append" for item in diff):
