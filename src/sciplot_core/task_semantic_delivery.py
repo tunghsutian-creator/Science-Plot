@@ -1,4 +1,4 @@
-"""Finish semantic tasks through the existing sealed native-snapshot delivery owner."""
+"""Finish semantic tasks through the existing sealed figure delivery owners."""
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -37,6 +37,11 @@ def execute_delivery(request: dict[str, Any]) -> dict[str, Any]:
 
 
 def finish_delivery(root: Path, state: dict[str, Any]) -> None:
+    if "formats" in state["request"]:
+        from sciplot_core.task_semantic_selected_delivery import finish_selected
+
+        finish_selected(root, state)
+        return
     if "delivery_request" not in state:
         state["delivery_request"] = delivery_request(state)
     state.update(status="running", phase="delivering")

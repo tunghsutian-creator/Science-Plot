@@ -376,7 +376,7 @@ def resume_task(task: Path, response: dict[str, Any], *, _public_mutation: bool 
         state = load_task(root)
         if "intent" in state["request"] and state["status"] == "complete" and response == {"retry": True}:
             current = _current_result(state)
-            if current.get("ready_to_use") is True:
+            if current.get("ready_to_use") is True or "formats" in state["request"]:
                 return current
         semantic_continuation = ("intent" in state["request"] and (response == {"retry": True} or "revise_intent" in response))
         if state["status"] in {"complete", "cancelled"} and "revise_operations" not in response and not semantic_continuation:

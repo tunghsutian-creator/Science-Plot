@@ -1,11 +1,15 @@
 """Copy only the requested files from one ready, current Managed publication."""
 
+from collections.abc import Callable
 from pathlib import Path
+from stat import S_ISDIR, S_ISREG
 from tempfile import TemporaryDirectory
-from typing import Any
+from typing import Any, TypedDict
 
+from sciplot_core.delivery.filesystem_metadata import is_delivery_finder_metadata
 from sciplot_core.delivery.install import install_new_delivery
 from sciplot_core.delivery.native_snapshot import SnapshotSealChanged, copy_sealed_file
+from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.research_destination import require_data_destination
 from sciplot_core.foundation.source_locations import selected_source_resolver
 from sciplot_core.plot_document.schema import figure_handoff_schema
@@ -15,11 +19,42 @@ from sciplot_core.plot_engine.current import require_current
 from sciplot_core.plot_engine.export_status import sealed_publication
 from sciplot_core.plot_ir.figure_document import is_figure
 from sciplot_core.project_store.source_resolver import ProjectSourceResolver
+from sciplot_core.studio_core.source_update_files import reject_symlink_path
 
 from .context import active, has_head, load_head, project_query
 from .contracts import RevisionToken
 from .errors import EngineError
 from .paths import canonical_path
+
+
+class FigureInstall(TypedDict):
+    """Private task witness; identifying the directory also excludes byte-identical foreign output."""
+    directory_identity: list[int]
+    revision_token: dict[str, Any]
+    result: dict[str, Any]
+
+
+def _directory_identity(path: Path) -> list[int]:
+    status = path.lstat()
+    if not S_ISDIR(status.st_mode):
+        raise ValueError("The selected output is no longer a real directory.")
+    return [status.st_dev, status.st_ino]
+
+
+def _installed_matches(out: Path, token: RevisionToken, result: dict[str, Any], receipt: FigureInstall) -> bool:
+    if receipt["revision_token"] != token.to_payload() or receipt["result"] != result:
+        return False
+    try:
+        reject_symlink_path(out)
+        if _directory_identity(out) != receipt["directory_identity"]:
+            return False
+        expected = {Path(item["path"]).name: item["sha256"] for item in result["exports"]}
+        actual = {path.name: path for path in out.iterdir() if not is_delivery_finder_metadata(path)}
+        return (actual.keys() == expected.keys()
+                and all(S_ISREG(path.lstat().st_mode) and file_sha256(path) == expected[name]
+                        for name, path in actual.items()))
+    except (OSError, ValueError):
+        return False
 
 
 def _publication(root: Path, out: Path, request: dict[str, Any], backend: PlotBackend) -> tuple[RevisionToken, list[dict[str, str]]]:
@@ -53,7 +88,10 @@ def _publication(root: Path, out: Path, request: dict[str, Any], backend: PlotBa
                           action="plot.export", plot=str(root))
 
 
-def handoff_figure(root: Path, request: dict[str, Any], backend: PlotBackend) -> dict[str, Any]:
+def handoff_figure(root: Path, request: dict[str, Any], backend: PlotBackend, *,
+                   before_install: Callable[[FigureInstall], None] | None = None,
+                   installed: FigureInstall | None = None) -> dict[str, Any]:
+    """Install a new visible delivery, or only verify one task's frozen installation."""
     validate_wire(request, figure_handoff_schema(), code="figure_handoff_invalid_request")
     if type(request["revision"]) is not int:
         raise EngineError("figure_handoff_invalid_request", "Use the integer revision from plot describe.")
@@ -61,20 +99,29 @@ def handoff_figure(root: Path, request: dict[str, Any], backend: PlotBackend) ->
         out = require_data_destination(canonical_path(Path(request["output_dir"])))
     except (OSError, ValueError) as exc:
         raise EngineError("figure_handoff_invalid_destination", str(exc)) from exc
-    if out.exists():
+    if installed is None and out.exists():
         raise EngineError("figure_handoff_destination_exists", "Choose a new output directory; nothing was replaced.")
     if not out.parent.is_dir():
         raise EngineError("figure_handoff_invalid_destination", "The parent directory must already exist.")
     token, records = _publication(root, out, request, backend)
+    files = [{**record, "path": str(out / Path(record["path"]).name)} for record in records]
+    result = {"kind": "sciplot_figure_handoff", "version": 1, "status": "exported", "ready_to_use": True,
+              "plot": str(root), "plot_id": token.plot_id, "revision": token.revision, "output_dir": str(out),
+              "exports": files}
+    if installed is not None:
+        if _installed_matches(Path(request["output_dir"]), token, result, installed):
+            return result
+        raise EngineError("figure_handoff_install_changed", "The task's selected-file delivery is missing, changed or not its own; nothing was replaced.")
     try:
         with TemporaryDirectory(prefix=".sciplot-figure-", dir=out.parent) as temporary:
             staged = Path(temporary) / "figure"
             staged.mkdir()
-            files = []
             for record in records:
                 source = Path(record["path"])
                 copy_sealed_file(source, staged / source.name, record["sha256"])
-                files.append({**record, "path": str(out / source.name)})
+            if before_install is not None:
+                before_install({"directory_identity": _directory_identity(staged),
+                                "revision_token": token.to_payload(), "result": result})
             if _publication(root, out, request, backend) != (token, records):
                 raise EngineError("figure_handoff_publication_changed", "The selected publication changed during handoff.")
             install_new_delivery(staged, out)
@@ -82,6 +129,4 @@ def handoff_figure(root: Path, request: dict[str, Any], backend: PlotBackend) ->
         raise EngineError("figure_handoff_destination_exists", "Choose a new output directory; nothing was replaced.") from exc
     except SnapshotSealChanged as exc:
         raise EngineError("figure_handoff_publication_changed", str(exc)) from exc
-    return {"kind": "sciplot_figure_handoff", "version": 1, "status": "exported", "ready_to_use": True,
-            "plot": str(root), "plot_id": token.plot_id, "revision": token.revision, "output_dir": str(out),
-            "exports": files}
+    return result

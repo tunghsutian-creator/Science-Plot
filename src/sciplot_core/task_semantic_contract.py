@@ -1,7 +1,7 @@
 """Small semantic creation intents; scientific documents retain their existing authority."""
 from typing import Any
 
-from sciplot_core.plot_document.schema import closed
+from sciplot_core.plot_document.schema import closed, figure_formats_schema
 
 
 def block_selection_schema() -> dict[str, Any]:
@@ -64,6 +64,8 @@ def semantic_request_schema() -> dict[str, Any]:
                    "sources": {"type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": True,
                                "items": {"type": "string", "minLength": 1}},
                    "intent": intent_schema(), **presentation_requirement_properties(), "out": {"type": "string", "minLength": 1},
+                   "formats": {**figure_formats_schema(),
+                               "description": "Deliver only the selected files (PDF, optionally 300 dpi TIFF); omitted retains the native snapshot."},
                    "choose_columns": {"const": True, "description": "Ask which exact observed FTIR blocks to overlay before creating a plot."},
                    "task_dir": {"type": "string", "minLength": 1, "deprecated": True}},
                   ["version", "action", "sources", "intent"])

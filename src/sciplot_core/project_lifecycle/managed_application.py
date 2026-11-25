@@ -2,7 +2,7 @@
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sciplot_core.plot_engine.backend import PlotBackend
 from sciplot_core.plot_engine.current import changed_inputs, dependency_state
@@ -18,6 +18,9 @@ from .paths import canonical_path
 from .ports import ProjectRepository
 from .recovery import project_recovery
 from .targets import ManagedCreationLocation
+
+if TYPE_CHECKING:
+    from .figure_handoff import FigureInstall
 
 
 class ManagedPlotApplication:
@@ -46,6 +49,15 @@ class ManagedPlotApplication:
         close = getattr(self.backend, "close", None)
         if close is not None:
             close()
+
+    @usecase
+    def handoff_figure(self, plot: Path, request: dict[str, Any], *,
+                       before_install: "Callable[[FigureInstall], None] | None" = None,
+                       installed: "FigureInstall | None" = None) -> dict[str, Any]:
+        from .figure_handoff import handoff_figure
+
+        return handoff_figure(canonical_path(plot), request, self.backend,
+                              before_install=before_install, installed=installed)
 
     @usecase
     def describe(self, plot: Path, *, description: dict[str, Any] | None = None) -> dict[str, Any]:

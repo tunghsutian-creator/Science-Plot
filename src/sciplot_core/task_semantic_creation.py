@@ -144,7 +144,10 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
         state["project"] = result["plot"]
     complete = (result.get("status") == "complete" and result.get("ready_to_use") is True
                 and isinstance(result.get("plot"), str) and bool(result.get("exports")))
-    state.update(status="complete" if complete else "blocked", phase="finished" if complete else "exporting")
+    if complete and "formats" in state["request"]:
+        state.update(status="running", phase="delivering")
+    else:
+        state.update(status="complete" if complete else "blocked", phase="finished" if complete else "exporting")
     if not complete:
         state["blocker"] = {"reason_code": (result.get("error") or {}).get("reason_code", "managed_export_not_ready"),
                             "message": (result.get("error") or {}).get("message", "The saved Managed revision is not a verified delivery."),
@@ -260,6 +263,10 @@ def resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
 def current_result(state: dict[str, Any]) -> dict[str, Any]:
     summary = task_summary(state)
     if state.get("project") and state["status"] == "complete":
+        if "formats" in state["request"]:
+            from sciplot_core.task_semantic_selected_delivery import current_selected_result
+
+            return current_selected_result(state, summary, assert_sources_current=assert_sources_current)
         from sciplot_core.task_semantic_owner import describe_managed
 
         try:

@@ -215,11 +215,9 @@ class ProjectApplication(ManagedPlotApplication, CommandDispatch):
 
     @usecase
     def export(self, plot: Path, *, handoff: dict[str, Any] | None = None) -> dict[str, Any]:
-        root = canonical_path(plot)
         if handoff is not None:
-            from .figure_handoff import handoff_figure
-
-            return handoff_figure(root, handoff, self.backend)
+            return self.handoff_figure(plot, handoff)
+        root = canonical_path(plot)
         with external_project_session(root):
             return self._export(root)
 
@@ -292,4 +290,5 @@ class ProjectApplication(ManagedPlotApplication, CommandDispatch):
         return local_managed_actions(
             self.create, lambda plot: self.describe(plot, description={"scope": "summary"}),
             self.deliver, lambda request, paper_dir: self.inspect_delivery(request, paper_dir=paper_dir),
+            handoff=self.handoff_figure,
         )

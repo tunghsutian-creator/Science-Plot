@@ -30,7 +30,7 @@ _DAILY_CONTRACTS: dict[str, tuple[str, dict[str, Any], str]] = {
     "sciplot_task_start": (
         "request",
         {"type": "object", "required": ["version", "action"]},
-        'Use request {version:1, action:"create", source:ABSOLUTE_PATH} for ordinary creation. For explicit coordinates, use sources and intent. Get exact request fields with task_capabilities(section="request", name=ACTION).',
+        'Use request {version:1, action:"create", source:ABSOLUTE_PATH} for ordinary creation. For explicit coordinates, use sources and intent; optional formats selects PDF or PDF plus 300 dpi TIFF. Get exact request fields with task_capabilities(section="request", name=ACTION).',
     ),
     "sciplot_task_resume": (
         "response", {"type": "object", "minProperties": 1},

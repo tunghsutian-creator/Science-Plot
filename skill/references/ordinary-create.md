@@ -97,6 +97,16 @@ This is a recipe default, not a universal journal rule: published
 
 2. For an advanced structured request, use `task start --request REQUEST.json`.
    Read only the missing named request/response schema from task capabilities.
+   A standalone request with `sources` and `intent` can set top-level
+   `"formats":["pdf"]` or `"formats":["pdf","tiff_300"]` here or in
+   `sciplot_task_start`. Use `out` for a new output directory. The task
+   returns only the selected, audited figure files in that directory and a
+   separate saved plot for later editing. Omitting `formats` keeps the existing
+   native snapshot. This option is not accepted by `task create` flags,
+   source-only or categorical requests, or experiment-group items. If the
+   delivery changes after completion, keep the plot and
+   [export the intended revision to a new directory](managed-delivery.md).
+
    If the original table is already understood, include `create.mapping` with
    its original file SHA, row selections, metadata evidence and XY pairs rather
    than rediscovering the same table. The typed entry does not invent mappings.

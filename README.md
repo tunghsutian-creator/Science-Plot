@@ -43,6 +43,13 @@ actual original column; conflicting selectors stop before plotting.
 Experiment identity does not depend
 on which coordinate is selected for a particular view.
 
+When only submission files are needed, a standalone structured `task start`
+request with `sources` and `intent` can set `"formats":["pdf"]` or
+`"formats":["pdf","tiff_300"]` through the CLI or daily MCP. The delivery folder
+contains only those files, and the task returns a separate editable plot path.
+Omit `formats` to keep the existing native snapshot. See
+[ordinary plotting](skill/references/ordinary-create.md).
+
 Mixed instrument tables can select exact observed Test values or qualified source
 blocks in that same task. The source plan retains selected and excluded original
 rows, counts and reasons, while the original file and its hash remain intact.
