@@ -34,19 +34,20 @@ def _selected_original_columns(document: dict[str, Any], source_id: str) -> set[
 
 
 @with_table_reads
-def _selected_source(source: dict[str, Any], rule_id: str) -> dict[str, Any]:
+def _selected_source(source: dict[str, Any], rule_id: str) -> tuple[dict[str, Any], Path]:
     path = resolve_source_path(source["path"], expected_sha256=source["sha256"], source_id=source["source_id"])
     if not path.is_absolute() or not path.is_file() or file_sha256(path) != source["sha256"]:
         raise EngineError("managed_source_changed", "Use the exact original source bytes or explicitly refresh their scientific binding.")
     if "table_selection" not in source:
         raise EngineError("managed_table_selection_required", "Managed data requires explicit original worksheet and row bounds.")
     snapshot = source_table_snapshot(Path(source["path"]), rule_id=rule_id,
-                                     sheets=[source["table_selection"]["sheet"]], expected_sha256=source["sha256"])
+                                     sheets=[source["table_selection"]["sheet"]], expected_sha256=source["sha256"],
+                                     read_path=path)
     if snapshot is None:
         raise EngineError("managed_source_unsupported", "This source format does not support explicit original-table binding.")
-    selected = select_table(snapshot, source["table_selection"], source.get("metadata_confirmations"))
+    selected = select_table(snapshot, source["table_selection"], source.get("metadata_confirmations"), read_path=path)
     selected["table_id"] = next(table["table_id"] for table in snapshot["tables"] if table["sheet"] == source["table_selection"]["sheet"])
-    return selected
+    return selected, path
 
 
 def _column_facts(selected: dict[str, Any]) -> dict[str, Any]:
@@ -61,7 +62,7 @@ def load_source_facts(document: dict[str, Any], rule_id: str) -> dict[str, dict[
     The original-table reader parses the selected worksheet, including numeric
     cells; this port only returns its column metadata.
     """
-    return {source["source_id"]: _column_facts(_selected_source(source, rule_id))
+    return {source["source_id"]: _column_facts(_selected_source(source, rule_id)[0])
             for source in document["scientific"]["data_sources"]}
 
 
@@ -72,8 +73,7 @@ def load_sources(document: dict[str, Any], rule_id: str, *,
     datasets: dict[str, dict[str, Any]] = {}
     samples: dict[str, dict[str, set[str]]] = {}
     for source in document["scientific"]["data_sources"]:
-        path = resolve_source_path(source["path"], expected_sha256=source["sha256"], source_id=source["source_id"])
-        selected = _selected_source(source, rule_id)
+        selected, path = _selected_source(source, rule_id)
         if column_facts is not None:
             column_facts[source["source_id"]] = _column_facts(selected)
         required_columns = _selected_original_columns(document, source["source_id"])
@@ -83,7 +83,7 @@ def load_sources(document: dict[str, Any], rule_id: str, *,
                 raise EngineError("managed_source_select_invalid", "An original column selection references an absent source column.")
             selected["columns"] = [column for column in selected["columns"] if f"column:{column['index']}" in required_columns]
         selection = selected["table_selection"]
-        frame = read_original_table(path, selection["sheet"], source["sha256"])
+        frame = read_original_table(Path(source["path"]), selection["sheet"], source["sha256"], read_path=path)
         if source_frames is not None:
             source_frames[source["source_id"]] = {"frame": frame, "table_id": selected["table_id"]}
         start, end = selection["data_start_row"], selection["data_end_row"]

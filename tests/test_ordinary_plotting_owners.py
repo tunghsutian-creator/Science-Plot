@@ -792,8 +792,10 @@ def test_project_core_domains_retain_all_owned_inputs_and_real_native_consumers(
         assert owner.owned_test_paths <= set(owner.pytest_targets)
         for target in owner.pytest_targets:
             assert (ROOT / target.split("::", 1)[0]).is_file(), target
-        for path in owner.exact_paths | owner.owned_test_paths:
-            assert (ROOT / path).is_file(), path
+        live_paths = owner.exact_paths | owner.owned_test_paths
+        assert live_paths.isdisjoint(owner.retired_paths)
+        for path in live_paths | owner.retired_paths:
+            assert (ROOT / path).is_file() == (path in live_paths), path
             plan = _plan([path])
             assert not plan["unowned_paths"]
             assert owner.owner_id in {row["owner_id"] for row in plan["owners"]}

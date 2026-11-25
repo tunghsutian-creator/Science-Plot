@@ -34,7 +34,7 @@ class FilesystemProjectTargets:
         delivery = managed_delivery_location(target)
         if delivery is not None:
             root, snapshot, manifest = delivery
-            selected = local_managed_target(root, figure_id, native_snapshot=snapshot, manifest=manifest)
+            selected = local_managed_target(root, figure_id, native_snapshot=snapshot, manifest=manifest, owner=self.repository)
             return ManagedDeliveryTarget(selected["plot"], selected["item_id"], selected["native_snapshot"],
                                          RevisionToken.of(selected["head"]["document"]))
         if self.repository.has_head(target):

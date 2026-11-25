@@ -17,7 +17,7 @@ from sciplot_core.semantic_sources.registered_paired_curve_transform import _com
 def resolve_column_metadata(
     columns: list[dict[str, Any]], confirmations: list[dict[str, Any]], *,
     source_sha256: str, sheet: str | None, frame: pd.DataFrame, rule: SemanticRule | None,
-    source: Path | None = None,
+    source: Path | None = None, read_path: Path | None = None,
 ) -> None:
     validate_metadata_confirmations(confirmations)
     grouped: dict[tuple[int, str], list[dict[str, Any]]] = {}
@@ -26,7 +26,7 @@ def resolve_column_metadata(
     for position, item in enumerate(confirmations):
         try:
             _validate_declaration(item, source_sha256=source_sha256, sheet=sheet,
-                                  frame=frame, source=source, columns=columns, evidence_frames=evidence_frames, rule=rule)
+                                  frame=frame, source=source, read_path=read_path, columns=columns, evidence_frames=evidence_frames, rule=rule)
         except ValueError as exc:
             errors.append(f"metadata_confirmations[{position}] target sheet={item['sheet']!r} "
                           f"column={item['column_index']} field={item['field']}: {exc}")
@@ -133,7 +133,7 @@ def resolve_column_metadata(
 
 def _validate_declaration(
     item: dict[str, Any], *, source_sha256: str, sheet: str | None,
-    frame: pd.DataFrame, source: Path | None, columns: list[dict[str, Any]],
+    frame: pd.DataFrame, source: Path | None, read_path: Path | None, columns: list[dict[str, Any]],
     evidence_frames: dict[str | None, pd.DataFrame], rule: SemanticRule | None,
 ) -> None:
     if item["source_sha256"] != source_sha256:
@@ -162,7 +162,7 @@ def _validate_declaration(
 
         evidence_frames[evidence_sheet] = _read_raw_table(DataSourceReference(
             "evidence", source.name, source_sha256, sheet=evidence["sheet"], header_row=None,
-        ), source, preserve_cells=True).frame
+        ), source, preserve_cells=True, read_path=read_path).frame
     evidence_frame = evidence_frames[evidence_sheet]
     if row >= len(evidence_frame) or col >= evidence_frame.shape[1]:
         raise ValueError("Evidence cell is outside the cited original worksheet.")

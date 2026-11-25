@@ -49,7 +49,8 @@ def table_choice_snapshot(source: Path, rule_id: str, *, sheets: list[str | None
 
 def _numeric_summary(source: Path, sheet: str | None, digest: str,
                      frame: pd.DataFrame, start: int, end: int, *,
-                     numeric_contract: MappingNumericContract = MAPPING_NUMERIC_V3) -> pd.DataFrame:
+                     numeric_contract: MappingNumericContract = MAPPING_NUMERIC_V3,
+                     read_path: Path | None = None) -> pd.DataFrame:
     """Reuse byte-bound numeric facts, never scientific eligibility or declarations."""
     def scan() -> pd.DataFrame:
         summaries = []
@@ -62,19 +63,20 @@ def _numeric_summary(source: Path, sheet: str | None, digest: str,
         return pd.DataFrame(summaries)
 
     return read_table_once(source, ("mapping_numeric_facts", sheet, start, end, numeric_contract), scan,
-                           expected_sha256=digest, content_only=True)
+                           expected_sha256=digest, content_only=True, read_path=read_path)
 
 
 def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
                  metadata_confirmations: list[dict[str, Any]] | None = None, *,
-                 numeric_contract: MappingNumericContract = MAPPING_NUMERIC_V3) -> dict[str, Any]:
+                 numeric_contract: MappingNumericContract = MAPPING_NUMERIC_V3,
+                 read_path: Path | None = None) -> dict[str, Any]:
     """Bind explicit metadata/data rows without filling blanks or guessing samples."""
     source = Path(snapshot["source"])
     # Selection validates original evidence. Discovery/proposal callers retain
     # their rule-adapter eligibility gate in table_choice_snapshot itself.
     try:
         fresh = source_table_snapshot(source, rule_id=snapshot["rule_id"], sheets=snapshot.get("observed_sheets"),
-                                      expected_sha256=snapshot["file_sha256"])
+                                      expected_sha256=snapshot["file_sha256"], read_path=read_path)
     except SourceVersionMismatch as exc:
         raise ValueError("Table-choice original evidence changed.") from exc
     if fresh != snapshot:
@@ -100,7 +102,7 @@ def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
             if type(value) is not int or value < 0:
                 raise ValueError(f"{key} must be an original row index or null.")
             metadata.append(value)
-    frame = _read(source, selection["sheet"], snapshot["file_sha256"])
+    frame = _read(source, selection["sheet"], snapshot["file_sha256"], read_path=read_path)
     if end > len(frame) or any(row >= start for row in metadata) or frame.shape[1] > 256:
         raise ValueError("Metadata must precede the selected data region; bounds must fit the table (up to 256 columns).")
     # A Managed original-value binding can carry ordinary XY context without
@@ -114,9 +116,9 @@ def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
 
         expanded, anchors, associations = selected_metadata_cells(
             frame, metadata, ranges=merged_metadata_ranges(source, selection["sheet"],
-                expected_sha256=snapshot["file_sha256"]), data_start=start)
+                expected_sha256=snapshot["file_sha256"], read_path=read_path), data_start=start)
     numeric_summary = _numeric_summary(source, selection["sheet"], snapshot["file_sha256"], frame, start, end,
-                                       numeric_contract=numeric_contract)
+                                       numeric_contract=numeric_contract, read_path=read_path)
     columns = []
     for column in range(frame.shape[1]):
         evidence = {f"{row},{column}": _original_text(frame.iat[row, column]) for row in metadata}
@@ -144,8 +146,9 @@ def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
             }
     confirmations = metadata_confirmations if metadata_confirmations is not None else []
     resolve_column_metadata(columns, confirmations, source_sha256=snapshot["file_sha256"],
-                            sheet=selection["sheet"], frame=frame, rule=rule, source=source)
-    if file_sha256(resolve_source_path(source, expected_sha256=snapshot["file_sha256"])) != snapshot["file_sha256"]:
+                            sheet=selection["sheet"], frame=frame, rule=rule, source=source, read_path=read_path)
+    if file_sha256(read_path if read_path is not None else resolve_source_path(
+            source, expected_sha256=snapshot["file_sha256"])) != snapshot["file_sha256"]:
         raise ValueError("Table-choice source changed while reading.")
     return {"kind": "sciplot_table_columns", "version": 1, "source": str(source),
             "file_sha256": snapshot["file_sha256"], "rule_id": snapshot["rule_id"],

@@ -60,9 +60,10 @@ class ProjectApplication(ManagedPlotApplication, CommandDispatch):
               adoption: tuple[dict[str, str], dict[str, Any]] | None = None) -> dict[str, Any]:
         destination = self.targets.resolve_open(target, figure_id)
         if isinstance(destination, ManagedDeliveryTarget):
-            head = load_head(destination.root)
-            require_current(self.backend, head["binding"])
-            result = self.describe(destination.root, description=description)
+            with self.repository.query_scope(destination.root):
+                head = load_head(destination.root)
+                require_current(self.backend, head["binding"])
+                result = self.describe(destination.root, description=description)
             if result["revision_token"] != destination.revision.to_payload():
                 raise EngineError("managed_delivery_original_changed", "The exact original advanced during delivery selection; open it explicitly to review the new revision.",
                                   action="plot.describe", plot=str(destination.root))

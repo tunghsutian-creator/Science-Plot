@@ -18,6 +18,7 @@ from sciplot_core.plot_document import seal_document
 from sciplot_core.plot_engine.managed_state import prepare_binding
 from sciplot_core.plot_engine.managed_backend import fingerprint_input_roles
 from sciplot_core.project_lifecycle.application import ProjectApplication
+from sciplot_core.project_lifecycle.attachment_index import encode
 from sciplot_core.project_lifecycle.capabilities import COMPATIBILITY_CAPABILITIES
 from sciplot_core.project_lifecycle.context import repository, repository_scope
 from sciplot_core.project_lifecycle.contracts import AuthorityMode, NormalizedCommand, Receipt, RevisionToken
@@ -45,6 +46,8 @@ class MemoryRepository(FileProjectRepository):
 
     def content_snapshot(self, path):
         payload = self.content.get(str(path))
+        if payload is None and str(path) in self.values:
+            payload = encode(self.values[str(path)])
         if payload is None:
             raise FileNotFoundError(path)
         return {"bytes": payload, "sha256": hashlib.sha256(payload).hexdigest(), "identity": {"size": len(payload)}}
@@ -339,7 +342,7 @@ def test_task_style_checkpoint_is_filesystem_but_semantic_state_uses_injected_ow
     def injected_service(*, read_only_legacy):
         assert read_only_legacy
         return service(backend, repository=repo, capabilities=COMPATIBILITY_CAPABILITIES,
-                       read_only_legacy=read_only_legacy)
+                       read_only_legacy=read_only_legacy, targets=FilesystemProjectTargets(repo))
 
     owner = injected_service(read_only_legacy=True)
     try:

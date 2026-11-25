@@ -20,10 +20,12 @@ class ChangedOwner:
     handoff_gates: tuple[str, ...] = ()
     final_milestone_gates: tuple[str, ...] = ()
     release_gates: tuple[str, ...] = ()
+    retired_paths: frozenset[str] = frozenset()
 
     def matches(self, path: str) -> bool:
         return path not in self.excluded_paths and (
             path in self.exact_paths
+            or path in self.retired_paths
             or path in self.owned_test_paths
             or path.startswith(self.path_prefixes)
         )

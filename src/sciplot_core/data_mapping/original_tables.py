@@ -18,11 +18,11 @@ from sciplot_core.mapping_contract import DataSourceReference
 from sciplot_core.source_tables.raw_readers import read_sheet_names
 
 
-def read_original_table(source: Path, sheet: str | None, digest: str) -> pd.DataFrame:
+def read_original_table(source: Path, sheet: str | None, digest: str, *, read_path: Path | None = None) -> pd.DataFrame:
     """Read original cells; callers retain source-snapshot and digest validation."""
     return _read_raw_table(DataSourceReference(
         "source", source.name, digest, sheet=sheet, header_row=None,
-    ), source, preserve_cells=True).frame
+    ), source, preserve_cells=True, read_path=read_path).frame
 
 
 def original_rows(frame: pd.DataFrame, indices: list[int]) -> list[dict[str, Any]]:
@@ -32,11 +32,18 @@ def original_rows(frame: pd.DataFrame, indices: list[int]) -> list[dict[str, Any
 
 def source_table_catalog(source: Path, *, expected_sha256: str | None = None) -> dict[str, Any] | None:
     """List every physical table without reading its measurement cells."""
-    source = source.expanduser().resolve()
+    observed = _source_table_catalog(source, expected_sha256)
+    return observed[0] if observed is not None else None
+
+
+def _source_table_catalog(source: Path, expected_sha256: str | None, *,
+                          read_path: Path | None = None) -> tuple[dict[str, Any], Path] | None:
+    if read_path is None:
+        source = source.expanduser().resolve()
     suffix = source.suffix.casefold()
     if suffix not in {".csv", ".tsv", ".xlsx", ".xls", ".xlsm"}:
         return None
-    actual = resolve_source_path(source, expected_sha256=expected_sha256)
+    actual = read_path if read_path is not None else resolve_source_path(source, expected_sha256=expected_sha256)
     if not actual.is_file():
         return None
     before = file_sha256(actual)
@@ -45,21 +52,21 @@ def source_table_catalog(source: Path, *, expected_sha256: str | None = None) ->
                                     "The original table changed from its exact declared byte version.")
     sheets: list[str | None] = [None]
     if suffix in {".xlsx", ".xls", ".xlsm"}:
-        sheets = list(read_sheet_names(source, expected_sha256=before))
-    if file_sha256(resolve_source_path(source, expected_sha256=before)) != before:
+        sheets = list(read_sheet_names(source, expected_sha256=before, read_path=actual))
+    if file_sha256(actual) != before:
         raise ValueError("Table-choice source changed while reading.")
     return {"source": str(source), "file_sha256": before,
-            "tables": [{"table_id": f"table:{index}", "sheet": sheet} for index, sheet in enumerate(sheets)]}
+            "tables": [{"table_id": f"table:{index}", "sheet": sheet} for index, sheet in enumerate(sheets)]}, actual
 
 
 def source_table_snapshot(source: Path, *, rule_id: str | None = None,
-                          sheets: list[str | None] | None = None,
-                          expected_sha256: str | None = None) -> dict[str, Any] | None:
-    """Observe declared sheets; omission preserves historical full snapshots."""
-    catalog = (source_table_catalog(source) if expected_sha256 is None else
-               source_table_catalog(source, expected_sha256=expected_sha256))
-    if catalog is None:
+                          sheets: list[str | None] | None = None, expected_sha256: str | None = None,
+                          read_path: Path | None = None) -> dict[str, Any] | None:
+    """Observe declared sheets; keep an explicitly admitted source's literal."""
+    observed = _source_table_catalog(source, expected_sha256, read_path=read_path)
+    if observed is None:
         return None
+    catalog, read_path = observed
     source = Path(catalog["source"])
     before = catalog["file_sha256"]
     if sheets is not None and (not sheets or any(sheet not in [item["sheet"] for item in catalog["tables"]] for sheet in sheets)):
@@ -70,7 +77,7 @@ def source_table_snapshot(source: Path, *, rule_id: str | None = None,
         if sheets is not None and sheet not in sheets:
             continue
         try:
-            frame = read_original_table(source, sheet, before)
+            frame = read_original_table(source, sheet, before, read_path=read_path)
         except pd.errors.EmptyDataError:
             table = {"sheet": sheet, "row_count": 0, "column_count": 0, "rows": []}
         else:
@@ -80,7 +87,7 @@ def source_table_snapshot(source: Path, *, rule_id: str | None = None,
         if sheets is not None:
             table["table_id"] = item["table_id"]
         tables.append(table)
-    if file_sha256(resolve_source_path(source, expected_sha256=before)) != before:
+    if file_sha256(read_path) != before:
         raise ValueError("Table-choice source changed while reading.")
     return {"kind": "sciplot_table_choice", "version": 1, "source": str(source),
             "file_sha256": before, "rule_id": rule_id, "tables": tables,

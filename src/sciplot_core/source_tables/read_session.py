@@ -50,13 +50,13 @@ def with_table_reads(function: Callable[_P, _R]) -> Callable[_P, _R]:
 
 def read_table_once(
     path: Path, options: tuple[Any, ...], loader: Callable[[], pd.DataFrame],
-    *, expected_sha256: str | None = None, content_only: bool = False,
+    *, expected_sha256: str | None = None, content_only: bool = False, read_path: Path | None = None,
 ) -> pd.DataFrame:
     session = _CURRENT.get()
     if session is None and expected_sha256 is None:
         return loader()
     # Re-read actual bytes even on hits. Mtime/size are not scientific identity.
-    actual = resolve_source_path(path, expected_sha256=expected_sha256)
+    actual = read_path if read_path is not None else resolve_source_path(path, expected_sha256=expected_sha256)
     digest = file_sha256(actual)
     if expected_sha256 is not None and digest != expected_sha256:
         raise ValueError("Original table changed while reading.")

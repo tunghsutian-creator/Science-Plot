@@ -26,10 +26,11 @@ def _coordinate(value: str) -> tuple[int, int]:
     return int(match[2]), column
 
 
-def merged_metadata_ranges(source: Path, sheet: str | None, *, expected_sha256: str | None = None) -> list[dict[str, int]]:
+def merged_metadata_ranges(source: Path, sheet: str | None, *, expected_sha256: str | None = None,
+                           read_path: Path | None = None) -> list[dict[str, int]]:
     if source.suffix.casefold() not in {".xlsx", ".xlsm"}:
         return []
-    actual = resolve_source_path(source, expected_sha256=expected_sha256)
+    actual = read_path if read_path is not None else resolve_source_path(source, expected_sha256=expected_sha256)
 
     def read() -> pd.DataFrame:
         main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -58,7 +59,7 @@ def merged_metadata_ranges(source: Path, sheet: str | None, *, expected_sha256: 
                     element.clear()
         return pd.DataFrame(records)
 
-    frame = read_table_once(actual, ("merged_metadata", sheet), read, expected_sha256=expected_sha256)
+    frame = read_table_once(source, ("merged_metadata", sheet), read, expected_sha256=expected_sha256, read_path=actual)
     return [{str(key): int(value) for key, value in row.items()} for row in frame.to_dict("records")]
 
 

@@ -126,6 +126,14 @@ SOURCE_LOCATOR_PATHS = frozenset({
     "src/sciplot_core/data_mapping/execution_directories.py",
 })
 
+# Git diffs still name retired readers on deletion/rename. Their replacement
+# consumers are selected separately from the active source inventory.
+RETIRED_NATIVE_PROJECT_PATHS = frozenset({
+    "src/sciplot_core/studio_core/managed_curve_observation.py",
+    "src/sciplot_core/studio_core/managed_curve_query.py",
+    "src/sciplot_core/studio_core/project_query_paths.py",
+})
+
 NATIVE_PROJECT_PATHS = frozenset({
     'src/sciplot_core/data_mapping/raw_tables.py',
     'src/sciplot_core/plot_backends/veusz.py',
@@ -156,10 +164,6 @@ NATIVE_PROJECT_PATHS = frozenset({
     'src/sciplot_core/studio_core/project_query.py',
     'src/sciplot_core/project_lifecycle/head_observation.py',
     'src/sciplot_core/project_lifecycle/managed_figure_observation.py',
-    'src/sciplot_core/studio_core/managed_curve_observation.py',
-    # These retired read paths must still select their replacement regressions on deletion.
-    'src/sciplot_core/studio_core/managed_curve_query.py',
-    'src/sciplot_core/studio_core/project_query_paths.py',
     'src/sciplot_core/studio_core/project_query_evidence.py',
     'src/sciplot_core/studio_core/project_query_sources.py',
     'src/sciplot_core/studio_core/project_session.py',

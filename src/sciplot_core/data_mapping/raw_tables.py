@@ -5,13 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from io import StringIO
 import csv
+import hashlib
 from pathlib import Path
 
 from sciplot_core.foundation.source_locations import resolve_source_path
 from typing import Any, Literal, cast
 import pandas as pd
-from sciplot_core.foundation.text_files import decode_text
-from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.text_decoding import smart_decode
 from sciplot_core.source_tables.read_session import read_table_once
 from sciplot_core.source_tables.parsing import (
     DECIMAL_ROUND_TRIP_ENCODING_V1, DECIMAL_ROUND_TRIP_ENCODING_V2,
@@ -120,7 +120,7 @@ def _read_original_cells(
     *,
     preserve_cells: bool = False,
 ) -> pd.DataFrame:
-    suffix = path.suffix.casefold()
+    suffix = Path(reference.relative_path).suffix.casefold()
     if suffix in {".xlsx", ".xls", ".xlsm"}:
         sheet = reference.sheet if reference.sheet is not None else 0
         return pd.read_excel(path, sheet_name=sheet, header=None, dtype=object, keep_default_na=False)
@@ -129,7 +129,10 @@ def _read_original_cells(
             raise ValueError(
                 f"Text source {reference.relative_path} cannot select an Excel sheet."
             )
-        text = decode_text(path, expected_sha256=reference.sha256)
+        payload = path.read_bytes()
+        if hashlib.sha256(payload).hexdigest() != reference.sha256:
+            raise ValueError("The text source changed from its exact declared byte version.")
+        text, _encoding = smart_decode(payload)
         delimiter = _detect_delimiter(text, reference)
         return pd.DataFrame(list(csv.reader(StringIO(text), delimiter=delimiter))) if preserve_cells or reference.data_start_row is not None else pd.read_csv(
             StringIO(text),
@@ -144,17 +147,16 @@ def _read_original_cells(
 
 
 def _read_raw_table(
-    reference: DataSourceReference, path: Path, *, preserve_cells: bool = False,
+    reference: DataSourceReference, path: Path, *, preserve_cells: bool = False, read_path: Path | None = None,
 ) -> _RawTable:
-    read_path = resolve_source_path(path, expected_sha256=reference.sha256)
-    digest = file_sha256(read_path)
+    actual = read_path if read_path is not None else resolve_source_path(path, expected_sha256=reference.sha256)
     options: tuple[object, ...] = ("mapping_cells", reference.sheet, reference.delimiter, reference.decimal,
                preserve_cells or reference.data_start_row is not None)
     if path.suffix.casefold() in {".xlsx", ".xls", ".xlsm"}:
         options = ("mapping_excel", reference.sheet if reference.sheet is not None else 0)
-    raw = read_table_once(read_path, options,
-        lambda: _read_original_cells(reference, read_path, preserve_cells=preserve_cells),
-        expected_sha256=digest, content_only=True)
+    raw = read_table_once(path, options,
+        lambda: _read_original_cells(reference, actual, preserve_cells=preserve_cells),
+        expected_sha256=reference.sha256, content_only=True, read_path=actual)
     if raw.empty:
         raise pd.errors.EmptyDataError(f"Data mapping source is empty: {reference.relative_path}")
     # Never collapse empty interior columns: selections use original cell indices.
@@ -163,8 +165,8 @@ def _read_raw_table(
         if row >= raw.shape[0] or column >= raw.shape[1]:
             raise ValueError(f"Metadata cell {coordinate} is outside the source.")
         value = raw.iat[row, column]
-        actual = "" if value is None or pd.isna(value) else str(value)
-        if actual != expected:
+        cell = "" if value is None or pd.isna(value) else str(value)
+        if cell != expected:
             raise ValueError(f"Metadata cell {coordinate} changed.")
     header_row = reference.header_row
     if header_row is None:
@@ -187,9 +189,9 @@ def _read_raw_table(
         frame = raw.iloc[reference.data_start_row:end].reset_index(drop=True)
     if not preserve_cells:
         selected = frame
-        frame = read_table_once(read_path,
+        frame = read_table_once(path,
             ("mapping_missing", *options, header_row, reference.data_start_row, reference.data_end_row),
-            lambda: selected.map(_normalize_missing), expected_sha256=digest, content_only=True)
+            lambda: selected.map(_normalize_missing), expected_sha256=reference.sha256, content_only=True, read_path=actual)
     return _RawTable(
         source=reference,
         path=path,

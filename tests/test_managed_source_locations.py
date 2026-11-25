@@ -180,6 +180,7 @@ def test_selected_source_double_requires_initial_identity_and_rejects_other_vers
 
 def test_managed_cold_source_io_and_currentness_keep_original_literal_and_seal(tmp_path):
     document, actual = relocated_document(tmp_path)
+    actual = actual.rename(tmp_path / "protected-host-view.csv")
     before = deepcopy(document)
     source = document["scientific"]["data_sources"][0]
     locator = SelectedSource(source, actual)
@@ -199,7 +200,8 @@ def test_managed_cold_source_io_and_currentness_keep_original_literal_and_seal(t
         backend = ManagedBackend.__new__(ManagedBackend)
         assert changed_inputs(backend, binding) == []
         assert resolved["scientific"]["data_sources"] == document["scientific"]["data_sources"]
-    assert locator.calls and document == before
+    assert set(locator.calls) == {(source["path"], source["sha256"], source["source_id"])}
+    assert document == before
     with pytest.raises(ValueError):
         require_inputs(document)
 

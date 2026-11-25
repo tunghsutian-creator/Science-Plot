@@ -11,6 +11,7 @@ from sciplot_core.verification.project_core_paths import (
     ATTACHED_SOURCE_PATHS as ATTACHED_SOURCE_PATHS,
     SOURCE_LOCATOR_PATHS as SOURCE_LOCATOR_PATHS,
     NATIVE_PROJECT_PATHS as NATIVE_PROJECT_PATHS,
+    RETIRED_NATIVE_PROJECT_PATHS,
     SCIENTIFIC_ARTIFACT_PATHS as SCIENTIFIC_ARTIFACT_PATHS,
 )
 from sciplot_core.verification.project_core_targets import (
@@ -105,6 +106,7 @@ PROJECT_CORE_OWNERS = (
     ChangedOwner(
         owner_id="native_project_commands",
         exact_paths=NATIVE_PROJECT_PATHS,
+        retired_paths=RETIRED_NATIVE_PROJECT_PATHS,
         owned_test_paths=frozenset(NATIVE_PROJECT_COMMAND_TESTS),
         pytest_targets=('tests/test_native_setting_admission.py', *CATEGORICAL_EDIT_TESTS, *NATIVE_PROJECT_COMMAND_TESTS, *NATIVE_PROJECT_CONSUMERS,
                         "tests/test_current_complete_tree_scope.py", "tests/test_project_root_identity.py",

@@ -76,30 +76,28 @@ def test_managed_delivery_uses_each_registered_original_version(case, tmp_path):
 
 def test_paper_capture_keeps_digest_when_host_member_has_a_different_literal(tmp_path, monkeypatch):
     store, before = fixture_store(tmp_path)
-    command = ProjectCommand.create("publish", "paper-request", project_id=before["project_id"],
-        expected_generation=before["generation"], read_set={"plot_request.json": None},
-        write_set=["plot_request.json"], request={"synthetic": True})
-    ProjectCommands(store).execute(command, lambda: ProjectMutation({"plot_request.json": b"{}"}, {}))
-    bundle = store.export_bundle(tmp_path / "bundle")
     original_root = store.root
+    raw = original_root / "raw/same.csv"
+    # The saved spec names the newly selected host spelling, but the bundle
+    # still owns the registered original path and SHA.
+    projected = tmp_path / "cold/raw/same.csv"
+    spec = {"series": [{"source_artifacts": [{"path": str(projected), "sha256": file_sha256(raw)}]}]}
+    command = ProjectCommand.create("publish", "paper-request", project_id=before["project_id"],
+        expected_generation=before["generation"], read_set={"plot_request.json": None,
+            "studio/spec.json": before["files"]["studio/spec.json"]["sha256"]},
+        write_set=["plot_request.json", "studio/spec.json"], request={"synthetic": True})
+    ProjectCommands(store).execute(command, lambda: ProjectMutation(
+        {"plot_request.json": b"{}", "studio/spec.json": json.dumps(spec).encode()}, {}))
+    bundle = store.export_bundle(tmp_path / "bundle")
     original_root.rename(tmp_path / "offline")
-    cold = FileProjectStore.import_bundle(bundle, tmp_path / "cold")
-    host, literal = cold.root / "raw/same.csv", original_root / "raw/same.csv"
-    specification = tmp_path / "paper-spec.json"
-    specification.write_text(json.dumps({"series": [{"source_artifacts": [
-        {"path": str(host), "sha256": file_sha256(host)}]}]}))
-    selected = {"project": str(cold.root), "figure_id": "primary", "document": str(cold.root / "studio/document.vsz"),
-                "spec": str(specification), "document_sha256": file_sha256(cold.root / "studio/document.vsz"),
-                "spec_sha256": file_sha256(specification)}
-    monkeypatch.setattr(paper, "resolve_project_figure", lambda *_args: selected)
-    monkeypatch.setattr(paper, "project_snapshot", lambda *_args: ({}, {}, [{"figure_id": "primary"}]))
+    cold = FileProjectStore.import_bundle(bundle, projected.parent.parent)
     monkeypatch.setattr(paper, "source_indicators", lambda *_args: {"current": True, "prepared": {"current": True}, "scope": "generated fixture"})
     monkeypatch.setattr(paper, "native_link_sources", lambda *_args: [])
     with project_runtime(cold):
         selection = paper.capture_selection(cold.root, "primary")
-        assert selection["source_files"] == {str(literal): file_sha256(host)}
+        assert selection["source_files"] == {str(raw): file_sha256(projected)}
         paper.assert_selection_current(selection)
-    assert host != literal and not literal.exists()
+    assert projected != raw and not raw.exists()
 
 
 @pytest.mark.parametrize("change", [None, "file_hash", "composite_hash", "namespace", "raw_drift"])
