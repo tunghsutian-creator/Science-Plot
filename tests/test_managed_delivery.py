@@ -256,7 +256,7 @@ def test_snapshot_open_reconnects_only_exact_current_local_authority(case, monke
     assert service.deliver(request)["ready_to_use"]
     out = Path(request["out"])
     index = json.loads((out / "index.json").read_text())
-    monkeypatch.setattr(managed_continuation, "load_head", lambda path: heads[str(path)])
+    monkeypatch.setattr(managed_continuation, "observe_plot_head", lambda path, **_kwargs: heads[str(path)])
     with pytest.raises(EngineError) as caught:
         managed_continuation.local_managed_target(out, None)
     assert caught.value.reason_code == "managed_delivery_choose_figure"
@@ -377,7 +377,7 @@ def test_reconnect_requires_exact_members_and_original_native_seal(case, monkeyp
     assert service.deliver(request)["ready_to_use"]
     out = Path(request["out"])
     item = json.loads((out / "index.json").read_text())["items"][0]
-    monkeypatch.setattr(continuation, "load_head", lambda path: heads[str(path)])
+    monkeypatch.setattr(continuation, "observe_plot_head", lambda path, **_kwargs: heads[str(path)])
     (out / ".DS_Store").write_bytes(b"incidental standalone Finder metadata")
     assert continuation.local_managed_target(out, item["id"])["plot"] == Path(request["items"][0]["plot"])
     extra = out / "another-project.vsz"
