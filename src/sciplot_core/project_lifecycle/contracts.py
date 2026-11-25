@@ -135,7 +135,7 @@ class RecoveryState:
         outcome = ("complete" if phase == "complete" else "rejected" if phase == "rejected"
                    else "native_outcome_requires_owner_validation" if phase == "applying"
                    else "export_only" if committed else "pending")
-        return cls(phase, committed, phase == "complete", outcome,
+        return cls(phase, committed, phase == "complete" and not transaction.get("export_deferred"), outcome,
                    bool(transaction.get("error")) and phase not in {"complete", "needs_review", "rejected"})
 
     def to_payload(self) -> dict[str, Any]:

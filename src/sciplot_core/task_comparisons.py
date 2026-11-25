@@ -1,4 +1,4 @@
-"""Generate independent native edit tasks, then commit exactly one explicit choice."""
+"""Generate independent comparisons and commit exactly one explicit choice."""
 
 from __future__ import annotations
 
@@ -39,6 +39,11 @@ def _record_failure(root: Path, state: dict[str, Any], exc: Exception) -> None:
 
 
 def _generate(root: Path, state: dict[str, Any]) -> None:
+    if state["version"] == 2:
+        from sciplot_core.task_managed_comparison import generate
+
+        generate(root, state)
+        return
     request = state["request"]
     project = Path(request["project"])
     _require_baseline(state)
@@ -109,6 +114,11 @@ def _apply_selection(root: Path, state: dict[str, Any]) -> None:
 
 
 def _finish_selection(root: Path, state: dict[str, Any]) -> None:
+    if state["version"] == 2:
+        from sciplot_core.task_managed_comparison import apply_selected
+
+        apply_selected(root, state)
+        return
     request = state["request"]
     state.update(status="applying")
     state.pop("blocker", None)
@@ -148,14 +158,25 @@ def _require_selected_figure(state: dict[str, Any]) -> None:
 def start_comparison(request: dict[str, Any], *, comparison_dir: Path, base_dir: Path | None = None,
                      _public_mutation: bool = False) -> dict[str, Any]:
     request = normalize_comparison_request(request, base_dir=base_dir)
-    root = task_location(candidate_request(request, request["candidates"][0]), comparison_path(comparison_dir))
-    if not root.exists():
-        if _public_mutation:
+    root = comparison_path(comparison_dir)
+    managed = request["version"] == 2
+    if not managed:
+        root = task_location(candidate_request(request, request["candidates"][0]), root)
+    baseline = None
+    existed = root.exists()
+    if not existed:
+        if not managed and _public_mutation:
             from sciplot_core.project_lifecycle.legacy_public_policy import require_public_editable
 
+            # Preserve the current prepared-native product admission, not a
+            # new permission to compare old unadopted VSZ files.
             require_public_editable(Path(request["project"]), figure_id=request["figure_id"])
         from sciplot_core.foundation.research_destination import require_data_destination
         require_data_destination(root)
+        if managed:
+            from sciplot_core.task_managed_comparison import admit_baseline
+
+            baseline = admit_baseline(root, request)
     root.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     with external_project_session(root):
         if root.exists():
@@ -163,14 +184,20 @@ def start_comparison(request: dict[str, Any], *, comparison_dir: Path, base_dir:
             if state["request"] != request:
                 raise TaskControlError("comparison_already_exists", "此目录已用于另一个比较。")
             return comparison_overview(root, state)
-        project = Path(request["project"])
-        figure = resolve_project_figure(project, request["figure_id"])
-        baseline = edit_state(project)
-        if (file_sha256(Path(figure["document"])) != request["expected_document_sha256"]
-                or baseline["project_files"].get(str(Path(figure["document"]).relative_to(project))) != request["expected_document_sha256"]):
-            raise TaskControlError("comparison_baseline_stale", "请使用当前图的文档版本创建比较。")
+        if managed:
+            if baseline is None:
+                raise TaskControlError("comparison_record_changed", "The existing comparison disappeared before admission.")
+        else:
+            if _public_mutation and existed:
+                raise TaskControlError("comparison_record_changed", "The existing native comparison disappeared before admission.")
+            project = Path(request["project"])
+            figure = resolve_project_figure(project, request["figure_id"])
+            baseline = edit_state(project)
+            if (file_sha256(Path(figure["document"])) != request["expected_document_sha256"]
+                    or baseline["project_files"].get(str(Path(figure["document"]).relative_to(project))) != request["expected_document_sha256"]):
+                raise TaskControlError("comparison_baseline_stale", "请使用当前图的文档版本创建比较。")
         root.mkdir(mode=0o700)
-        state = {"kind": "sciplot_task_comparison", "version": 1, "comparison_dir": str(root),
+        state = {"kind": "sciplot_task_comparison", "version": request["version"], "comparison_dir": str(root),
                  "request": request, "baseline": baseline, "status": "generating"}
         save_comparison(root, state)
         try:
@@ -213,7 +240,8 @@ def select_comparison(comparison: Path, selection: dict[str, Any]) -> dict[str, 
             result = comparison_snapshot(root, state)
             if selection["expected_comparison_id"] != result["comparison_id"]:
                 raise TaskControlError("stale_comparison_selection", "比较内容已变化，请重新查询后选择。")
-            _require_baseline(state)
+            if state["version"] == 1:
+                _require_baseline(state)
             chosen = next((c for c in [result["baseline"], *result["candidates"]] if c["id"] == selection["candidate_id"]), None)
             if chosen is None or not chosen["selectable"]:
                 raise TaskControlError("comparison_not_selectable", "该候选或原图基准当前不可采用，请查询比较。")

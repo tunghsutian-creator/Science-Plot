@@ -138,7 +138,15 @@ def advance(root: Path, tx: dict[str, Any], backend: PlotBackend) -> dict[str, A
                 stage = "preview"
                 tx["review"] = _attempt(root, tx, "preview", preview)
                 _require_audit(tx["review"])
-                tx["phase"] = "needs_review" if tx["risk"] == "review" else "prepared"
+                selected = tx.get("comparison_selection")
+                if selected is not None:
+                    review = tx["review"]
+                    if ((review.get("_managed_binding") or {}).get("ir_hash") != selected["ir_hash"]
+                            or review.get("native_state_hash") != selected["native_state_hash"]
+                            or review.get("compiler_identity") != selected["compiler_identity"]):
+                        raise EngineError("comparison_candidate_changed", "The patch does not reproduce the audited native candidate.")
+                    tx["accepted"] = True  # One explicit, already frozen comparison selection.
+                tx["phase"] = "needs_review" if tx["risk"] == "review" and selected is None else "prepared"
             else:
                 tx["phase"] = "committed"
             tx.pop("error", None)
@@ -150,6 +158,11 @@ def advance(root: Path, tx: dict[str, Any], backend: PlotBackend) -> dict[str, A
             # candidates have a separate path, so applying cannot alter the base.
             stage = "apply"
             _require_audit(tx["review"])
+            if "comparison_selection" in tx:
+                from sciplot_core.plot_backends.managed import compiler_identity
+
+                if compiler_identity() != tx["comparison_selection"]["compiler_identity"]:
+                    raise EngineError("comparison_compiler_changed", "Restore the renderer that produced the selected review before committing.")
             verify_document_content(root, tx["document"])
             if tx["phase"] == "prepared":
                 require_current(backend, tx["binding"], input_document=tx["document"])
@@ -182,6 +195,11 @@ def advance(root: Path, tx: dict[str, Any], backend: PlotBackend) -> dict[str, A
             commit(root, tx["document"], tx["binding"], tx["id"])
             tx["phase"] = "committed"
             persist(root, tx)
+        if tx["phase"] == "committed" and tx.get("export_deferred"):
+            tx["phase"] = "complete"
+            tx.pop("error", None)
+            persist(root, tx)
+            return receipt(root, tx)
         if tx["phase"] in {"committed", "exporting", "export_pending"}:
             stage = "export"
             require_current(backend, tx["binding"], input_document=tx["document"])
@@ -224,6 +242,8 @@ def replay(root: Path, tx: dict[str, Any], backend: PlotBackend) -> dict[str, An
                            "exports": [], "next_step": {"action": "plot.describe"}})
             return result
         require_current(backend, tx["binding"], input_document=tx["document"])
+        if tx.get("export_deferred"):
+            return receipt(root, tx, replay=True)
         if (tx.get("artifact_build_key") == build_key(tx["document"], tx["binding"])
                 and evidence_current(tx.get("artifact_files", {}), tx.get("evidence_inventories"))):
             return receipt(root, tx, replay=True)

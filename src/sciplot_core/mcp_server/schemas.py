@@ -195,7 +195,7 @@ def tool_definitions(profile: ToolProfile = "expert") -> list[Tool]:
         {"group": string}, ["group"])
     add("group_resume", "Continue pending/interrupted experiment tasks or supply per-item responses bound to each current task_dir. Preview responses require expected_operation_id. Never accepts previews or answers scientific questions automatically.",
         {"group": string, "responses": group_responses_schema()}, ["group"])
-    add("comparison_start", "Generate 2–8 independent native alternatives from the same saved figure baseline. No candidate is applied. Returns original/candidate PNG resources, compact factual differences and a local comparison page. Caller supplies and judges supported operations; no model calls.",
+    add("comparison_start", "Generate 2–8 detached presentation alternatives from an exact saved Managed plot and revision (request version 2). No live edit is reserved or applied. Returns audited PNGs, differences and a local comparison page. Version 1 preserves existing native comparisons and already admitted prepared-native figures.",
         {"request": comparison_request_schema(), "comparison_dir": string}, ["request", "comparison_dir"])
     add("comparison_inspect", "Read frozen alternatives, their validity and current project evidence. Does not render or advance tasks; queries reuse stored native images.",
         {"comparison": string}, ["comparison"])

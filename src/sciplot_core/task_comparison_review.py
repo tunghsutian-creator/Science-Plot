@@ -23,6 +23,10 @@ def _different(change: dict[str, Any]) -> bool:
 
 
 def comparison_snapshot(root: Path, state: dict[str, Any]) -> dict[str, Any]:
+    if state.get("version") == 2:
+        from sciplot_core.task_managed_comparison import snapshot
+
+        return snapshot(root, state)
     request = state["request"]
     result: dict[str, Any] = {
         "kind": "sciplot_task_comparison_result", "version": 1,

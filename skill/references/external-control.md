@@ -975,14 +975,29 @@ was styled.
 
 ## Comparing alternatives of the same saved figure
 
-Use `task compare` to explore 2–8 explicit operation batches against one saved
-figure. Start from [the comparison manifest](figure-comparison.json), replacing
-its project, figure ID, SHA and sample names with values from `project inspect`.
-Each candidate has a unique `id` and `label`, optional short `rationale`, and
-ordinary advertised `operations`. These are alternatives for the same data and
-saved figure; chart-type conversion and automatic scientific transformations
-are not introduced. The external AI proposes and judges alternatives. SciPlot
-does not invoke a model or independently invent a winning design.
+Use `task compare` to explore 2–8 presentation alternatives for one saved
+Managed figure. Get its exact `plot`, `plot_id` and `revision` from
+`plot describe --scope summary`; read the scoped edit contract for each target.
+Use revision as `base_revision`, and use the same typed `changes` as a
+presentation `plot patch`. Name each candidate separately.
+
+```json
+{
+  "version": 2, "title": "Line weight", "plot": "/research/EXACT_MANAGED_PLOT",
+  "plot_id": "plot:EXACT_ID", "base_revision": 0,
+  "candidates": [
+    {"id": "quiet", "label": "Quiet", "changes": [
+      {"op": "set", "target": ["mark:EXACT_ID"], "property": "style", "value": {"line_width_pt": 0.8}}]},
+    {"id": "strong", "label": "Strong", "changes": [
+      {"op": "set", "target": ["mark:EXACT_ID"], "property": "style", "value": {"line_width_pt": 1.5}}]}
+  ]
+}
+```
+
+Version 1 still uses the existing native comparison path for already admitted
+prepared-native figures and opens or resumes frozen native comparisons.
+To compare a new alternative for a plain saved legacy VSZ, first convert a
+separate supported copy. SciPlot never chooses an alternative.
 
 ```bash
 skill/scripts/sciplot task compare capabilities --json
@@ -992,19 +1007,20 @@ skill/scripts/sciplot task compare resume COMPARISON_DIRECTORY --json
 ```
 
 The comparison directory must be outside the source, managed project and
-delivery. CLI project/preset paths resolve beside the manifest. MCP paths
-resolve against the server working directory. One immutable request captures a
-full project/delivery baseline and creates separate native edit tasks with
-export disabled. Creating and inspecting candidates never applies them. A
-failed candidate does not prevent viewing or choosing another valid one.
+delivery. A relative CLI plot path resolves beside the manifest; MCP resolves it
+against the server working directory. The compiler reconstructs the saved
+Managed baseline and every candidate from its sealed data in this separate
+directory. Candidates do not acquire the original plot’s edit transaction,
+reserve a revision, or change its scientific hash. A failed candidate does not
+prevent viewing or choosing another valid one.
 
 Read the original and candidate PNGs from `previews` or the local `overview`.
 Each candidate reports its operation ID, science-audit status, change count and
 the first 12 factual setting differences; `review_path` contains the full native
 review. A `rationale` is caller-supplied intent, not a measured quality score.
 `baseline_current`, `selectable` and `comparison_id` describe the current choice
-context. Changed candidate artifacts are unavailable; changed project/data/
-delivery state requires a new comparison. Inspections reuse the stored images
+context. Changed candidate artifacts are unavailable; changed baseline, inputs
+or renderer require a new comparison. Inspections use stored images
 and never launch a renderer. `resume` retries pending/failed generation; already
 generated candidates are retained and no candidate is chosen automatically.
 
@@ -1014,7 +1030,7 @@ copy its directory, candidate ID and expected comparison ID back to the AI
 assistant. This is text handoff only: re-inspect the comparison, verify that the
 copied ID and selectable state still match, then use the normal selection
 service. A stale or already selected comparison offers no new choice note.
-Current saved-project source/export/delivery indicators are distinct from the
+The observed saved revision and the publication outcome are separate from the
 comparison images. The timestamp is the last query time; browser refresh alone
 does not inspect the project. Re-run `task compare inspect` to update the page.
 
@@ -1031,12 +1047,12 @@ skill/scripts/sciplot task compare select COMPARISON_DIRECTORY --selection SELEC
 Use `candidate_id:"baseline"` to keep the original. Selection is frozen before
 the native transaction begins; identical retries or `resume` recover that same
 choice after an interrupted reply. A second, different selection is rejected.
-Unchosen edit tasks are never accepted by the comparison owner. Their previews
-remain historical evidence after application. An unchanged candidate requires
-no document write. The default `export:false` saves the chosen edit for continued
-work; `export:true` in the original manifest adds one ordinary export task after
-selection, with recovery that does not reapply the edit. A saved choice does not
-certify publication; inspect `current_evidence` and export for delivery.
+Unchosen candidates remain private previews. The existing patch owner checks
+the selected candidate before committing it; an unchanged candidate creates
+no revision. The default `export:false` records a saved choice, not a
+publication. `export:true` also publishes that exact revision via the ordinary
+owner; if publication fails, `resume` continues that choice without applying
+another edit. See `selection_outcome` for the commit and export status.
 
 MCP exposes `sciplot_comparison_start`, `sciplot_comparison_inspect`,
 `sciplot_comparison_resume` and `sciplot_comparison_select`. Start takes `request`

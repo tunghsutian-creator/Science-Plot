@@ -34,12 +34,15 @@ def save_comparison(root: Path, state: dict[str, Any]) -> None:
 def load_comparison(root: Path) -> dict[str, Any]:
     state = json.loads((root / "comparison.json").read_text())
     if (not isinstance(state, dict) or state.get("kind") != "sciplot_task_comparison"
-            or state.get("version") != 1 or state.get("comparison_dir") != str(root)):
+            or type(state.get("version")) is not int or state["version"] not in {1, 2}
+            or state.get("comparison_dir") != str(root)):
         raise TaskControlError("invalid_comparison", "比较记录的位置或版本不匹配。")
     digest = canonical_json_sha256({k: v for k, v in state.items() if k != "state_sha256"}, allow_nan=False)
     if digest != state.get("state_sha256"):
         raise TaskControlError("comparison_record_changed", "比较记录已变化，请保留原记录。")
     validate_shape(state["request"], comparison_request_schema())
+    if state["request"]["version"] != state["version"]:
+        raise TaskControlError("invalid_comparison", "The comparison record and request versions disagree.")
     return dict(state)
 
 
