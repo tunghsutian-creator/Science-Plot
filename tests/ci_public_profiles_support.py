@@ -76,6 +76,13 @@ def exercise_profile_stage_route(tmp_path, monkeypatch, capsys):
         assert (directory / "command.log").read_bytes() == b"HUGE ORIGINAL PYTEST OUTPUT\n" * 10000
         assert (failed / profiles.DIRECTORY / "focused.log").read_bytes() == stdout
 
+        stdout = b"UNBOUNDED worker startup noise\n" * 10000 + b"ValueError: native runtime missing\n"
+        no_result = tmp_path / "no-result"
+        assert profiles.run_profile(no_result, "focused") == 7
+        console = capsys.readouterr().out
+        assert "ValueError: native runtime missing" in console and len(console) < 1000
+        assert (no_result / profiles.DIRECTORY / "focused.log").read_bytes() == stdout
+
 
 def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
     import re

@@ -32,6 +32,16 @@ def _progress(paths: list[Path]) -> None:
     print("Public verification: waiting for the first test checkpoint.", flush=True)
 
 
+def _console_tail(path: Path, prefix: str) -> None:
+    if not path.is_file():
+        return
+    with path.open("rb") as stream:
+        stream.seek(max(0, path.stat().st_size - 8192))
+        final = stream.read().decode("utf-8", errors="replace").splitlines()
+    for line in final[-10:]:
+        print(f"{prefix}: {line[:500]}", flush=True)
+
+
 def report_profile(path: Path, result: dict[str, Any]) -> None:
     """Console is an index; original reports, stdout and result stay unchanged."""
     finish = result.get("finish", {})
@@ -49,15 +59,9 @@ def report_profile(path: Path, result: dict[str, Any]) -> None:
             print(f"FAILED {nodeid} [{', '.join(phases)}]", flush=True)
         for issue in result.get("issues", []):
             print(f"Evidence issue: {issue[:500]}", flush=True)
-        detail = path / "command.log"
-        if not failed and detail.is_file():
+        if not failed:
             # A collection/usage crash can happen before report hooks run.
-            # Keep the original log; show its final diagnostic without dumping it.
-            with detail.open("rb") as stream:
-                stream.seek(max(0, detail.stat().st_size - 8192))
-                final = stream.read().decode("utf-8", errors="replace").splitlines()
-            for line in final[-10:]:
-                print(f"pytest: {line[:500]}", flush=True)
+            _console_tail(path / "command.log", "pytest")
 
 
 def run_profile(root: Path, profile: str) -> int:
@@ -93,6 +97,8 @@ def run_profile(root: Path, profile: str) -> int:
         detail = failure.get("error")
         print(f"Public verification exited {code} before creating a result."
               + (f" {detail[:1000]}" if isinstance(detail, str) else ""), flush=True)
+        if not failure:
+            _console_tail(log, "public stage")
     return code
 
 
