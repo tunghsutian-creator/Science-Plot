@@ -7,10 +7,14 @@ import hashlib
 import html
 import importlib.util
 import json
+import shlex
 import subprocess
 import tempfile
 from pathlib import Path
 from urllib.parse import quote
+
+
+DAILY_MCP_ARGS = ("mcp", "--profile", "daily")
 
 
 def feedback_report(doctor: dict, build: dict, mcp_available: bool) -> dict:
@@ -57,12 +61,12 @@ def connection_files(command: Path) -> dict[str, str]:
             "# 供审阅后手工添加；SciPlot 不会修改你的 Codex 配置。\n"
             "[mcp_servers.sciplot]\n"
             f"command = {json.dumps(path, ensure_ascii=False)}\n"
-            'args = ["mcp", "--profile", "daily"]\n'
+            f"args = {json.dumps(DAILY_MCP_ARGS)}\n"
             "startup_timeout_sec = 30\n"
             "tool_timeout_sec = 300\n"
         ),
         "mcp-server.json": json.dumps(
-            {"mcpServers": {"sciplot": {"command": path, "args": ["mcp", "--profile", "daily"]}}},
+            {"mcpServers": {"sciplot": {"command": path, "args": list(DAILY_MCP_ARGS)}}},
             ensure_ascii=False, indent=2,
         ) + "\n",
     }
@@ -74,8 +78,13 @@ def render_page(command: Path, doctor: dict, mcp_available: bool, status_path: P
     failures = [str(item.get("detail", item.get("label", ""))) for item in doctor.get("checks", []) if item.get("status") == "failed" and item.get("required")]
     if not ready and not failures:
         failures.append(str(doctor.get("error", "请查看环境检查记录。")))
-    command_text = html.escape(str(command.resolve()))
+    command_path = str(command.resolve())
+    command_text = html.escape(command_path)
     build = build or {}
+
+    def cli(*arguments: str) -> str:
+        return html.escape(shlex.join([command_path, *arguments]))
+
     configurations = connection_files(command)
     codex_download = "data:text/plain;charset=utf-8," + quote(configurations["codex-mcp.toml"], safe="")
     mcp_download = "data:application/json;charset=utf-8," + quote(configurations["mcp-server.json"], safe="")
@@ -84,6 +93,13 @@ def render_page(command: Path, doctor: dict, mcp_available: bool, status_path: P
     )
     architecture = "Apple silicon" if build.get("architecture") == "arm64" else str(build.get("architecture", "当前架构"))
     platform_note = html.escape(f"版本 {build.get('app_version', '未知')} · macOS {build.get('build_macos', '当前版本')} · {architecture}")
+    mcp_setup = (
+        f'''<p>在支持本地 STDIO MCP 的 AI 客户端添加名为 <b>sciplot</b> 的服务。命令填上方路径，三个参数分别是 <code>{"</code>、<code>".join(DAILY_MCP_ARGS)}</code>。<code>daily</code> 包含日常建图、找回、编辑与导出；需要完整工具目录时，把 <code>daily</code> 改成 <code>expert</code> 后重新连接。</p>
+<p>在客户端确认已经看到 SciPlot 工具，再开始绘图。这里不改客户端设置，也不会自动连接。</p>
+<p><a href="{codex_download}" download="codex-mcp.toml">下载 Codex 配置片段</a> · <a href="{mcp_download}" download="mcp-server.json">下载通用 MCP JSON</a> · <a href="https://learn.chatgpt.com/docs/extend/mcp?surface=cli">官方连接说明</a></p>'''
+        if mcp_available else
+        "<p>当前构建尚未提供 MCP 入口。若本地环境已就绪，可用下方命令行；也可向维护者取得支持 MCP 的构建。</p>"
+    )
     return f'''<!doctype html><html lang="zh-CN"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>SciPlot · 开始使用</title>
 <style>body{{font:17px/1.75 -apple-system,BlinkMacSystemFont,sans-serif;color:#203037;background:#f5f8f8;margin:0}}main{{max-width:840px;margin:48px auto;padding:0 24px 64px}}h1{{font-size:36px;line-height:1.3}}h2{{font-size:23px;margin-top:32px}}.card{{background:white;border:1px solid #dbe4e5;border-radius:14px;padding:20px 26px;margin:18px 0}}.status{{color:{'#146b50' if ready else '#a44315'};font-weight:700}}code,pre{{font:14px/1.5 ui-monospace,monospace;overflow-wrap:anywhere;white-space:pre-wrap}}a{{color:#006f85}}button{{font:inherit;border:1px solid #bbcdd0;border-radius:8px;background:#eef6f6;padding:8px 16px;cursor:pointer}}small{{color:#66777d}}li{{margin:10px 0}}</style>
@@ -91,24 +107,25 @@ def render_page(command: Path, doctor: dict, mcp_available: bool, status_path: P
 <div class="card"><span class="status">{status}</span>
 <p>{'Python、Qt 和 Veusz 随应用提供，无需另外安装。' if ready else html.escape('；'.join(failures))}</p>
 <a href="{status_path.name}">查看本次环境检查</a></div>
-<h2>1. 放好应用，再连接一次</h2>
-<p>把完整的 SciPlot.app 放在一个固定位置，再双击它打开本页。只移动整个应用，不拆开包内文件。移动后，重新打开本页并更新 AI 工具的连接路径。旧交付的打开命令可能仍指向应用的原位置；请先用更新后的 AI 连接继续原项目并重新导出。</p>
-<p>{'MCP 本地服务入口可用。' if mcp_available else '当前构建尚未提供 MCP 入口；请先使用下面的公开 CLI 路径，或取得包含 MCP 的构建。'}</p>
-<p>在支持本地 MCP 的 AI 工具里添加 <b>STDIO</b> 服务：名称 <b>sciplot</b>，命令填下方路径，依次填参数 <b>mcp</b>、<b>--profile</b>、<b>daily</b>。这个配置只列出日常绘图工具。需要完整工具目录时，把 <b>daily</b> 改成 <b>expert</b>。</p>
+<h2>1. 放好应用，连接你的 AI</h2>
+<p>把整个 SciPlot.app 放在固定位置（例如“应用程序”），双击即可回到本页。移动应用后，重新打开本页，并用新路径更新客户端连接。</p>
 <div class="card"><code id="command">{command_text}</code><p><button onclick="copyCommand()">复制命令路径</button> <span id="copyStatus" role="status"></span></p></div>
-<p>Codex 可在设置中的 MCP servers 添加服务器；也可由你审阅后将下列片段加入配置。这里不会改写任何 AI 工具的设置。</p>
-<p><a href="{codex_download}" download="codex-mcp.toml">下载 Codex 配置片段</a> · <a href="{mcp_download}" download="mcp-server.json">下载通用 MCP JSON</a> · <a href="https://learn.chatgpt.com/docs/extend/mcp?surface=cli">官方连接说明</a></p>
-<h2>2. 在 AI 对话里给文件和需求</h2>
-<div class="card">用 SciPlot 把这些 DSC 数据画成图。样品名称保持原样，给我可编辑项目、PDF 和 300 dpi TIFF；只有科学含义不明确时再问我。</div>
-<p>AI 负责理解需求；本地 SciPlot 检查数据、生成图稿和交付文件。你只需回答真实歧义，例如工作表、单位或样品对应关系。不要为了继续运行而猜缺失的实验信息。</p>
-<h2>3. 看首图，再用一句话修改</h2>
-<div class="card">把这张图的纵轴标题字号改大一点，给我看修改后的预览，并导出成图。</div>
-<p>双击交付包里的 <b>Open_in_SciPlot.command</b> 可以直接选中曲线、修改外观、撤销和重做。点击 <b>Save</b> 保存可编辑项目；点击 <b>Save and update delivery</b> 同时更新 PDF 和 TIFF。当前可用修改以画布和 AI 查询到的能力为准。Open_in_Veusz.command 保留为高级原生编辑入口。</p>
-<h2>4. 找到结果，下次接着做</h2>
-<p>交付包默认在原数据旁的 <b>文件名_SciPlot</b> 文件夹，含 PDF、TIFF、CSV 和可编辑 VSZ。下次把同一个文件夹交给 AI，说“继续这个项目”，无需重新导入。</p>
-<p>原位置的打开命令会继续受管项目；复制或移动后的交付包打开独立快照。应用缺失、图稿有新修改或文件已变化时，请让 AI 读取实际诊断再恢复。</p>
+{mcp_setup}
+<h2>2. 用原始数据出第一张图</h2>
+<div class="card">用 SciPlot 绘制这个 UV–Vis 文件。保留样品名和单位；有不确定的列或单位先问我。给我 PDF、300 dpi TIFF，并告诉我下次继续编辑用的项目路径。</div>
+<p>连接后，把原始文件交给 AI，由它使用 <code>sciplot_task_start</code>；SciPlot 在本机处理数据并绘图。需要确认时，按原实验信息选工作表、样品、数据列或单位。看图后检查样品、单位和范围；只有实际导出完成后才取用最终文件。</p>
+<p>以任务返回的路径为准。默认交付目录在原数据旁，通常名为 <b>文件名_SciPlot</b>，包含本次实际导出的 PDF、TIFF、绘图 CSV 和 VSZ。请一并保留原始文件、返回的项目路径和同级隐藏的 <b>.sciplot</b> 工作区。</p>
+<h2>3. 下次找回原图，再预览修改</h2>
+<div class="card">继续这个 SciPlot 项目，不要重新建图。把图例字号改成 8 pt，先给我看候选图，确认后再保存和更新交付。</div>
+<p>把原项目路径或原位置的已登记交付目录交给 AI。它用 <code>sciplot_project_open</code> 识别图；只记得原始文件时，先用 <code>sciplot_task_continue</code> 查找已有项目，有多个候选时由你选择。不要用原输入再建一份来代替编辑。</p>
+<p>可编辑图按实际公布的能力用 <code>sciplot_task_edit</code> 等入口提交修改。看过候选图再确认保存和导出。如果已保存但导出失败，修正原因后用原任务重试，不要再应用一次修改。只复制交付目录得到的是独立快照，不是能够继续原受管项目的迁移。</p>
+<p>如果打开结果为 <code>read_only</code>，旧图可读取，并用 <code>project legacy-redraw</code> 原样重画到新目录。只有要用新编辑功能时，才按返回的 <code>project legacy-convert</code> 指引将受支持的 XY 图转换为独立 Managed 副本；原图不变，不支持的图不强行转换。历史启动文件不作为打开入口。</p>
+<details><summary>不接入 AI 时的命令行入口</summary>
+<p>将示例中的绝对路径换成自己的路径。出图：</p><pre>{cli("task", "create", "/absolute/original.csv", "--json")}</pre>
+<p>查看已保存图的身份和可用操作：</p><pre>{cli("plot", "open", "/absolute/saved-project", "--json")}</pre>
+<p>按返回的 <code>next_step</code> 继续同一个任务；不要编造决策 ID 或接受没看过的预览。</p></details>
 <h2>遇到问题时</h2><p>记录刚才的操作、预期结果和实际现象，并附上<a href="{feedback_download}" download="SciPlot-feedback.json">本机检查摘要</a>。摘要仅包含版本、构建编号和检查状态，不包含实验数据、样品名称、文件路径、错误全文或 AI 密钥；不会自动发送。完整环境检查仅供你在本机查看。</p>
-<details><summary>构建与验收范围</summary><p>当前包的签名与公证状态以维护者提供的 release.json 为准；只有 public 渠道并通过发行检查的包才供公开分发。candidate 包用于本地候选验证。干净 Mac 安装、其它 macOS 版本和真实小白测试仍需独立验收。不要把本机 doctor 成功当作这些验收已经通过。</p><p>本页只检查环境，不启动付费模型。文件内容是否发送给模型由你使用的外部 AI 工具决定。</p></details>
+<details><summary>构建与验收范围</summary><p>当前包的签名与公证状态以维护者提供的 release.json 为准；只有 public 渠道并通过发行检查的包才供公开分发。candidate 包用于本地候选验证。本机 Doctor、合成原生导出和 MCP 工具发现分别检查环境、渲染和协议；不能替代干净 Mac 安装、其它系统或架构的兼容性、真实 AI 客户端的连接与任务，或独立用户试用。</p><p>本页只检查环境，不启动付费模型。文件内容是否发送给模型由你使用的外部 AI 工具决定。</p></details>
 </main><script>function copyCommand(){{const s=document.getElementById('copyStatus');if(navigator.clipboard){{navigator.clipboard.writeText(document.getElementById('command').textContent).then(()=>s.textContent='已复制').catch(()=>s.textContent='请选中上方路径复制');}}else{{s.textContent='请选中上方路径复制';}}}}</script></html>'''
 
 

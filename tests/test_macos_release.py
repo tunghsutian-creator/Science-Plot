@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import shutil
 import subprocess
 from html.parser import HTMLParser
@@ -11,6 +12,7 @@ import pytest
 
 from distribution.macos import release, verification, welcome
 from distribution.macos.identity import bundle_snapshot, content_digest, file_hash, source_snapshot
+from distribution.macos.mcp_probe import read_connection
 
 
 def _app(root: Path) -> Path:
@@ -27,19 +29,32 @@ def _app(root: Path) -> Path:
 
 
 def _ok(command, **kwargs):
-    if "doctor" in command:
+    if command[1:] == ["doctor", "--json"]:
         payload = {"status": "ready"}
-    elif "--welcome" in command:
+    elif command[1] == "--welcome":
+        assert command[2] == "--out" and command[4:] == ["--no-open"]
+        output = Path(command[3])
+        output.mkdir()
+        for filename, content in welcome.connection_files(Path(command[0])).items():
+            (output / filename).write_text(content, encoding="utf-8")
         payload = {"doctor_status": "ready", "mcp_available": True}
     else:
-        payload = {"status": "passed"}
+        assert command[1:3] == ["smoke", "--profile"] and command[3] in {"quick", "full"}
+        assert command[4] == "--out" and command[6:] == ["--json"]
+        payload = {"kind": "sciplot_runtime_smoke", "status": "passed"}
+        if command[3] == "quick":
+            payload["profile"] = "quick"
     return subprocess.CompletedProcess(command, 0, json.dumps(payload), "")
 
 
 def _mock_runtime(monkeypatch):
+    def mcp(command, _environment, connection_directory):
+        assert read_connection(connection_directory, command) == (str(command), ["mcp", "--profile", "daily"])
+        return {"status": "passed"}
+
     monkeypatch.setattr(verification, "audit_runtime", lambda path: {"external_non_system_dependencies": 0})
     monkeypatch.setattr(verification.subprocess, "run", _ok)
-    monkeypatch.setattr(verification, "verify_mcp", lambda *args: {"status": "passed"})
+    monkeypatch.setattr(verification, "verify_mcp", mcp)
 
 
 def test_build_identity_covers_routing_and_distribution_source(tmp_path):
@@ -71,7 +86,7 @@ def test_bundle_identity_survives_relocation_but_detects_changes(tmp_path):
 
 @pytest.mark.parametrize("name,payload", [
     ("doctor", {"status": "needs_fix"}),
-    ("native_window", {"status": "failed"}),
+    pytest.param("runtime_smoke", {"status": "passed"}, id="native_window-payload1"),
     ("runtime_smoke", {"status": "failed"}),
     ("welcome", {"doctor_status": "ready", "mcp_available": False}),
     ("doctor", []),
@@ -121,8 +136,11 @@ def test_verification_binds_actual_bundle_and_detects_runtime_writes(tmp_path, m
     report = verification.verify_app(app, tmp_path / "passed", smoke=True)
     assert report["status"] == "passed"
     assert report["bundle_sha256"] == content_digest(bundle_snapshot(app))
-    assert [item["name"] for item in report["checks"]][-1] == "runtime_smoke"
+    assert [item["name"] for item in report["checks"]] == ["doctor", "welcome", "runtime_smoke"]
+    assert report["runtime_smoke_profile"] == "full"
     assert report["developer_id_signed"] is None
+    quick = verification.verify_app(app, tmp_path / "quick")
+    assert quick["runtime_smoke_profile"] == "quick" and quick["status"] == "passed"
 
     def writes_to_app(*args):
         (app / "unexpected.pyc").write_bytes(b"cache")
@@ -190,15 +208,30 @@ def test_welcome_timeout_and_nonzero_ready_are_failures(monkeypatch):
 
 
 def test_welcome_downloads_embed_exact_contents_for_local_file_pages(tmp_path):
+    from sciplot_core.cli import _build_parser
+
     class Downloads(HTMLParser):
         def __init__(self):
             super().__init__()
             self.files = {}
+            self.commands = []
+            self.in_pre = False
 
         def handle_starttag(self, tag, attrs):
             values = dict(attrs)
             if tag == "a" and values.get("download"):
                 self.files[values["download"]] = values["href"]
+            elif tag == "pre":
+                self.in_pre = True
+                self.commands.append("")
+
+        def handle_endtag(self, tag):
+            if tag == "pre":
+                self.in_pre = False
+
+        def handle_data(self, data):
+            if self.in_pre:
+                self.commands[-1] += data
 
     command = tmp_path / '有空格 "name"/sciplot'
     page = welcome.render_page(command, {"status": "ready"}, True, tmp_path / "check.json")
@@ -211,3 +244,20 @@ def test_welcome_downloads_embed_exact_contents_for_local_file_pages(tmp_path):
     for filename, text in expected.items():
         assert parser.files[filename].startswith("data:")
         assert unquote(parser.files[filename].split(",", 1)[1]) == text
+        (tmp_path / filename).write_text(text, encoding="utf-8")
+    assert read_connection(tmp_path, command) == (str(command), ["mcp", "--profile", "daily"])
+    with pytest.raises(ValueError, match="relocated"):
+        read_connection(tmp_path, tmp_path / "old location" / "sciplot")
+    (tmp_path / "codex-mcp.toml").write_text(expected["codex-mcp.toml"].replace('"daily"', '"expert"'))
+    with pytest.raises(ValueError, match="must agree"):
+        read_connection(tmp_path, command)
+
+    cli = _build_parser()
+    assert [cli.parse_args(["mcp", "--profile", profile]).profile for profile in ("daily", "expert")] == ["daily", "expert"]
+    create, reopen = [shlex.split(user_command) for user_command in parser.commands]
+    assert create[0] == reopen[0] == str(command)
+    assert cli.parse_args(create[1:]).task_action == "create"
+    assert cli.parse_args(reopen[1:]).plot_action == "open"
+    assert "Open_in_SciPlot.command" not in page and "Open_in_Veusz.command" not in page
+    assert "legacy-redraw" in page and "legacy-convert" in page
+    assert "sciplot_task_continue" in page and "sciplot_task_edit" in page
