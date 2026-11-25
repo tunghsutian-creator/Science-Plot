@@ -6,12 +6,21 @@ from typing import Any
 from sciplot_core.delivery.native_snapshot import SnapshotSealChanged
 from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.foundation.source_locations import resolve_source_path
+from sciplot_core.foundation.source_locations import resolve_source_path, selected_source_resolver
+from sciplot_core.project_store.runtime import ProjectSourceResolver
 from sciplot_core.source_coverage.file_snapshots import _physical_file_snapshot, _require_snapshot_identity, _write_private_snapshot
 
 from .errors import EngineError
 
 _LABEL = "Managed delivery original source"
+
+
+def resolve_original(source: dict[str, Any]) -> Path:
+    # The generic host runtime can register an exact literal/version without
+    # adopting an independent plot's semantic alias. A selected semantic
+    # project's QuerySourceResolver must still prove the declared source ID.
+    identity = None if type(selected_source_resolver()) is ProjectSourceResolver else source["source_id"]
+    return canonical_path(resolve_source_path(Path(source["path"]), expected_sha256=source["sha256"], source_id=identity))
 
 
 def stage_originals(root: Path, sources: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -25,14 +34,11 @@ def stage_originals(root: Path, sources: list[dict[str, Any]]) -> list[dict[str,
 def _stage_original(originals: Path, source: dict[str, Any]) -> dict[str, str]:
     literal, sha, identity = Path(source["path"]), source["sha256"], source["source_id"]
 
-    def actual() -> Path:
-        return canonical_path(resolve_source_path(literal, expected_sha256=sha, source_id=identity))
-
     def capture(path: Path) -> dict[str, Any]:
         return _physical_file_snapshot(path, literal=literal, label=_LABEL, expected_sha256=sha)
 
     try:
-        path = actual()
+        path = resolve_original(source)
         snapshot = capture(path)
         name = sha + literal.suffix.lower()
         target = canonical_path(originals / name)
@@ -41,7 +47,7 @@ def _stage_original(originals: Path, source: dict[str, Any]) -> dict[str, str]:
         except FileExistsError:
             if not target.is_file() or file_sha256(target) != sha:
                 raise EngineError("managed_delivery_staging_changed", "A shared staged original differs from its selected source bytes.") from None
-        current_path = actual()
+        current_path = resolve_original(source)
         if current_path != path:
             raise ValueError("The selected original source changed its resolved location.")
         _require_snapshot_identity(snapshot, capture(current_path), label=_LABEL)

@@ -12,12 +12,11 @@ from sciplot_core.plot_engine.managed_delivery_data import capture_plot_data, pr
 from sciplot_core.plot_engine.managed_delivery_continuation import delivery_inventory, require_native_seal
 from sciplot_core.plot_engine.managed_delivery_publication import cached_native_audit, inspect_managed_native, publish
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.plot_engine.current import require_current
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.storage import digest, load_head, read, write
 from sciplot_core.source_coverage.file_snapshots import _assert_snapshot_current
-from sciplot_core.plot_engine.managed_delivery_sources import stage_originals, require_originals
+from sciplot_core.plot_engine.managed_delivery_sources import stage_originals, require_originals, resolve_original
 from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.project_lifecycle.context import active, external_project_session, exists, prepare_namespace, create_namespace, project_query
 from sciplot_core.studio_core.source_update_files import file_inventory
@@ -43,7 +42,7 @@ def _selected_head(item: dict[str, Any], *targets: Path) -> dict[str, Any]:
     paths = [plot, Path(head["binding"]["output"])]
     for source in document["scientific"]["data_sources"]:
         literal = Path(source["path"])
-        paths.extend((literal, resolve_source_path(literal, expected_sha256=source["sha256"], source_id=source["source_id"])))
+        paths.extend((literal, resolve_original(source)))
     for selected_path in paths:
         path = canonical_path(selected_path)
         if any(target == path or target.is_relative_to(path) or path.is_relative_to(target) for target in targets):
