@@ -1,0 +1,52 @@
+name: Summarize prior SciPlot verification failure
+
+on:
+  push:
+    branches: [dot/sciplot-ci-log-45534984540]
+
+permissions:
+  actions: read
+
+jobs:
+  summarize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - name: Extract bounded failed-step evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          log="$RUNNER_TEMP/sciplot-prior-verification.log"
+          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/tunghsutian-creator/Science-Plot/actions/jobs/138939307559/logs -o "$log"
+          python3 - "$log" <<'PY'
+          from collections import deque
+          import json
+          import re
+          import sys
+
+          last = deque(maxlen=50)
+          failed = deque(maxlen=140)
+          profiles = []
+          with open(sys.argv[1], encoding="utf-8", errors="replace") as stream:
+              for raw in stream:
+                  line = re.sub(r"^\d{4}-\d\d-\d\dT\S+ ", "", raw).rstrip()
+                  if line.startswith("{") and '"status": "BLOCKED"' in line:
+                      try:
+                          row = json.loads(line)
+                          if "profiles" in row:
+                              keys = ("profile", "status", "actual_exit_code", "issues", "binding_checks")
+                              profiles.append([{key: phase.get(key) for key in keys} for phase in row["profiles"]])
+                          elif "error" in row:
+                              profiles.append({"stage_error": row["error"]})
+                      except (ValueError, TypeError):
+                          pass
+                  if re.search(r"(?:\bFAILED\b|^E\s+|^ERROR\b|failed, .*passed|\bException:|\bValueError:|\bPermissionError:|no space left)", line, re.I):
+                      failed.append(line[:1100])
+                  if len(line) < 1100:
+                      last.append(line[:1100])
+          print(json.dumps({"terminal_profiles": profiles}, ensure_ascii=False))
+          print("\n".join(failed))
+          print("\n--- last lines ---\n" + "\n".join(last))
+          PY
