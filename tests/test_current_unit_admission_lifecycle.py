@@ -7,7 +7,7 @@ import pytest
 from test_current_unit_admission import expert_wire, managed
 
 from sciplot_core.project_lifecycle import managed_creation
-from sciplot_core.project_lifecycle import application as service
+from sciplot_core.project_lifecycle import patch_execution as service
 from sciplot_core.plot_engine.content_store import intern_document, resolve_provenance_value
 from sciplot_core.plot_engine.contracts import validate_create
 from sciplot_core.plot_engine.service import PlotService
@@ -70,7 +70,7 @@ def test_scientific_noop_does_not_reinterpret_or_rewrite_old_request(tmp_path, m
     monkeypatch.setattr(publication_repair, "authorize_pending", lambda *args: None)
     monkeypatch.setattr(publication_repair, "reserve_repair", lambda *args: None)
     monkeypatch.setattr(service, "persist", lambda *args: None)
-    monkeypatch.setattr(PlotService, "_cached_export", lambda *args: None)
+    monkeypatch.setattr(service, "cached_export", lambda *args: None)
     monkeypatch.setattr(service, "advance", lambda root, tx, backend: tx)
     original = deepcopy(document)
     result = PlotService(backend=object())._patch(tmp_path / "store", patch_for(document))
