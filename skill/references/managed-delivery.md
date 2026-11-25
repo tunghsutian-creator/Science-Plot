@@ -103,9 +103,9 @@ reopen, style edit, atomic Save and PDF/TIFF export with exact dataset equality.
 That bounded acceptance does not certify every private figure, GUI workflow,
 font installation, journal or a transferable full Managed project.
 
-For a complete Managed project migration, retain its original sources and
-registry and use an explicitly supported migration owner when available;
-this native snapshot route does not invent one.
+For an already versioned Store, use [same-project bundle
+relocation](saved-work-continuation.md#relocate-an-existing-store). The bundle
+retains the original project identity; the native snapshot here does not.
 
 For a saved experiment group, `task paper start --group GROUP_DIRECTORY
 --out NEW_OUTPUT --paper-dir NEW_PAPER_TASK --json` freezes the exact ordered

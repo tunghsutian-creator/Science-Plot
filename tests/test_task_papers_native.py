@@ -130,28 +130,28 @@ def test_native_second_capture_failure_and_exact_retry_only_captures_unsealed_fi
     for item in request["items"]:
         item.pop("source_files")
         item.pop("document_authority")
-    from sciplot_core import task_papers as owner
+    from sciplot_core.delivery import native_snapshot
 
-    portable = owner._portable
+    portable = native_snapshot.capture_native
     calls = []
 
-    def failure(source, target, imports):
+    def failure(source, target, imports, *, original_sha256, selected_imports):
         calls.append(target.name)
         if target.name == "002_Fig1.vsz":
             raise RuntimeError("injected native capture failure after first sealed item")
-        return portable(source, target, imports)
+        return portable(source, target, imports, original_sha256=original_sha256, selected_imports=selected_imports)
 
-    monkeypatch.setattr(owner, "_portable", failure)
+    monkeypatch.setattr(native_snapshot, "capture_native", failure)
     first = start_paper(request, paper_dir=tmp_path / "paper-task")
     assert first["status"] == "blocked", first
     assert [i["status"] for i in first["items"]] == ["sealed", "exporting"]
     assert not Path(request["out"]).exists()
 
-    def restored(source, target, imports):
+    def restored(source, target, imports, *, original_sha256, selected_imports):
         calls.append(target.name)
-        return portable(source, target, imports)
+        return portable(source, target, imports, original_sha256=original_sha256, selected_imports=selected_imports)
 
-    monkeypatch.setattr(owner, "_portable", restored)
+    monkeypatch.setattr(native_snapshot, "capture_native", restored)
     from sciplot_core.delivery import install
 
     atomic_install = install.install_new_delivery

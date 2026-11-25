@@ -171,6 +171,7 @@ PROJECT_CORE_OWNERS = (
                               "src/sciplot_core/foundation/descriptor_names.py",
                               "src/sciplot_core/project_manifest_locations.py",
                               "src/sciplot_core/project_host_factory.py",
+                              "src/sciplot_core/project_lifecycle/relocation.py",
                               "src/sciplot_core/studio_core/native_save_storage.py",
                               "src/sciplot_core/studio_core/native_serialization.py",
                               "src/sciplot_core/foundation/project_session_lease.py",

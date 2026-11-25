@@ -10,7 +10,8 @@ import zipfile
 
 import pytest
 
-from sciplot_core.plot_engine import managed_delivery as managed, managed_delivery_publication as managed_publication
+from sciplot_core.delivery import install, native_snapshot
+from sciplot_core.plot_engine import managed_delivery as managed
 from sciplot_core.plot_engine.managed_delivery_contract import normalize_request
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_engine.errors import EngineError
@@ -61,11 +62,22 @@ def case(tmp_path, monkeypatch):
             exports.append({"format": fmt, "path": str(path), "sha256": file_sha256(path)})
         return {"status": "exported", "ready_to_use": True, "publication_qa": {"status": "passed"}, "exports": exports}
 
-    def portable(source, target, imports):
+    def native(operation, *args):
+        if operation == "inspect":
+            _, expected_flag, expected = args
+            assert expected_flag == "--expected-sha256" and file_sha256(Path(args[0])) == expected
+            return []
+        assert operation == "save"
+        original, editable, imports_flag, imports, expected_flag, expected = args
+        assert imports_flag == "--imports" and expected_flag == "--expected-sha256"
+        source, target = Path(original), Path(editable)
+        assert file_sha256(source) == expected
         target.parent.mkdir(parents=True, exist_ok=True)
-        imports.mkdir(parents=True)
+        Path(imports).mkdir(parents=True)
         shutil.copy2(source, target)
-        return {"status": "passed", "native_state_sha256": "b" * 64, "original_sha256": file_sha256(source)}
+        return {"status": "passed", "native_state_sha256": "b" * 64,
+                "reopened_native_state_sha256": "b" * 64,
+                "original_sha256": file_sha256(source), "portable_sha256": file_sha256(target), "imports": []}
 
     for plot, head in heads.items():
         exported = seed_export(Path(plot))
@@ -91,8 +103,7 @@ def case(tmp_path, monkeypatch):
     monkeypatch.setattr(managed, "_selection", selection)
     monkeypatch.setattr(service, "export", lambda *_: pytest.fail("Delivery must not export or rebuild originals"))
     monkeypatch.setattr(managed, "inspect_managed_native", inspect)
-    monkeypatch.setattr(managed, "portable_native", portable)
-    monkeypatch.setattr(managed_publication, "verify_relocated_native", lambda *_: None)
+    monkeypatch.setattr(native_snapshot, "_native", native)
     return service, request, heads, calls, failures
 
 
@@ -138,18 +149,36 @@ def test_partial_retry_only_audits_unsealed_plot_and_completed_replay_is_read_on
 
 def test_recover_lost_reply_after_exclusive_install_without_reexport(case, monkeypatch):
     service, request, _, calls, _ = case
-    install = managed_publication.install_new_delivery
+    real_install = install.install_new_delivery
 
     def installed_then_lost(candidate, out):
-        install(candidate, out)
+        real_install(candidate, out)
         raise RuntimeError("injected lost completion after native install")
 
-    monkeypatch.setattr(managed_publication, "install_new_delivery", installed_then_lost)
+    monkeypatch.setattr(install, "install_new_delivery", installed_then_lost)
     result = service.deliver(request)
     assert result["status"] == "blocked" and Path(request["out"]).exists()
     before = dict(calls)
     assert service.deliver(request)["status"] == "complete"
     assert calls == before
+
+    # Identical external bytes do not prove the publisher's exclusive rename.
+    conflicting = {**request, "idempotency_key": "copied-candidate", "out": str(Path(request["out"]).with_name("conflict"))}
+
+    def copied_without_install(candidate, out):
+        shutil.copytree(candidate, out)
+        raise RuntimeError("external byte-identical directory, unconsumed candidate")
+
+    monkeypatch.setattr(install, "install_new_delivery", copied_without_install)
+    collision = service.deliver(conflicting)
+    assert collision["status"] == "blocked"
+    receipt = read(Path(collision["checkpoint"]) / "delivery.json")
+    staged = Path(receipt["publication_candidate"]["path"])
+    assert staged.is_dir() and Path(conflicting["out"]).is_dir()
+    before = dict(calls)
+    retry = service.deliver(conflicting)
+    assert retry["status"] == "blocked" and retry["blocker"]["reason_code"] == "managed_delivery_external_edit"
+    assert calls == before and staged.is_dir() and Path(conflicting["out"]).is_dir()
 
 
 def test_changed_published_file_is_preserved_and_blocks_replay(case):
@@ -309,7 +338,7 @@ def test_original_native_exact_seal_blocks_resume_and_complete_replay(case, phas
 def test_publication_validates_original_seal_after_candidate_relocation(case, monkeypatch):
     service, request, heads, _, _ = case
     native = Path(heads[request["items"][0]["plot"]]["binding"]["document"])
-    monkeypatch.setattr(managed_publication, "verify_relocated_native", lambda *_: native.write_bytes(b"concurrent original mutation"))
+    monkeypatch.setattr(native_snapshot, "_verify_relocated_native", lambda *_: native.write_bytes(b"concurrent original mutation"))
     result = service.deliver(request)
     assert result["status"] == "blocked" and not Path(request["out"]).exists()
     assert result["blocker"]["reason_code"] == "managed_delivery_original_native_changed"
@@ -318,15 +347,27 @@ def test_publication_validates_original_seal_after_candidate_relocation(case, mo
 
 def test_native_save_must_consume_freshly_audited_original_bytes(case, monkeypatch):
     service, request, _, _, _ = case
-    save = managed.portable_native
+    native = native_snapshot._native
 
-    def wrong_original(*args):
-        return {**save(*args), "original_sha256": "0" * 64}
+    def wrong_original(operation, *args):
+        result = native(operation, *args)
+        return {**result, "original_sha256": "0" * 64} if operation == "save" else result
 
-    monkeypatch.setattr(managed, "portable_native", wrong_original)
+    monkeypatch.setattr(native_snapshot, "_native", wrong_original)
     result = service.deliver(request)
     assert result["status"] == "partial" and not Path(request["out"]).exists()
     assert all(item["error"]["reason_code"] == "managed_delivery_native_changed" for item in result["items"])
+
+    def unsealed_link(operation, *args):
+        result = native(operation, *args)
+        if operation == "inspect":
+            return [{"path": str(Path(request["out"]).parent / "outside-link.csv"), "sha256": "a" * 64}]
+        return result
+
+    monkeypatch.setattr(native_snapshot, "_native", unsealed_link)
+    blocked = service.deliver(request)
+    assert blocked["status"] == "blocked" and not Path(request["out"]).exists()
+    assert "exact packaged imports" in blocked["blocker"]["message"]
 
 
 def test_reconnect_requires_exact_members_and_original_native_seal(case, monkeypatch):
@@ -363,14 +404,14 @@ def test_missing_cache_blocks_without_export_or_rebuild(case):
 
 def test_publication_checks_original_again_after_exclusive_install(case, monkeypatch):
     service, request, heads, _, _ = case
-    install = managed_publication.install_new_delivery
+    real_install = install.install_new_delivery
     native = Path(heads[request["items"][0]["plot"]]["binding"]["document"])
 
     def install_then_original_changes(candidate, out):
-        install(candidate, out)
+        real_install(candidate, out)
         native.write_bytes(b"concurrent edit at publication boundary")
 
-    monkeypatch.setattr(managed_publication, "install_new_delivery", install_then_original_changes)
+    monkeypatch.setattr(install, "install_new_delivery", install_then_original_changes)
     result = service.deliver(request)
     assert result["status"] == "blocked" and not result["ready_to_use"]
     assert result["blocker"]["reason_code"] == "managed_delivery_original_native_changed"

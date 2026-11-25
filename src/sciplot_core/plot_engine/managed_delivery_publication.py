@@ -3,33 +3,17 @@
 import json
 from collections.abc import Callable
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 from typing import Any
 from uuid import uuid4
 import zipfile
 
-from sciplot_core.delivery.install import install_new_delivery
-from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.delivery import native_snapshot
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.storage import digest
 from sciplot_core.studio_core.source_update_commit import file_inventory
 from sciplot_core.veusz_runtime import veusz_worker_environment
-
-
-def portable_native(source: Path, target: Path, imports: Path) -> dict[str, Any]:
-    """Use native Save, never VSZ text substitution or another scientific renderer."""
-    result = subprocess.run([sys.executable, "-m", "sciplot_core.task_paper_native", "save",
-                             str(source), str(target), "--imports", str(imports)],
-                            env=veusz_worker_environment(), capture_output=True, text=True,
-                            timeout=120, check=False)
-    if result.returncode:
-        raise EngineError("managed_delivery_native_failed", result.stderr[-2000:])
-    payload = json.loads(result.stdout)
-    if payload.get("status") != "passed":
-        raise EngineError("managed_delivery_native_failed", "Native Save did not preserve the complete selected state.")
-    return dict(payload)
 
 
 def inspect_managed_native(binding: dict[str, Any]) -> dict[str, Any]:
@@ -47,18 +31,6 @@ def inspect_managed_native(binding: dict[str, Any]) -> dict[str, Any]:
     return dict(payload)
 
 
-def verify_relocated_native(document: Path, root: Path) -> None:
-    result = subprocess.run([sys.executable, "-m", "sciplot_core.task_paper_native", "inspect", str(document)],
-                            env=veusz_worker_environment(), capture_output=True, text=True,
-                            timeout=120, check=False)
-    if result.returncode:
-        raise EngineError("managed_delivery_reopen_failed", result.stderr[-2000:])
-    for source in json.loads(result.stdout):
-        path = Path(source["path"])
-        if not path.is_relative_to(root) or file_sha256(path) != source["sha256"]:
-            raise EngineError("managed_delivery_external_import", "The relocated native snapshot imports outside its package.")
-
-
 def publish(root: Path, state: dict[str, Any], *, checkpoint: Callable[[], None], validate: Callable[[], None]) -> dict[str, str]:
     out = Path(state["request"]["out"])
     candidate = root / "candidates" / uuid4().hex
@@ -66,15 +38,17 @@ def publish(root: Path, state: dict[str, Any], *, checkpoint: Callable[[], None]
     for directory in ("project", "pdf", "tiff", "data/originals", "data/imports"):
         (candidate / directory).mkdir(parents=True, exist_ok=True)
     entries = []
+    assembled: dict[str, str] = {}
     for index, (selection, item) in enumerate(zip(state["request"]["items"], state["items"], strict=True), 1):
-        attempt = Path(item["attempt"])
-        if file_inventory(attempt) != item["files"]:
-            raise EngineError("managed_delivery_staging_changed", "A sealed delivery item changed; no output was replaced.")
-        for directory in ("project", "pdf", "tiff", "data"):
-            shutil.copytree(attempt / directory, candidate / directory, dirs_exist_ok=True)
+        layout = {name: name for name in item["files"] if Path(name).parts[0] in ("project", "pdf", "tiff", "data")}
         stem = item["stem"]
-        native = candidate / "project" / f"{stem}.vsz"
-        verify_relocated_native(native, candidate)
+        try:
+            native_snapshot.stage_native(Path(item["attempt"]), candidate, item["files"],
+                                         layout=layout, assembled=assembled, stem=stem, portable=item["portable"])
+        except native_snapshot.SnapshotSealChanged as exc:
+            raise EngineError("managed_delivery_staging_changed", str(exc)) from exc
+        except native_snapshot.NativeSnapshotError as exc:
+            raise EngineError("managed_delivery_reopen_failed", str(exc)) from exc
         entries.append({"id": stem, "order": index, "label": selection["label"],
                         "mode": "native_snapshot", "managed_project_included": False,
                         "local_managed_continuation": {key: selection[key] for key in ("plot", "plot_id", "revision")},
@@ -103,9 +77,12 @@ def publish(root: Path, state: dict[str, Any], *, checkpoint: Callable[[], None]
     with zipfile.ZipFile(candidate / "Figures.zip", "x", zipfile.ZIP_DEFLATED) as archive:
         for name in sorted(inventory):
             archive.write(candidate / name, name)
-    state["publication_candidate"] = {"path": str(candidate), "files": file_inventory(candidate)}
-    checkpoint()
-    validate()
-    install_new_delivery(candidate, out)
-    validate()
-    return dict(state["publication_candidate"]["files"])
+
+    def freeze(files: dict[str, str]) -> None:
+        state["publication_candidate"] = {"path": str(candidate), "files": files}
+        checkpoint()
+
+    try:
+        return native_snapshot.publish_snapshot(candidate, out, assembled=assembled, freeze=freeze, validate=validate)
+    except native_snapshot.SnapshotSealChanged as exc:
+        raise EngineError("managed_delivery_staging_changed", str(exc)) from exc

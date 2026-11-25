@@ -29,7 +29,7 @@ PAPER_LEAF_PATHS = frozenset({
     "src/sciplot_core/task_paper_sources.py", "src/sciplot_core/task_paper_native.py",
     "src/sciplot_core/task_paper_delivery.py", "src/sciplot_core/cli/task_paper.py",
     "src/sciplot_core/task_paper_selection.py", "src/sciplot_core/task_paper_publication.py",
-    "src/sciplot_core/task_paper_status.py",
+    "src/sciplot_core/task_paper_status.py", "src/sciplot_core/delivery/native_snapshot.py",
     "tests/test_task_papers.py", "tests/test_task_papers_native.py",
     "tests/test_task_paper_selection.py", "tests/test_task_paper_publication.py",
 })
@@ -239,6 +239,7 @@ TASK_CONTROL_OWNERS = (
         owner_id="task_paper_publication",
         exact_paths=PAPER_LEAF_PATHS,
         pytest_targets=("tests/test_task_papers.py", "tests/test_task_papers_native.py",
+                        "tests/test_managed_delivery.py", "tests/test_managed_delivery_native.py",
                         "tests/test_task_paper_selection.py", "tests/test_task_paper_publication.py",
                         "tests/test_task_groups.py", "tests/test_product_task_entries.py",
                         "tests/test_output_package_contract.py", "tests/test_delivery_install.py",

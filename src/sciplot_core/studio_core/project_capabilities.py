@@ -15,6 +15,8 @@ def project_control_capabilities() -> dict[str, Any]:
         "model_configuration_required": False,
         "commands": {
             "create": "project create SOURCE --expected-plan PLAN_JSON [--out VISIBLE_DIRECTORY] --json",
+            "bundle_export": "project bundle-export STORE_ROOT --out NEW_BUNDLE --json",
+            "bundle_import": "project bundle-import BUNDLE_ROOT --out NEW_PROJECT_PATH --json",
             "legacy_open": "plot open TARGET [--figure-id FIGURE_ID] --json",
             "legacy_convert": "project legacy-convert TARGET --out NEW_DIRECTORY [--figure FIGURE_ID] [--x-unit UNIT] [--y-unit UNIT] --json",
             "legacy_redraw": "project legacy-redraw TARGET --out NEW_DIRECTORY [--formats pdf,png_300] --json",
