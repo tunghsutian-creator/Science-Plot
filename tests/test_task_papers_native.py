@@ -353,6 +353,7 @@ def test_public_paper_group_and_explicit_secondary_use_current_saved_figures(tmp
     from sciplot_core.plot_protocol.server import make_service
     from sciplot_core.project_lifecycle.managed_figure_observation import observe_frequency_figures
     from sciplot_core.task_semantic_owner import local_managed_actions
+    from managed_plot_helpers import read_managed_head_and_ir
     from test_rheology_mean_suite_publication import _mean_input
 
     frequency_raw, _ = _mean_input(tmp_path)
@@ -383,8 +384,7 @@ def test_public_paper_group_and_explicit_secondary_use_current_saved_figures(tmp
         assert group["status"] == "complete", group
         uv_handle, = uv_item["plot_objects"]
         uv_plot = Path(uv_handle["plot"])
-        original = load_head(uv_plot)
-        ir = json.loads(Path(original["binding"]["ir_path"]).read_bytes())
+        original, ir = read_managed_head_and_ir(uv_plot)
         mark = ir["views"][0]["layers"][0]["marks"][0]["id"]
         edited = service.patch(uv_plot, {"plot_id": uv_handle["plot_id"], "base_revision": 0,
             "idempotency_key": "paper-uv-revised", "intent_class": "presentation",

@@ -13,13 +13,14 @@ from mcp import Client
 from mcp.client.stdio import StdioServerParameters
 import pytest
 from socket_fixture_helpers import socket_directory
-from managed_plot_helpers import request_for_source, patch
+from managed_plot_helpers import patch, read_managed_head_and_ir, request_for_source
 
 from sciplot_core._paths import REPO_ROOT
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_engine.storage import load_head, read
 from sciplot_core.plot_protocol.client import call
 from sciplot_core.plot_protocol.paths import read_owner
+from sciplot_core.project_lifecycle.repository_router import ComposedProjectRepository
 
 
 @pytest.mark.comprehensive
@@ -73,7 +74,7 @@ def test_semantic_lifecycle_cli_rpc_mcp_undo_restart_and_cold_export(tmp_path):
 
             undone = anyio.run(undo)
             assert undone["revision"] == 2 and undone["ready_to_use"]
-            before_restart = load_head(root)
+            before_restart, original_ir = read_managed_head_and_ir(root)
             assert before_restart["document"]["presentation"] == baseline["document"]["presentation"]
             assert before_restart["document"]["scientific_hash"] == baseline["document"]["scientific_hash"]
             history = {str(path): file_sha256(path) for path in root.glob("revisions/*.json")}
@@ -82,16 +83,22 @@ def test_semantic_lifecycle_cli_rpc_mcp_undo_restart_and_cold_export(tmp_path):
             # A completed read must preserve their bytes; cold export may advance
             # export stages, while their original request/scientific evidence stays frozen.
             journal = Path(undone["evidence"])
-            old = read(journal)
-            old.pop("normalized_command")
-            journal.write_text(json.dumps(old))
-            old_bytes = journal.read_bytes()
+            owner = ComposedProjectRepository()
+            with owner.invocation_scope():
+                old = owner.read(journal)
+                old.pop("normalized_command")
+                owner.write(journal, old)
+            with owner.invocation_scope(), owner.query_scope(root):
+                old_bytes = owner.content_snapshot(journal)["bytes"]
             assert cli("export", root)["ready_to_use"]
-            assert journal.read_bytes() == old_bytes
+            with owner.invocation_scope(), owner.query_scope(root):
+                assert owner.content_snapshot(journal)["bytes"] == old_bytes
             original_command = {key: old[key] for key in ("request", "request_hash", "before", "document")}
             # Delete only disposable products; the immutable head/science/history survive.
             shutil.rmtree(Path(before_restart["binding"]["output"]))
-            shutil.rmtree(root / "ir")
+            ir_path = Path(before_restart["binding"]["ir_path"])
+            ir_path.unlink()
+            assert not ir_path.exists()
             old_pid = owned_pid
             os.kill(old_pid, signal.SIGTERM)
             deadline = time.monotonic() + 5
@@ -108,10 +115,13 @@ def test_semantic_lifecycle_cli_rpc_mcp_undo_restart_and_cold_export(tmp_path):
             owned_pid = read_owner(endpoint)["pid"]
             assert owned_pid != old_pid and rebuilt["ready_to_use"] and rebuilt["revision"] == 2
             assert rebuilt["scientific_hash"] == created["scientific_hash"]
-            native = Path(load_head(root)["binding"]["document"])
+            rebuilt_head, rebuilt_ir = read_managed_head_and_ir(root)
+            assert rebuilt_ir == original_ir
+            native = Path(rebuilt_head["binding"]["document"])
             assert read(native.parent / "build.json")["native_state_hash"] == baseline_state
             assert {str(path): file_sha256(path) for path in root.glob("revisions/*.json")} == history
-            recovered = read(journal)
+            with owner.invocation_scope(), owner.query_scope(root):
+                recovered = owner.read(journal)
             assert "normalized_command" not in recovered
             assert {key: recovered[key] for key in original_command} == original_command
             assert source.read_bytes() == original_source

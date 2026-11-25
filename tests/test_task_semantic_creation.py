@@ -195,11 +195,11 @@ def test_public_single_csv_task_binds_labels_to_curves_and_revises_count_without
 
 @pytest.mark.comprehensive
 def test_native_single_table_ftir_raw_overlay_preserves_sample_membership_and_descending_display(tmp_path):
+    from managed_plot_helpers import read_managed_head_and_ir
     from sciplot_core.plot_backends.figure_marks import graph_path, scale_name
     from sciplot_core.plot_backends.native_primitives import dataset_name
     from sciplot_core.plot_backends.managed_audit import scientific_audit
     from sciplot_core.plot_engine.service import PlotService
-    from sciplot_core.plot_engine.storage import load_head, read
     from sciplot_core.veusz_worker.document_edit import loaded_native_document
 
     source, intent = _single_table_spectral_control(tmp_path)
@@ -209,8 +209,7 @@ def test_native_single_table_ftir_raw_overlay_preserves_sample_membership_and_de
     try:
         created = service.create(wire)
         assert created['ready_to_use'], created
-        head = load_head(Path(created['plot']))
-        ir = read(Path(head['binding']['ir_path']))
+        _, ir = read_managed_head_and_ir(Path(created['plot']))
         with loaded_native_document(Path(service.describe(Path(created['plot']))['artifact'])) as loaded:
             assert scientific_audit(ir, loaded)['status'] == 'passed'
             axis = loaded.resolveWidgetPath(None, graph_path('view:main')).getChild(scale_name('scale:x'))
@@ -231,7 +230,7 @@ def test_native_single_table_ftir_raw_overlay_preserves_sample_membership_and_de
         stack = service.create({'source': str(default), 'rule_id': 'ftir_spectrum', 'idempotency_key': 'native-ftir-stack'})
         assert stack['ready_to_use'] and len(stack['analysis_metrics']) == 2, stack
         root = Path(stack['plot'])
-        snapshot = read(Path(load_head(root)['binding']['ir_path']))
+        _, snapshot = read_managed_head_and_ir(root)
         assert [label['text'] for label in snapshot['annotations']] == ['A', 'B']
         with loaded_native_document(Path(service.describe(root)['artifact'])) as loaded:
             assert scientific_audit(snapshot, loaded)['status'] == 'passed'

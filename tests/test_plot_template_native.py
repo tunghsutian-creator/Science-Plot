@@ -12,6 +12,7 @@ import subprocess
 from time import perf_counter
 
 import pytest
+from managed_plot_helpers import read_managed_head_and_ir
 
 from sciplot_core._paths import REPO_ROOT
 from sciplot_core.foundation.file_hashing import file_sha256
@@ -267,15 +268,14 @@ def test_legacy_paired_template_reauthored_as_managed_preserves_data_and_styles(
     try:
         result = service.create(request)
         assert result["plot_type"] == "ManagedPlot" and result["ready_to_use"]
-        head = load_head(Path(result["plot"]))
-        compiled = json.loads(Path(head["binding"]["ir_path"]).read_text())
+        _, compiled = read_managed_head_and_ir(Path(result["plot"]))
         assert [(series["id"], series["label"], series["x"], series["y"], series["style"]["line_color"],
                  series["style"]["line_width_pt"]) for series in compiled["series"]] == [
             ("bound:E2", "E2", [400, 450, 500], [1, 2, 3], "#2878b5", .7),
             ("bound:E4", "E4", [400, 450, 500], [2, 3, 4], "#c82423", .7),
         ]
         assert [compiled["axes"][role]["unit"] for role in ("x", "y")] == ["nm", "a.u."]
-        exported = json.loads((Path(result["plot"]) / "export-cache.json").read_text())["export"]
+        exported = json.loads(Path(result["evidence"]).read_bytes())["export"]
         assert exported["scientific_audit"]["status"] == "passed"
         assert {entry["format"] for entry in result["exports"]} == {"pdf", "tiff_300", "vsz"}
         assert source.read_bytes() == original

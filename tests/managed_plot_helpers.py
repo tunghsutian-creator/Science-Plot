@@ -37,6 +37,6 @@ def read_managed_head_and_ir(plot: Path):
     from sciplot_core.project_lifecycle.repository_router import ComposedProjectRepository
 
     owner = ComposedProjectRepository()
-    with repository_scope(owner), owner.query_scope(plot):
+    with repository_scope(owner), owner.invocation_scope(), owner.query_scope(plot):
         head = owner.load_head(plot)
         return head, owner.read(Path(head["binding"]["ir_path"]))

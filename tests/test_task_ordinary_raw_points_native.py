@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 
 import pytest
+from managed_plot_helpers import read_managed_head_and_ir
 
 from sciplot_core._paths import REPO_ROOT
 from sciplot_core.foundation.file_hashing import file_sha256
@@ -84,7 +85,6 @@ def test_public_no_experiment_xy_creates_native_original_values_and_archives_con
     import math
     from sciplot_core.plot_backends.managed_audit import scientific_audit
     from sciplot_core.plot_backends.native_primitives import dataset_name
-    from sciplot_core.plot_engine.storage import load_head, read
     from sciplot_core.veusz_worker.document_edit import loaded_native_document
 
     source = tmp_path / "acquisition.csv"
@@ -104,8 +104,7 @@ def test_public_no_experiment_xy_creates_native_original_values_and_archives_con
     assert wire["rule_id"] == "ordinary_xy"
     assert wire["data_binding"]["provenance"]["semantic_task"]["intent"] == intent
     assert {node["kind"] for node in wire["data_binding"]["transforms"]} <= {"select", "row_slice", "rename"}
-    head = load_head(Path(created["project"]))
-    ir = read(Path(head["binding"]["ir_path"]))
+    head, ir = read_managed_head_and_ir(Path(created["project"]))
     layer = ir["views"][0]["layers"][0]
     assert all(scale["transform"] == "linear" for scale in ir["scales"])
     with loaded_native_document(Path(head["binding"]["document"])) as loaded:

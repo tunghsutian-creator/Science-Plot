@@ -7,6 +7,7 @@ import subprocess
 import sys
 
 import pytest
+from managed_plot_helpers import read_managed_head_and_ir
 from test_figure_document import request_for_figure
 
 from sciplot_core._paths import REPO_ROOT
@@ -171,12 +172,14 @@ def test_public_cli_v2_series_style_cold_reopen_replay_and_rollback(tmp_path):
     _complete(root, _cli("task", "edit", root, "--rename-series", "layer:modulus", "Control A",
                         "--task-dir", tmp_path / "rename"), tmp_path)
     before = load_head(root)
+    _, before_ir = read_managed_head_and_ir(root)
     old_spec = figure_spec(before["document"])
     entry = tmp_path / "style"
     arguments = ["task", "style", root, "--sample", "Control A", "--width", "1.1pt",
                  "--color", "#990000", "--task-dir", entry]
     result = _complete(root, _cli(*arguments), tmp_path)
     after = load_head(root)
+    _, after_ir = read_managed_head_and_ir(root)
     assert result["revision"] == 2
     assert after["document"]["scientific"] == initial["document"]["scientific"]
     assert after["document"]["scientific_hash"] == initial["document"]["scientific_hash"]
@@ -185,7 +188,6 @@ def test_public_cli_v2_series_style_cold_reopen_replay_and_rollback(tmp_path):
     marks[0]["style"].update(line_color="#990000", line_width_pt=1.1)
     marks[1]["style"].update(marker_color="#990000")
     assert figure_spec(after["document"]) == expected
-    before_ir, after_ir = (read(Path(head["binding"]["ir_path"])) for head in (before, after))
     assert after_ir["datasets"] == before_ir["datasets"] and after_ir["scales"] == before_ir["scales"]
     assert after_ir["guides"][0]["entries"][0]["marks"] == after_ir["views"][0]["layers"][0]["marks"]
     assert {item["format"] for item in result["exports"]} >= {"pdf", "tiff_300", "vsz"}
@@ -254,7 +256,7 @@ def test_public_cli_series_display_cold_reopen_replay_and_rollback(tmp_path, aut
     assert exported["ready_to_use"]
     assert _cli(*arguments)["revision"] == 1 and load_head(root) == head
     if authority == "managed":
-        ir = read(Path(head["binding"]["ir_path"]))
+        _, ir = read_managed_head_and_ir(root)
         assert [len(ir["datasets"][name]["columns"]["column:0"]["values"]) for name in ("raw:A", "raw:B")] == [4, 3]
         assert ir["datasets"]["raw:A"]["columns"]["column:0"]["values"] == [10., 5., 5., 0.]
         layer = figure_spec(head["document"])["views"][0]["layers"][0]
