@@ -62,7 +62,8 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
     assert "tests/test_repository_policy.py" in selected
 
     workflow = (ROOT / ".github/workflows/minimal-repository.yml").read_text()
-    assert "  push:\n  pull_request:\n  workflow_dispatch:" in workflow
+    assert "branches: [main, integration, 'integration/**', release, 'release/**']" in workflow
+    assert "tags: ['**']" in workflow and "  pull_request:\n  workflow_dispatch:" in workflow
     steps = workflow.split("      - name: ")
     diagnostic = next(step for step in steps if step.startswith("Check known native CI regressions"))
     assert "github.event_name == 'workflow_dispatch' && inputs.native_regression_preflight == true" in diagnostic
@@ -73,7 +74,6 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
     for name, command in (
         ("Run reviewed complete public behavior", "ci_public_profiles full"),
         ("Run scoped static type gate", "python3 -m mypy --platform darwin"),
-        ("Run readiness check", "skill/scripts/sciplot doctor --json"),
         ("Run fixture-free lifecycle smoke", "skill/scripts/sciplot smoke --out"),
     ):
         step = next(step for step in steps if step.startswith(name))
@@ -83,7 +83,7 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
         if name == "Run scoped static type gate":
             assert "steps.main-admission.outcome != 'success'" in step
             assert "steps.main-admission.outputs.referenced != 'true'" in step
-            assert "native-feedback" not in step, "Static gates must run in every fresh layer"
+            assert "steps.native-feedback.outputs.source_only != 'true'" in step
         else:
             assert "steps.native-feedback.outcome != 'success'" in step
             assert "steps.native-feedback.outputs.layer != 'affected'" in step

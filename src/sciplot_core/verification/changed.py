@@ -16,6 +16,8 @@ from sciplot_core.verification.owners import (
     ChangedOwner,
 )
 from sciplot_core.verification.source_contracts import CHEAP_SOURCE_TARGETS
+from sciplot_core.verification.reviewed_feedback import ScopeValidator, reviewed_feedback
+from sciplot_core.verification.scope_feedback import scope_delta_is_reviewed
 
 
 CommandRunner = Callable[[Sequence[str], Path], subprocess.CompletedProcess[str]]
@@ -81,6 +83,8 @@ def build_changed_verification_plan(
     *,
     repo_root: Path,
     comparison: Mapping[str, Any] | None = None,
+    feedback_base: str = "",
+    scope_validator: ScopeValidator = scope_delta_is_reviewed,
 ) -> dict[str, Any]:
     """Map one changed snapshot to explicit focused checks and later gates."""
 
@@ -103,6 +107,12 @@ def build_changed_verification_plan(
             owner_paths.setdefault(owner.owner_id, []).append(path)
             pytest_targets.update(owner.pytest_targets)
     matched_owners.sort(key=CHANGED_OWNERS.index)
+    public_feedback = reviewed_feedback(paths, repo_root, unowned_paths, base=feedback_base,
+                                       scope_validator=scope_validator)
+    # The same reviewed source/test slice is available to the editing loop.
+    # Existing broader owner assertions and separate native/release obligations
+    # are not removed when the quick run filters for focused bodies.
+    pytest_targets.update(public_feedback["targets"])
 
     python_paths = [
         path for path in paths if path.endswith(".py") and (repo_root / path).is_file()
@@ -133,6 +143,7 @@ def build_changed_verification_plan(
             for owner in matched_owners
         ],
         "unowned_paths": sorted(unowned_paths),
+        "public_feedback": public_feedback,
         "checks": checks,
         "required_later": {
             "handoff": _unique_gates(owner.handoff_gates for owner in matched_owners),

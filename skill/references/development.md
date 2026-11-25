@@ -3,7 +3,11 @@
 Read `docs/ARCHITECTURE.md` before changing owners. Fix the central owner and add
 discriminating coverage. After two unsuccessful attempts at one symptom, stop
 guessing: record cause, replacement contract, verification and limitations.
-Use `.venv/bin/python` and `skill/scripts/sciplot`. Development evidence belongs
+Use `skill/scripts/sciplot` with its bound runtime. For a separate worktree without
+its own `.venv`, run `SCIPLOT_RUNTIME_REPO=/absolute/path/to/configured-checkout skill/scripts/sciplot verify --quick`
+from that worktree. The wrapper then selects the configured Python/Qt runtime
+while the current worktree owns source; do not replace it with ambient Python.
+Development evidence belongs
 under ignored `.tmp_verify/`; preserve user data and exact-current VSZ authority.
 That directory name is not cleanup authority: historical private inputs and
 paper deliveries there remain user data. Ordinary generated check caches use the
@@ -221,8 +225,19 @@ replace completion/access evidence. Keep `PYTEST_ADDOPTS` unset for known suites
 
 ### Feedback, diagnostic repetition and claim-specific reuse
 
-Push and pull-request CI distinguish limited affected feedback from complete
-public verification. The planner admits only its explicitly reviewed owner paths:
+Ordinary branches use pull-request CI for the exact merge checkout. For an
+exact pushed commit that will advance main without a rewrite, use
+`integration/<name>`; main, integration, release and tags retain push checks.
+Do not additionally open a PR from an integration ref solely to repeat the
+same responsibility. A squash, rebase or merge checkout with a different
+commit does not inherit an exact-source approval.
+
+The shared changed plan distinguishes limited affected feedback from complete
+public verification. PR planning uses its event base; candidate pushes freeze
+the main base, not the previous potentially unverified push. The main push
+uses its actual previous main commit. Pure authorized prose uses source-only
+checks: no Qt, wheel, native tests, Doctor or smoke. That green is source-only,
+not a full approval. The planner admits only its explicitly reviewed owner paths:
 selected documentation, table parsing, intake, assembly, frequency sweep and
 managed curve leaves, raw analysis, reviewed scope-manifest deltas, or the finite
 metadata-only `task_timing.py` change. An unreviewed path, deleted or aliased file,
@@ -240,15 +255,19 @@ or certify unrelated modules. Targeted native assertions remain in a separate
 comprehensive-tier stage when the owner needs them. The same source/runtime
 binding, public input guard and exact test completion checks still apply.
 
-Affected CI retains changed Python lint, both complete static type targets,
-distribution/wheel and Qt/font/toolchain/native helper build/import checks.
+Runtime-bearing affected CI retains changed Python lint, both complete static type
+targets, distribution/wheel and Qt/font/toolchain/native helper checks. Its
+shared source assertions run in the selected stage, not separately. Two affected
+tiers share a source copy but run in distinct pytest processes.
 Its result explicitly distinguishes unexecuted canonical public profiles,
 historical native diagnostics, Doctor, lifecycle smoke, real private inputs and
 access capture. Affected feedback is not release or scientific proof.
 
-The complete path still checks the complete collection against the manifest in
-both original public profiles, retaining their order and the runtime/build,
-Doctor and smoke gates. The twelve native regressions still execute in the
+The complete path checks collection against the manifest in both original profiles
+in order, using two distinct pytest processes sharing one private-absent source
+copy. Early source contracts still fail before native builds; native stage
+assertions still require original phase evidence. Full smoke retains its own
+Doctor check, without an independent second Doctor call. The twelve native regressions still execute in the
 comprehensive profile; only an explicitly requested manual early diagnostic
 repeats them. Both public profiles execute fresh unless the main source-commit
 admission below references their completed check.

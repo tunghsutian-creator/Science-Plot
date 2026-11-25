@@ -69,7 +69,6 @@ def future_origin():
         "Check known native CI regressions before the public suites",
         "Run reviewed complete public behavior",
         "Verify source-checkout wrapper bootstrap",
-        "Run readiness check",
         "Run fixture-free lifecycle smoke",
     ]
     job["steps"] = [

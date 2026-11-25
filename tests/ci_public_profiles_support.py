@@ -60,6 +60,7 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
     import re
     import sys
     from sciplot_core.verification import ci_feedback, public_stage
+    from sciplot_core.verification.changed import build_changed_verification_plan
     from sciplot_core.verification import task_timing_feedback
     from sciplot_core.verification.type_gate_owners import ARCHITECTURE_CORE_TARGETS
 
@@ -103,6 +104,14 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
     regular = ci_feedback.ci_feedback_plan(paths, root, ref="refs/heads/main")
     assert regular["layer"] == "affected" and not regular["native_targets"]
     assert "tests/test_source_numeric_encodings.py" in regular["targets"]
+    combined = [*paths, "tests/test_source_numeric_encodings.py", "tests/test_plot_data_exports.py"]
+    leaf_pair = ci_feedback.ci_feedback_plan(combined, root, event="pull_request")
+    local_feedback = build_changed_verification_plan(combined, repo_root=root)["public_feedback"]
+    assert leaf_pair["layer"] == "affected" and leaf_pair["targets"] == local_feedback["targets"]
+    assert "tests/test_plot_data_exports.py" in leaf_pair["targets"]
+    assert ci_feedback.ci_feedback_plan([*combined, "tests/test_private_corpus_preflight.py"], root)["layer"] == "full"
+    assert ci_feedback.ci_feedback_plan(["README.md"], root, ref="refs/heads/main")["source_only"] is True
+    assert ci_feedback.ci_feedback_plan(["README.md"], root, ref="refs/heads/integration/candidate")["source_only"] is False
     paths = ["src/sciplot_core/intake/table_preview.py", "tests/test_intake_review_recovery.py",
              "src/sciplot_core/panel_assembly/export.py", "src/sciplot_core/panel_assembly/preview.py",
              "tests/test_panel_assembly_export.py"]
@@ -215,8 +224,6 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
     git("commit", "-qam", "Unauthorized private dependency")
     assert not scope_delta_is_reviewed(scope_checkout, base, delta, [], [test_file])
 
-    from sciplot_core.verification.changed import build_changed_verification_plan
-
     for path in ("src/sciplot_core/source_tables/curve_tables.py", "src/sciplot_core/source_tables/heatmap_tables.py"):
         local = build_changed_verification_plan([path], repo_root=root)
         assert not local["unowned_paths"] and local["status"] == "planned"
@@ -228,10 +235,12 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
     steps = workflow.split("      - name: ")
     conditional = {step.splitlines()[0]: re.search(r"        if: \$\{\{ (.*?) \}\}", step).group(1)
                    for step in steps if "        if: ${{ " in step}
-    full_names = ("Run reviewed complete public behavior", "Run readiness check",
+    full_names = ("Run reviewed complete public behavior",
                   "Run fixture-free lifecycle smoke")
-    def enabled(expression, outcome, layer, event, admission_outcome="success", referenced="false", diagnostic=False):
-        values = {"steps.native-feedback.outcome": outcome, "steps.native-feedback.outputs.layer": layer,
+    def enabled(expression, outcome, layer, event, admission_outcome="success", referenced="false",
+                diagnostic=False, source_only=False):
+        values = {"steps.native-feedback.outputs.source_only": str(source_only).lower(),
+                  "steps.native-feedback.outcome": outcome, "steps.native-feedback.outputs.layer": layer,
                   "steps.main-admission.outcome": admission_outcome,
                   "steps.main-admission.outputs.referenced": referenced,
                   "github.event_name": event,
@@ -253,13 +262,18 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
     assert not enabled(preflight, "success", "full", "push", diagnostic=True)
     assert not enabled(preflight, "success", "full", "workflow_dispatch")
     assert enabled(preflight, "success", "full", "workflow_dispatch", diagnostic=True)
-    for name in ("Run lint gate", "Run shared source contracts", "Run scoped static type gate", "Build vendored Veusz helpers",
+    assert enabled(conditional["Run source-only documentation feedback"], "success", "affected", "push", source_only=True)
+    assert not enabled(conditional["Run reviewed affected public feedback"], "success", "affected", "push", source_only=True)
+    assert not enabled(conditional["Run shared source contracts"], "success", "affected", "push")
+    assert enabled(conditional["Run shared source contracts"], "success", "full", "push")
+    for name in ("Run lint gate", "Run scoped static type gate", "Build vendored Veusz helpers",
                  "Verify vendored Veusz helpers", "Verify minimal wheel surface", "Verify Qt build and runtime identity"):
         expression = conditional[name]
         for admission_outcome, referenced, executes in (("success", "true", False), ("success", "false", True),
                                                         ("failure", "true", True), ("", "", True)):
             assert enabled(expression, "success", "affected", "push", admission_outcome, referenced) is executes
             assert enabled(expression, "failure", "", "workflow_dispatch", admission_outcome, referenced) is executes
+            assert not enabled(expression, "success", "affected", "push", source_only=True)
 
     with monkeypatch.context() as context:
         context.setattr(ci_feedback, "changed_paths", lambda *_args: ["src/sciplot_core/task_contract.py"])
@@ -267,11 +281,26 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
         with pytest.raises(ValueError, match="eligibility changed"):
             ci_feedback.run_affected(root, "a" * 40, event="push")
     with monkeypatch.context() as context:
+        (tmp_path / "README.md").touch()
+        context.setattr(ci_feedback, "changed_paths", lambda *_args: ["README.md"])
+        def source_only(command, **_options):
+            assert "tests/test_documentation_contract.py::test_active_documents_declare_distinct_responsibilities" in command
+            assert not any("test_public_stage.py" in argument for argument in command)
+            return 0
+        context.setattr(ci_feedback.subprocess, "call", source_only)
+        assert ci_feedback.run_source_only(tmp_path, "a" * 40, event="push", ref="refs/heads/main") == 0
+        with pytest.raises(ValueError, match="eligibility changed"):
+            ci_feedback.run_affected(tmp_path, "a" * 40, event="push")
+    with monkeypatch.context() as context:
         selected = []
-        context.setattr(ci_feedback, "changed_paths", lambda *_args: ["docs/DESIGN_PROJECT_LIFECYCLE.md"])
+        leaf_path = "src/sciplot_core/source_tables/curve_tables.py"
+        leaf = tmp_path / leaf_path
+        leaf.parent.mkdir(parents=True)
+        leaf.touch()
+        context.setattr(ci_feedback, "changed_paths", lambda *_args: [leaf_path])
         def stage(actual_root, output, profile, *, targets=None):
             assert actual_root == tmp_path and profile == "public-affected"
-            assert targets and "tests/test_repository_policy.py" in targets
+            assert targets and "tests/test_plot_data_exports.py" in targets
             selected.extend(targets)
             output.mkdir(parents=True)
             return {"status": "PASS", "profile": profile}
@@ -287,12 +316,12 @@ def exercise_ci_feedback_layers(root, tmp_path, monkeypatch):
         context.setattr(ci_feedback, "changed_paths", lambda *_args: [native_path])
         stages = []
 
-        def stage(_root, output, profile, *, targets=None):
-            stages.append((profile, targets))
+        def stage(_root, output, profiles):
+            stages.extend(profiles)
             output.mkdir(parents=True)
-            return {"status": "BLOCKED" if profile == "public-affected-native" else "PASS"}
+            return [{"status": "PASS"}, {"status": "BLOCKED"}]
 
-        context.setattr(public_stage, "run_public_stage", stage)
+        context.setattr(public_stage, "run_public_profiles", stage)
         result = ci_feedback.run_affected(staged, "a" * 40, event="push")
         assert [profile for profile, _ in stages] == ["public-affected", "public-affected-native"]
         assert stages[1][1] == native["native_targets"]

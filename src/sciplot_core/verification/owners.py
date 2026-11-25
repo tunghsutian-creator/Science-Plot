@@ -185,6 +185,7 @@ CHANGED_OWNERS = (
         exact_paths=frozenset(
             {
                 "src/sciplot_core/plan_preview.py",
+                "src/sciplot_core/plan_admission.py",
                 "src/sciplot_core/scientific_review.py",
                 "src/sciplot_core/scientific_review_ledger.py",
                 "src/sciplot_core/semantic.py",
