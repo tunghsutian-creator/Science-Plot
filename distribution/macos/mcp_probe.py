@@ -58,13 +58,20 @@ async def _verify_first_figure(client, directory: Path) -> dict:
     opened = await call("sciplot_project_open", {
         "target": completed["project"], "description": {"scope": "summary"},
     })
-    if (opened["plot_type"] != "ManagedPlot" or opened["plot_id"] != completed["result"]["plot_id"]
+    saved = completed["result"]
+    if (opened["plot_type"] != "ManagedPlot" or opened["description_scope"] != "summary"
+            or any(opened[key] != saved[key] for key in (
+                "plot", "plot_id", "revision", "scientific_hash", "presentation_hash"))
             or opened["object_operations"]["patch"]["available"] is not True
             or source.read_text(encoding="utf-8") != FIRST_FIGURE_CSV):
         raise RuntimeError("The training result did not reopen the same editable project with the original source intact")
     return {
         "status": "passed", "claim": "synthetic_first_figure_over_stdio_not_real_ai_client_acceptance",
         "project": completed["project"], "files": files[0], "plotting_data": next_step["plotting_data"],
+        "summary_labels": {
+            "axes": [opened["edit_targets"][axis]["label"] for axis in ("axis:x", "axis:y")],
+            "series": [target["label"] for target in opened["edit_targets"].values() if target["kind"] == "layer"],
+        },
         "tool_calls": 3, "scripted_user_choices": 1, "model_calls": completed["model_calls_by_sciplot"],
         "seconds_to_question": question_at - started, "seconds_to_delivery": delivered - started,
     }

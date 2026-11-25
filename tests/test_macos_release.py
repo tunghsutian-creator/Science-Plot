@@ -272,6 +272,7 @@ def test_welcome_downloads_embed_exact_contents_for_local_file_pages(tmp_path):
 
 @pytest.mark.comprehensive
 def test_synthetic_first_figure_runs_through_daily_stdio(tmp_path):
+    import pymupdf
     from PIL import Image
 
     from sciplot_core._paths import REPO_ROOT
@@ -286,6 +287,12 @@ def test_synthetic_first_figure_runs_through_daily_stdio(tmp_path):
     assert first["status"] == "passed" and first["model_calls"] == 0
     assert first["tool_calls"] == 3 and first["scripted_user_choices"] == 1
     assert Path(first["files"]["pdf"]).read_bytes().startswith(b"%PDF")
+    assert first["summary_labels"] == {"axes": ["Time (s)", "Mass (%)"], "series": ["Sample A", "Sample B"]}
+    with pymupdf.open(first["files"]["pdf"]) as figure:
+        assert len(figure) == 1
+        labels = [line.strip() for line in figure[0].get_text().splitlines()]
+    assert all(labels.count(label) == 1 for kind in ("axes", "series")
+               for label in first["summary_labels"][kind])
     with Image.open(first["files"]["tiff_300"]) as figure:
         assert figure.format == "TIFF" and figure.info["dpi"] == pytest.approx((300, 300))
         assert min(figure.size) > 0
