@@ -122,6 +122,15 @@ owns native paths and recovery. Repeating its idempotency key resumes the same
 work. Structural changes return a bound preview when needed. CLI and MCP share
 this engine; existing projects retain their native VSZ and explicit partial-import
 coverage. See the [saved-figure route](skill/references/saved-figure-edit.md).
+
+On a Qt desktop, `sciplot plot editor PLOT` opens the exact Managed FigureSpec v2
+`plot` path from that summary. The native view is read-only. Choose an axis,
+check the before/after display text and save through the same plot transaction
+used by CLI and MCP. This changes only the title, not the scale, units or data.
+If another client saved first, read the latest revision and choose the change
+again; the editor will not overwrite it. A missing current verified native
+artifact must be rebuilt through the existing project command before editing.
+
 `task style` selects represented series by stable ID or a unique source/display
 label. For ordinary FigureSpec v2 measurement line/point layers, color updates
 both line and point symbols; width updates line marks only. Existing line

@@ -21,10 +21,18 @@ def _request(path: Path) -> dict[str, Any]:
     return value
 
 
-def dispatch_plot(args: Any) -> int | None:
+def dispatch_plot(args: Any, argv: list[str] | None = None) -> int | None:
     if args.command != "plot":
         return None
     action = args.plot_action
+    if action == "editor":
+        import sys
+        from sciplot_core.studio_core.runtime import maybe_reexec_with_qt_runtime
+
+        maybe_reexec_with_qt_runtime(sys.argv[1:] if argv is None else argv)
+        from sciplot_core.plot_editor import run_editor
+
+        return run_editor(args.plot, socket_path=args.socket, timeout=args.timeout)
     if action == "serve":
         from sciplot_core.plot_protocol.server import serve
 

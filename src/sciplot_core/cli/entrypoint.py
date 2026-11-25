@@ -43,7 +43,7 @@ def main(
             lambda: dispatch_host(args),
             lambda: dispatch_intake(args),
             lambda: dispatch_composition(args),
-            lambda: dispatch_plot(args),
+            lambda: dispatch_plot(args, arguments),
             lambda: dispatch_rheology(args),
             lambda: dispatch_diagnostics(args, argv),
             lambda: dispatch_rendering(
