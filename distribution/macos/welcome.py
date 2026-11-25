@@ -128,7 +128,7 @@ def render_page(command: Path, doctor: dict, mcp_available: bool, status_path: P
 <p>两列都以百分比记录，但数值不同。客户端应先让你在 <code>Mass</code> 和 <code>Weight</code> 之间选，再继续同一次任务。练习可答「用 Mass」；不用填写任何内部编号。检查图中有两个样品、横轴为秒、纵轴为百分比，再打开实际导出的文件。</p>
 <p>换成自己的原始文件时，只有影响结果的样品、工作表、列或单位不明确才需要确认。以任务返回的路径为准：交付目录通常在原数据旁，包含 PDF、TIFF、绘图 CSV 和 VSZ。保留原始文件和返回的<strong>可续编项目路径</strong>；交付文件和项目各自保留，不要把导出的 VSZ 当成原项目。</p>
 <h2>3. 下次找回原图，再预览修改</h2>
-<div class="card">继续这个 SciPlot 项目，不要重新建图。把图例字号改成 8 pt，先给我看候选图，确认后再保存和更新交付。</div>
+<div class="card">继续这个 SciPlot 项目，不要重新建图。把图例里 Sample A 的显示名改成 Practice A，原始数据不变。先给我看候选图，确认后再保存和更新交付。</div>
 <p>把原项目路径或原位置的已登记交付目录交给 AI。它用 <code>sciplot_project_open</code> 识别图；只记得原始文件时，先用 <code>sciplot_task_continue</code> 查找已有项目，有多个候选时由你选择。不要用原输入再建一份来代替编辑。</p>
 <p>可编辑图按实际公布的能力用 <code>sciplot_task_edit</code> 等入口提交修改。看过候选图再确认保存和导出。如果已保存但导出失败，修正原因后用原任务重试，不要再应用一次修改。</p>
 <p><strong>交稿：</strong>让 AI 给你当前的 PDF 或论文交付包，交出去的是成果快照。<strong>搬家续编：</strong>让 AI「把整个项目迁到新位置」，先导出项目迁移包，再导入一个未用的目录，保留同一项目和历史；以后从返回的新路径继续，不要两边同时改。<strong>另存副本：</strong>让 AI「把当前这张图另存为独立副本」，在新目录单独编辑；原图不变，也不会带过去旧项目的历史。</p>
