@@ -17,7 +17,6 @@ import pytest
 
 from sciplot_core._paths import REPO_ROOT
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.plot_engine.storage import load_head
 from sciplot_core.plot_protocol.client import _ping, call
 from sciplot_core.plot_protocol.paths import read_owner
 from managed_plot_helpers import request_for_source
@@ -27,10 +26,16 @@ from managed_plot_helpers import request_for_source
 @pytest.mark.parametrize("figure", [False, True], ids=["cartesian-v1", "figure-v2"])
 def test_public_cli_create_and_mcp_rebuild_from_canonical_document(tmp_path, figure):
     from test_figure_document import request_for_figure
+    from sciplot_core.project_lifecycle.context import repository_scope
+    from sciplot_core.project_lifecycle.repository import digest
+    from sciplot_core.project_lifecycle.repository_router import ComposedProjectRepository
+    from sciplot_core.project_store.repository import FileProjectStore
 
     request = request_for_figure(tmp_path) if figure else request_for_source(tmp_path)
-    source = Path(request["data_binding"]["data_sources"][0]["path"])
+    source = Path(request["data_binding"]["data_sources"][0]["path"]).resolve()
     source_hash = file_sha256(source)
+    historical_id = digest([str(source.parent), request["idempotency_key"]])[:24]
+    visible_output = source.parent / (source.stem + "_SciPlot") / ("plot_" + historical_id)
     request_file = tmp_path / "managed-create.json"
     request_file.write_text(json.dumps(request))
     timings = []
@@ -56,18 +61,37 @@ def test_public_cli_create_and_mcp_rebuild_from_canonical_document(tmp_path, fig
             assert described["authority"]["rebuild_from_document"] is True
             if figure:
                 assert described["plot_ir_version"] == 2 and created["publication_qa"]["native_text_checked"]
-            head = load_head(root)
-            binding = head["binding"]
-            native = Path(binding["document"])
+            assert root.parent.name == ".sciplot_semantic"
+            store = FileProjectStore(root.parent.parent)
+            repository = ComposedProjectRepository()
+            with repository_scope(repository), repository.query_scope(root):
+                binding = repository.load_head(root)["binding"]
+                creation = repository.read(root / "managed-creation.json")
+            assert creation["request"] == request and creation["request_hash"] == digest(request)
+            assert "out" not in creation["request"]
+            private = Path(binding["document"])
+            assert private.is_relative_to(store.root / ".sciplot_store")
+            native = visible_output / "artifacts" / binding["ir_hash"] / "document.vsz"
+            assert next(Path(item["path"]) for item in created["exports"] if item["format"] == "vsz") == native
+            assert file_sha256(native) == file_sha256(private)
             ir_path = Path(binding["ir_path"])
             ir = json.loads(ir_path.read_text())
             pixels = (native.parent / "preview.png").read_bytes()
             native_state = json.loads((native.parent / "build.json").read_text())["native_state_hash"]
-            authority_paths = [root / "head.json", root / "managed-creation.json", Path(binding["canonical_document"])]
-            authority_paths.extend(root.glob("revisions/*.json"))
-            authority_before = {str(path): file_sha256(path) for path in authority_paths}
+            authority_names = {(path.relative_to(store.root)).as_posix() for path in (
+                root / "head.json", root / "managed-creation.json", Path(binding["canonical_document"]))}
+            revision_prefix = (root / "revisions").relative_to(store.root).as_posix() + "/"
+
+            def authority():
+                files = store.snapshot()["files"]
+                revisions = {name for name in files if name.startswith(revision_prefix)}
+                assert len(revisions) == 1
+                return {name: files[name]["sha256"] for name in authority_names | revisions}
+
+            authority_before = authority()
+            shutil.rmtree(visible_output)
             shutil.rmtree(Path(binding["output"]))
-            shutil.rmtree(root / "ir")
+            shutil.rmtree(ir_path.parent)
             dirty = call("plot.describe", {"plot": str(root)}, socket_path=socket)
             assert dirty["artifact_status"] == "missing" and dirty["next_step"]["action"] == "plot.export"
 
@@ -92,11 +116,11 @@ def test_public_cli_create_and_mcp_rebuild_from_canonical_document(tmp_path, fig
                 assert receipt["plot_id"] == created["plot_id"]
                 assert receipt["scientific_hash"] == created["scientific_hash"]
                 assert receipt["presentation_hash"] == created["presentation_hash"]
+                assert next(Path(item["path"]) for item in receipt["exports"] if item["format"] == "vsz") == native
             assert json.loads(ir_path.read_text()) == ir
             assert (native.parent / "preview.png").read_bytes() == pixels
             assert json.loads((native.parent / "build.json").read_text())["native_state_hash"] == native_state
-            assert {str(path): file_sha256(path) for path in authority_paths} == authority_before
-            assert len(list((root / "revisions").glob("*.json"))) == 1
+            assert authority() == authority_before
             current = call("plot.describe", {"plot": str(root)}, socket_path=socket)
             assert current["status"] == "current" and current["dependencies"]["invalidated"] == []
             assert _ping(socket, 3)["pid"] == engine_pid and file_sha256(source) == source_hash
@@ -115,3 +139,51 @@ def test_public_cli_create_and_mcp_rebuild_from_canonical_document(tmp_path, fig
                 engine_pid = read_owner(socket)["pid"]
             if engine_pid is not None:
                 os.kill(engine_pid, signal.SIGTERM)
+
+
+@pytest.mark.comprehensive
+def test_public_expert_output_is_projection_for_create_patch_and_export(tmp_path):
+    from managed_plot_helpers import patch
+    from sciplot_core.plot_protocol.rpc import RemoteError
+    from sciplot_core.project_lifecycle.context import repository_scope
+    from sciplot_core.project_lifecycle.repository_router import ComposedProjectRepository
+    from sciplot_core.studio_core.source_update_files import file_inventory
+
+    originals = tmp_path / "originals"
+    originals.mkdir()
+    out = tmp_path / "deliveries" / "experiment"
+    request = {**request_for_source(originals), "out": str(out)}
+    created = call("plot.create", {"request": request}, direct=True)
+    assert created["ready_to_use"] and created["revision"] == 0, created
+    root = Path(created["plot"])
+    assert root.parent.name == ".sciplot_semantic"
+    assert (root.parent.parent / ".sciplot_store/head.json").is_file()
+    assert root.is_relative_to(originals) and not root.is_relative_to(out)
+    repository = ComposedProjectRepository()
+    with repository_scope(repository), repository.query_scope(root):
+        binding = repository.load_head(root)["binding"]
+    assert Path(binding["document"]).is_relative_to(root.parent.parent / ".sciplot_store")
+    first = out / "artifacts" / created["ir_hash"]
+    original_members = file_inventory(first)
+    assert {"document.vsz", "exports/document.pdf", "exports/document_300dpi.tiff"} <= set(original_members)
+    assert not (out / "index.json").exists()  # This is not a task or paper package.
+
+    changed = call("plot.patch", {"plot": str(root), "request": patch(
+        created, "wider-line", "style.line.width", "1.2pt", "series:A")}, direct=True)
+    assert changed["ready_to_use"] and changed["revision"] == 1, changed
+    second = out / "artifacts" / changed["ir_hash"]
+    assert first != second and file_inventory(first) == original_members
+    assert all(Path(item["path"]).is_relative_to(second) for item in changed["exports"])
+
+    lost = next(Path(item["path"]) for item in changed["exports"] if item["format"] == "pdf")
+    lost.unlink()
+    exported = call("plot.export", {"plot": str(root)}, direct=True)
+    assert exported["ready_to_use"] and exported["revision"] == 1 and lost.is_file()
+    assert file_inventory(first) == original_members
+
+    visible = second / "document.vsz"
+    edited = visible.read_bytes() + b"\n# user edit\n"
+    visible.write_bytes(edited)
+    with pytest.raises(RemoteError):
+        call("plot.export", {"plot": str(root)}, direct=True)
+    assert visible.read_bytes() == edited

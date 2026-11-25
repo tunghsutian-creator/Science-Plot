@@ -18,12 +18,13 @@ def delivery_request(state: dict[str, Any]) -> dict[str, Any]:
     # Older completed task attempts already placed their original artifacts in
     # the requested visible directory. Preserve those frozen paths and select a
     # distinct sibling for native packaging, whose owner rejects any overlap.
-    artifacts = Path(wire.get("out", source.parent / (source.stem + "_SciPlot") / result["plot_id"].replace(":", "_")))
-    if out == artifacts or out in artifacts.parents or artifacts in out.parents:
-        out = out.with_name(out.name + "_delivery")
-        state.setdefault("automatic_corrections", []).append({"field": "/delivery/out",
-            "action": "separate_legacy_task_artifacts", "value": str(out),
-            "message": "The frozen prior task already owns artifacts at the original out; the final native snapshot uses this distinct new sibling without moving or replacing them."})
+    if wire.get("storage") != "project_store_v2":
+        artifacts = Path(wire.get("out", source.parent / (source.stem + "_SciPlot") / result["plot_id"].replace(":", "_")))
+        if out == artifacts or out in artifacts.parents or artifacts in out.parents:
+            out = out.with_name(out.name + "_delivery")
+            state.setdefault("automatic_corrections", []).append({"field": "/delivery/out",
+                "action": "separate_legacy_task_artifacts", "value": str(out),
+                "message": "The frozen prior task already owns artifacts at the original out; the final native snapshot uses this distinct new sibling without moving or replacing them."})
     return {"idempotency_key": "task-delivery:" + canonical_json_sha256([state["task_dir"], state["intent_revision"]]),
             "out": str(out), "title": "Scientific figure", "mode": "native_snapshot",
             "items": [{"plot": result["plot"], "plot_id": result["plot_id"], "revision": result["revision"], "label": "Figure 1"}]}

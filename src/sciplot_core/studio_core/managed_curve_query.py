@@ -5,7 +5,8 @@ from typing import Any
 from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.foundation.json_io import read_json_object
 from sciplot_core.plot_engine.managed_delivery_continuation import local_managed_target
-from sciplot_core.plot_engine.storage import load_head
+from sciplot_core.project_lifecycle.context import repository_scope
+from sciplot_core.project_lifecycle.repository_router import ComposedProjectRepository
 from sciplot_core.task_semantic_creation import current_result
 from sciplot_core.task_storage import load_task
 
@@ -24,8 +25,8 @@ def inspect_curve_project(value: Path, *, figure_id: str | None = None) -> dict[
         if snapshot is not None and target["native_snapshot"] != str(snapshot):
             raise ValueError(f"The selected VSZ is not registered in this Managed delivery: {snapshot}")
         plot = target["plot"]
-    elif selected.parent.name == "managed" and selected.parent.parent.name == ".sciplot_documents" and (
-            selected / "head.json").is_file():
+    elif (selected.parent.name == "managed" and selected.parent.parent.name == ".sciplot_documents"
+          or selected.parent.name == ".sciplot_semantic"):
         plot = selected
     elif selected.name == "task.json" and selected.parent.name == "creation" and selected.is_file():
         journal_state = load_task(selected.parent)
@@ -35,7 +36,13 @@ def inspect_curve_project(value: Path, *, figure_id: str | None = None) -> dict[
         plot = canonical_path(Path(journal_state["project"]))
     else:
         return None
-    head = load_head(plot)
+    # Read an exact selected aggregate under the established discovery/query
+    # owner, whether its storage is attached or from a historical journal.
+    repository = ComposedProjectRepository()
+    with repository_scope(repository), repository.query_scope(plot):
+        if not repository.has_head(plot):
+            return None
+        head = repository.load_head(plot)
     document = head["document"]
     if document.get("plot_type") != "ManagedPlot":
         return None

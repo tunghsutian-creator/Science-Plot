@@ -6,9 +6,6 @@ from sciplot_core.figure_plan import FigureOutcome, merge_figure_outcomes
 from sciplot_core.materials_rules.analysis import frequency_terminal_analysis
 from sciplot_core.plot_backends.managed import ManagedVeuszCompiler, compiler_identity
 from sciplot_core.plot_engine.managed_backend import native_build_record
-from sciplot_core.plot_engine.managed_resolution import resolve_science, resolved_metadata
-from sciplot_core.plot_engine.managed_state import prepare_binding
-from sciplot_core.plot_ir import create_managed_document
 from sciplot_core.project_commands import ProjectCommands, SourceTreeRead
 from sciplot_core.project_lifecycle.attached_repository import AttachedProjectRepository
 from sciplot_core.project_lifecycle.attachment_group import PreparedFigure, publish_attachment_group, resume_attachment_group
@@ -17,6 +14,7 @@ from sciplot_core.project_lifecycle.attachment_import import entry_for
 from sciplot_core.project_lifecycle.attachment_index import Attachment, encode
 from sciplot_core.project_lifecycle.capabilities import COMPATIBILITY_CAPABILITIES
 from sciplot_core.project_lifecycle.context import repository_scope
+from sciplot_core.project_lifecycle.managed_creation import bind_managed_member, new_managed_member
 from sciplot_core.project_lifecycle.repository import digest
 from sciplot_core.project_store import FileProjectStore
 from sciplot_core.semantic_sources.scientific_source import ResolvedScientificSource
@@ -38,10 +36,9 @@ def _figure(
     attachment = Attachment(store, entry)
     repo = AttachedProjectRepository(attachment)
     with repo.prepare_new_member(snapshot) as members, repository_scope(repo, capabilities=COMPATIBILITY_CAPABILITIES):
-        document = create_managed_document(request["template_definition"], request["data_binding"], plot_id=entry["plot_id"])
-        document = resolved_metadata(document, rule_id=request["rule_id"], executors={})
-        document, _ = resolve_science(attachment.root, document)
-        binding, ir = prepare_binding(attachment.root, document, output=output)
+        document = new_managed_member(request, entry["plot_id"])
+        document, prepared = bind_managed_member(attachment.root, document, output)
+        binding, ir = prepared
         repo.commit(attachment.root, document, binding, "frequency_mean_suite")
     native = Path(binding["document"])
     built = compiler.compile_ir(ir, private)

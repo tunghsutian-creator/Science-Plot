@@ -28,7 +28,9 @@ class PlotService(ProjectApplication):
         self.read_only_legacy = read_only_legacy
         backend, repository, capabilities, resolve_figure = components(backend, repository, capabilities, resolve_figure)
         super().__init__(backend, repository, capabilities=capabilities,
-                         targets=targets if targets is not None else FilesystemProjectTargets(repository, resolve_figure=resolve_figure))
+                         targets=targets if targets is not None else FilesystemProjectTargets(
+                             repository, resolve_figure=resolve_figure,
+                             publish_fresh_managed_output=read_only_legacy))
 
     def create(self, request: dict[str, Any], *, project: Path | None = None) -> dict[str, Any]:
         from .selected_project import selected_project_creation

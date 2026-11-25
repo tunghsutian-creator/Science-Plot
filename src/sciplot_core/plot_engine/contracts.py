@@ -28,7 +28,13 @@ def create_schema() -> dict[str, Any]:
     from sciplot_core.plot_ir.figure_document import template_schema as figure_template_schema, theme_schema as figure_theme_schema
 
     figure = deepcopy(templated)
-    figure["properties"].update(template_definition=figure_template_schema(), theme=figure_theme_schema(), mode={"const": "managed"})
+    figure["properties"].update(template_definition=figure_template_schema(), theme=figure_theme_schema(),
+                                mode={"const": "managed"}, storage={"const": "project_store_v2"})
+    # The task hands off separately through its existing publication owner.
+    # An external out or host-executor request is not this private build route.
+    figure["dependentSchemas"] = {"storage": {"not": {"anyOf": [
+        {"required": ["out"]}, {"required": ["scientific_executors"]},
+    ]}}}
     return {"oneOf": [original, templated, figure]}
 
 

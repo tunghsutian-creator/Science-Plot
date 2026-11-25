@@ -113,9 +113,10 @@ def resolve_attached_open(repository: ComposedProjectRepository, target: Path, f
     return ImportTarget(root, project, selected_id, plot_id)
 
 
-def attached_managed_creation(repository: ComposedProjectRepository,
-                              request: dict[str, Any]) -> ManagedCreationLocation | None:
-    store = _store(repository)
+def attached_managed_creation(repository: ComposedProjectRepository, request: dict[str, Any], *,
+                              store: FileProjectStore | None = None,
+                              publication: Path | None = None) -> ManagedCreationLocation | None:
+    store = store if store is not None else _store(repository)
     if store is None:
         return None
     snapshot = store.snapshot()
@@ -127,7 +128,7 @@ def attached_managed_creation(repository: ComposedProjectRepository,
         root = store.root / ".sciplot_semantic" / identity
         default_output = store.root / STORE / "semantic-derived" / identity / "output"
         try:
-            output = canonical_path(Path(request["out"])) if "out" in request else default_output
+            output = canonical_path(Path(request["out"])) if "out" in request and publication is None else default_output
         except ValueError as exc:
             raise EngineError("managed_output_conflict", "An attached output cannot follow a symbolic alias.") from exc
         protected = (store.root / ".sciplot_semantic", store.root / STORE, store.root / ".sciplot_resources")
@@ -136,6 +137,10 @@ def attached_managed_creation(repository: ComposedProjectRepository,
             raise EngineError("managed_output_conflict", "Attached output must be separate from canonical semantic state and project storage.")
         plot_id = "plot:" + digest([snapshot["project_id"], key])[:24]
         existing = entry_for(store, key=key, figure_id=key, origin=root, plot_id=plot_id, managed_output=str(output))
+        if publication is not None:
+            existing["publication_output"] = str(publication)
+    elif publication is not None and existing.get("publication_output") != str(publication):
+        raise EngineError("document_idempotency_conflict", "The existing Managed attachment has another publication destination.")
     attachment = Attachment(store, existing)
     from copy import deepcopy
     repository.select(attachment, new_sources=tuple(deepcopy(request["data_binding"]["data_sources"])) if index["attachments"].get(identity) is None else ())
