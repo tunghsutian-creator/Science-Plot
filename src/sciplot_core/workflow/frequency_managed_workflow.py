@@ -18,7 +18,7 @@ from sciplot_core.project_store import FileProjectStore
 from sciplot_core.semantic_sources.rheology_sweep_domain import ResolvedRheologySweepDomain
 from sciplot_core.semantic_sources.scientific_source import ResolvedScientificSource
 from sciplot_core.task_errors import TaskControlError
-from sciplot_core.project_lifecycle.figure_observation import FREQUENCY_AUTHORITY as AUTHORITY
+from sciplot_core.workflow.frequency_locations import FREQUENCY_AUTHORITY as AUTHORITY
 
 from .frequency_managed_requests import PreparedFrequencyRequests, prepare_frequency_requests
 from .frequency_managed_suite import publish_frequency_managed_suite

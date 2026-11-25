@@ -7,7 +7,7 @@ import os
 import sys
 from pathlib import Path
 
-from sciplot_core.studio_core.source_update_commit import reject_symlink_path
+from sciplot_core.studio_core.source_update_files import reject_symlink_path
 
 
 def install_new_delivery(candidate: Path, delivery: Path) -> None:

@@ -25,7 +25,6 @@ from sciplot_core.one_step import build_one_step_project
 from sciplot_core.policy import layout_policy_for_semantic
 from sciplot_core.publication import (
     build_publication_intent,
-    build_transform_step,
     get_publication_profile,
 )
 from sciplot_core.semantic import build_intervention_request, classify_source
@@ -49,6 +48,7 @@ from sciplot_core.workflow.route_intent import (
     resolve_workflow_route_intent,
 )
 from sciplot_core.workflow.source_binding import (
+    initial_transform_steps,
     verify_workflow_figure_plan_source_binding,
 )
 from sciplot_core.semantic_sources.scientific_source_models import ResolvedScientificSource
@@ -238,7 +238,7 @@ def _run_request_in_managed_output(
     publication_profile = get_publication_profile(
         publication_intent["target_profile_id"]
     )
-    transform_steps = _initial_transform_steps(
+    transform_steps = initial_transform_steps(
         mapping_application=mapping_application,
         cleanup_application=cleanup_application,
         original_input_path=original_input_path,
@@ -301,43 +301,6 @@ def _run_request_in_managed_output(
         _update_project=update_project,
         previous_delivery=previous_delivery,
     )
-
-
-def _initial_transform_steps(
-    *,
-    mapping_application: dict[str, Any] | None,
-    cleanup_application: dict[str, Any] | None,
-    original_input_path: Path,
-    input_path: Path,
-) -> list[dict[str, Any]]:
-    steps = [
-        deepcopy(step)
-        for step in (
-            mapping_application.get("transform_steps", [])
-            if mapping_application is not None
-            else []
-        )
-        if isinstance(step, dict)
-    ]
-    if cleanup_application is not None:
-        steps.append(
-            build_transform_step(
-                step_id="assisted_cleanup",
-                operation="confirmed_cleanup",
-                input_path=original_input_path,
-                output_path=input_path,
-                implementation_ref=(
-                    "sciplot_core.assisted_cleanup.consume_ready_cleanup_result"
-                ),
-                parameters={
-                    "cleanup_result": cleanup_application["cleanup_result"],
-                    "mapping_proposal": cleanup_application["mapping_proposal"],
-                    "request_patch": cleanup_application["request_patch"],
-                    "human_confirmed": True,
-                },
-            )
-        )
-    return steps
 
 
 def _enforce_intervention_gate(

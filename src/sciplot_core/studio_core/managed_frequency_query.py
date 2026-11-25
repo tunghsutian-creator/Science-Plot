@@ -9,14 +9,8 @@ from sciplot_core.foundation.json_io import read_json_object
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.output_contract import REQUEST_DELIVERY_ROOT_KEY, UserOutputLayout
 
-from sciplot_core.project_lifecycle.figure_observation import (
-    FREQUENCY_AUTHORITY, FREQUENCY_RECORD, locate_frequency_project, observe_frequency_figures,
-)
-
-
-def frequency_roots(layout: UserOutputLayout) -> tuple[Path, Path, Path]:
-    workspace = layout.workspace_root
-    return workspace / FREQUENCY_RECORD, workspace / "runs" / "run_001", workspace / FREQUENCY_AUTHORITY
+from sciplot_core.project_lifecycle.managed_figure_observation import observe_frequency_figures
+from sciplot_core.workflow.frequency_locations import FREQUENCY_RECORD, frequency_roots, locate_frequency_project
 
 
 def is_frequency_creation_owner(layout: UserOutputLayout, owner: str) -> bool:

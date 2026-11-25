@@ -13,7 +13,7 @@ def _timed_semantic_backend(tmp_path, monkeypatch, *, decisions, fail_delivery=F
     """Account for known owner work without native runtime or wall-clock sleeps."""
     from sciplot_core import task_timing
     from sciplot_core import task_semantic_plan
-    from sciplot_core.plot_engine import service
+    from sciplot_core.project_lifecycle import managed_application
     from sciplot_core.plot_protocol import socket_client
     from sciplot_core.task_semantic_owner import create_managed
 
@@ -79,7 +79,7 @@ def _timed_semantic_backend(tmp_path, monkeypatch, *, decisions, fail_delivery=F
             close=lambda: methods.append("closed"),
         )
 
-    monkeypatch.setattr(service, "public_plot_service", new_owner)
+    monkeypatch.setattr(managed_application, "managed_task_application", new_owner)
     monkeypatch.setattr(socket_client, "call", no_nested_transport)
     source = tmp_path / "original.csv"
     source.write_text("Time,Mass\ns,%\n0,100\n1,99\n")

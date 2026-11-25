@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -103,3 +104,34 @@ def owned_source_view(io: StoreIO, value: dict[str, Any], actual: Path, *,
         if data != io.get(entry):
             raise ProjectConflict("An immutable source view was changed outside the store.")
     return actual, str(entry["locator"])
+
+
+def logical_path(root: Path, locations: Mapping[str, Path], location_members: Mapping[str, frozenset[str] | None],
+                 path: Path) -> str:
+    """Classify an external path only under its registered physical roots."""
+    candidate = Path(path).expanduser().absolute()
+    roots = {"": root, **locations}
+    for key, root in sorted(roots.items(), key=lambda item: len(str(item[1])), reverse=True):
+        if candidate.is_relative_to(root):
+            relative = candidate.relative_to(root).as_posix()
+            parts(relative)
+            allowed = location_members.get(key)
+            if allowed is not None and relative not in allowed:
+                continue
+            if not key and relative.split("/", 1)[0] == ".sciplot_resources":
+                continue
+            return f"@{key}/{relative}" if key else relative
+    raise ProjectStoreError("This path is outside all explicitly trusted resource roots.")
+
+
+def projection_path(io: StoreIO, current: dict[str, Any], logical: str) -> Path:
+    """Expose a derived path only when its physical bytes match the registry."""
+    expected = current["files"].get(logical)
+    physical = io.physical(logical)
+    if (expected is None or physical is None or sha(physical[0]) != expected["sha256"]
+            or physical[1] != expected["mode"]):
+        raise ProjectConflict("The derived path has unregistered outside bytes or is absent.")
+    components = parts(logical)
+    if components[0].startswith("@"):
+        return io.locations[components[0][1:]] / Path(*components[1:])
+    return io.root / Path(*components)
