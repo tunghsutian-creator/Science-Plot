@@ -25,12 +25,13 @@ def test_public_managed_delivery_relocated_native_open_edit_save_and_export(tmp_
     originals = {}
     selected = []
     try:
+        source_directory = tmp_path / "shared-input"
+        source_directory.mkdir()
+        original_request = request_for_figure(source_directory)
         for name in ("A", "B"):
-            source_directory = tmp_path / name
-            source_directory.mkdir()
-            request = request_for_figure(source_directory)
+            request = {**original_request, "idempotency_key": f"shared-delivery-{name}"}
             result = service.create(request)
-            assert result["ready_to_use"], result
+            assert result["ready_to_use"], json.dumps(result, indent=2)
             plot = Path(result["plot"])
             head = load_head(plot)
             for path in (Path(request["data_binding"]["data_sources"][0]["path"]),
@@ -52,6 +53,9 @@ def test_public_managed_delivery_relocated_native_open_edit_save_and_export(tmp_
         assert result["capabilities"]["portable_managed_project"] is False
         out = Path(result["out"])
         index = json.loads((out / "index.json").read_text())
+        assert len({item["plot_id"] for item in selected}) == 2
+        assert len({item["sources"][0]["path"] for item in index["items"]}) == 1
+        assert len(list((Path(result["checkpoint"]) / "data" / "originals").iterdir())) == 1
         for item, selection in zip(index["items"], selected, strict=True):
             original_ir = Path(load_head(Path(selection["plot"]))["binding"]["ir_path"])
             data = item["plotted_data"]
@@ -114,3 +118,44 @@ def test_public_managed_delivery_relocated_native_open_edit_save_and_export(tmp_
         assert service.deliver(delivery)["ready_to_use"], "Editing the independent moved snapshot must not dirty the original ManagedPlots/delivery."
     finally:
         service.close()
+
+
+@pytest.mark.comprehensive
+def test_managed_delivery_uses_store_sealed_source_after_original_disappears(tmp_path):
+    from contextlib import closing
+
+    from sciplot_core.project_store.repository import FileProjectStore
+
+    project, inputs = tmp_path / "original-project", tmp_path / "original-inputs"
+    project.mkdir()
+    inputs.mkdir()
+    request = request_for_figure(inputs)
+    source = Path(request["data_binding"]["data_sources"][0]["path"])
+    raw = source.read_bytes()
+    store = FileProjectStore(project)
+    store.snapshot(import_legacy=True)
+    with closing(PlotService()) as service:
+        original = service.create(request, project=project)
+        assert original["ready_to_use"], json.dumps(original, indent=2)
+    bundle = store.export_bundle(tmp_path / "bundle")
+    project.rename(tmp_path / "disconnected-project")
+    inputs.rename(tmp_path / "disconnected-inputs")
+    assert not source.exists()
+    moved = FileProjectStore.import_bundle(bundle, tmp_path / "relocated-project")
+    with closing(PlotService()) as service:
+        opened = service.open(moved.root, figure_id=original["plot_id"])
+        plot = Path(opened["plot"])
+        exported = service.export(plot)
+        assert exported["ready_to_use"], exported
+        out = tmp_path / "delivered"
+        result = service.deliver({"idempotency_key": "moved-project-delivery", "title": "Moved project",
+            "mode": "native_snapshot", "out": str(out), "items": [{
+                "plot": str(plot), "plot_id": original["plot_id"], "revision": original["revision"], "label": "Moved plot",
+            }]})
+        assert result["ready_to_use"], json.dumps(result, indent=2)
+    manifest = json.loads((out / "index.json").read_text())
+    row = manifest["items"][0]
+    assert row["scientific_hash"] == original["scientific_hash"]
+    assert (out / row["sources"][0]["path"]).read_bytes() == raw
+    assert row["sources"][0]["original_name"] == source.name
+    assert not source.exists()
