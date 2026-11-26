@@ -130,6 +130,13 @@ work. Structural changes return a bound preview when needed. CLI and MCP share
 this engine; existing projects retain their native VSZ and explicit partial-import
 coverage. See the [saved-figure route](skill/references/saved-figure-edit.md).
 
+For an existing standalone `.sciplot` file, use
+`sciplot plot open FILE.sciplot --scope summary --json` or the MCP
+`sciplot_project_open` summary. Pass `--figure PLOT_ID` (MCP `figure_id`) when
+there is more than one selection. This reads the saved ID, revision and hashes
+without rendering or modifying the file. The `project_file` locator is not an
+editable `plot` target.
+
 On a Qt desktop, `sciplot plot editor PLOT` opens the exact Managed FigureSpec v2
 `plot` path from that summary. The native view is read-only. Choose an axis,
 check the before/after display text and save through the same plot transaction

@@ -14,6 +14,11 @@ That route reads the current source selectors and legal fields in one edit conte
 
 Choose the first read from authority already established for this figure:
 
+- **Standalone `.sciplot` project file:** `plot open FILE.sciplot --scope summary`
+  or `sciplot_project_open` reads the saved figure ID, revision and hashes. Use
+  `--figure PLOT_ID` or MCP `figure_id` when more than one figure is registered.
+  A `sciplot_project_file_summary` is read-only: it does not expose an editable
+  plot target, native preview or export.
 - **Known ManagedPlot:** call `skill/scripts/sciplot plot open TARGET --scope
   summary --json`, or `sciplot_project_open` with `{"target":"/absolute/target",
   "description":{"scope":"summary"}}`. This returns `plot`, `plot_id`,

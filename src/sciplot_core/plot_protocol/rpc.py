@@ -128,7 +128,13 @@ def invoke(service: Service, method: str, params: dict[str, Any]) -> dict[str, A
 def _invoke_validated(service: Service, method: str, params: dict[str, Any]) -> dict[str, Any]:
     """Dispatch an admitted call synchronously within the owning RPC boundary."""
     if method == "project.open":
-        target = Path(params["target"]).expanduser().resolve()
+        target = Path(params["target"]).expanduser()
+        if target.suffix != ".sciplot":
+            resolved = target.resolve()
+            # Preserve legacy location handling, but don't turn a differently
+            # named alias into admission to the regular project-file reader.
+            if resolved.suffix != ".sciplot" or resolved.is_dir():
+                target = resolved
         if "description" in params:
             return service.open(target, figure_id=params.get("figure_id"), description=params["description"])
         return service.open(target, figure_id=params.get("figure_id"))

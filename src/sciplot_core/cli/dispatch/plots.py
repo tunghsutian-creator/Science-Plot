@@ -40,7 +40,7 @@ def dispatch_plot(args: Any, argv: list[str] | None = None) -> int | None:
         return 0
     params: dict[str, Any] = {}
     if action == "open":
-        params["target"] = str(args.target.expanduser().resolve())
+        params["target"] = str(args.target.expanduser().absolute())
         if args.figure_id is not None:
             params["figure_id"] = args.figure_id
     elif action not in {"create", "deliver"}:

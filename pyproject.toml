@@ -456,6 +456,7 @@ files = [
   "src/sciplot_core/project_commands/resources.py",
   "src/sciplot_core/project_manifest.py",
   "src/sciplot_core/project_lifecycle/project_file.py",
+  "src/sciplot_core/project_lifecycle/project_file_summary.py",
   "src/sciplot_core/project_store/__init__.py",
   "src/sciplot_core/project_store/adapters.py",
   "src/sciplot_core/project_store/commands.py",

@@ -10,8 +10,8 @@ def register_plot_commands(subparsers: Any) -> None:
     for name in ("open", "describe", "create", "patch", "resume", "intent", "render", "export", "rollback", "decide", "deliver"):
         action = actions.add_parser(name)
         if name == "open":
-            action.add_argument("target", type=Path)
-            action.add_argument("--figure", dest="figure_id")
+            action.add_argument("target", type=Path, help="Saved figure target or a .sciplot file (read-only summary).")
+            action.add_argument("--figure", dest="figure_id", help="Exact saved figure or plot ID; required if selection is ambiguous.")
         elif name not in {"create", "deliver"}:
             action.add_argument("plot", type=Path)
         if name in {"open", "describe"}:
