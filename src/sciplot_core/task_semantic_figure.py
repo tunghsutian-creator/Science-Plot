@@ -50,7 +50,8 @@ def _source_views(sources: list[dict[str, Any]], choices: dict[str, Any], intent
             views.append((source, {**candidate, "sample_view": True}))
             continue
         if not instrument and (candidate.get("format") != "sample_column_blocks"
-                               or len({block["sample"] for block in candidate["blocks"]}) <= 1):
+                               or (len({block["sample"] for block in candidate["blocks"]}) <= 1
+                                   and all(block["table_selection"] == candidate["table_selection"] for block in candidate["blocks"]))):
             views.append((source, candidate))
             continue
         if intent.get("secondary_y") and len(candidate["blocks"]) > 1:

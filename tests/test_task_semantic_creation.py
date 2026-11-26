@@ -600,7 +600,8 @@ def test_opted_in_ftir_raw_overlay_asks_exact_blocks_and_resumes_same_task(tmp_p
     from sciplot_core import task_control as control, task_semantic_creation as semantic
 
     source, intent = _single_table_spectral_control(tmp_path)
-    original = source.read_bytes()
+    original = source.read_bytes().replace(b"4000,55", b",")
+    source.write_bytes(original)
     digest = sha256(original).hexdigest()
     calls = []
 
@@ -624,6 +625,8 @@ def test_opted_in_ftir_raw_overlay_asks_exact_blocks_and_resumes_same_task(tmp_p
     assert [b["block_id"] for b in options] == ["block:0", "block:1", "block:2"]
     assert [b["sample"] for b in plan["selection"]["available"]] == ["Resin blue", "Resin red", "Excluded resin"]
     assert all(b["source_sha256"] == digest for b in plan["selection"]["available"])
+    assert [(b["data_start_row"], b["data_end_row"], b["point_count"]) for b in plan["selection"]["available"]] == [
+        (3, 6, 3), (3, 6, 3), (3, 5, 2)]
     assert result["next_step"]["response_template"]["choices"] == {"blocks": []}
     assert result["source_plan"]["selection"]["selected_block_count"] == 0
     assert "revise_template" not in result["next_step"]
@@ -668,10 +671,14 @@ def test_opted_in_ftir_raw_overlay_asks_exact_blocks_and_resumes_same_task(tmp_p
     single = tmp_path / "single-task"
     pending = control.start_task(request, task_dir=single)
     one = control.resume_task(single, {**answer, "expected_question_id": pending["question"]["question_id"],
-                                       "choices": {"blocks": [options[1]]}})
+                                       "choices": {"blocks": [options[2]]}})
     assert one["blocker"]["reason_code"] == "synthetic_native_boundary"
     assert one["source_plan"]["selection"]["selected_block_count"] == 1
-    assert {slot["sample"] for slot in calls[-1][1]["data_binding"]["slots"].values()} == {"Resin red"}
+    assert one["source_plan"]["selection"]["selected_point_count"] == 2
+    single_binding = calls[-1][1]["data_binding"]
+    assert {slot["sample"] for slot in single_binding["slots"].values()} == {"Excluded resin"}
+    entry, = single_binding["data_sources"]
+    assert entry["table_selection"]["data_end_row"] == 5 and entry["sha256"] == digest
     assert len(calls) == 3 and calls[-1][0] == str(single)
 
     second = tmp_path / "changed-task"
@@ -680,3 +687,17 @@ def test_opted_in_ftir_raw_overlay_asks_exact_blocks_and_resumes_same_task(tmp_p
     changed = control.resume_task(second, {**answer, "expected_question_id": pending["question"]["question_id"]})
     assert changed["status"] == "blocked" and changed["blocker"]["reason_code"] == "source_changed"
     assert len(calls) == 3 and not (tmp_path / "deliver").exists()
+
+    direct = {"version": 1, "action": "create", "sources": [str(source)], "choose_columns": True, "curve_display": "raw_overlay",
+              "intent": {key: value for key, value in intent.items() if key not in {"labels", "selection"}}}
+    for label, invalid in (
+        ("one-sided", original.replace(b"3900,79,3800,91,,", b"3900,79,3800,91,4000,")),
+        ("interior", original.replace(b"2700,43", b",").replace(b"3900,79,3800,91,,", b"3900,79,3800,91,4000,55")),
+        ("nonfinite", original.replace(b"3900,79,3800,91,,", b"3900,79,3800,91,NaN,Inf")),
+        ("text", original.replace(b"3900,79,3800,91,,", b"3900,79,3800,91,?,?")),
+    ):
+        source.write_bytes(invalid)
+        blocked = control.start_task(direct, task_dir=tmp_path / label)
+        assert blocked["status"] == "blocked" and blocked["blocker"]["reason_code"] == "ftir_block_choice_unsupported"
+        assert blocked.get("question") is None and source.read_bytes() == invalid
+    assert len(calls) == 3

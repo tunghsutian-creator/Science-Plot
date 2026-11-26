@@ -384,7 +384,9 @@ failure never changes its authority. Verified default coverage:
   single spectra retain a quantitative Y readout. Fully bound, same-mode
   paired tables also retain the default multi-spectrum stack, with its
   display-only offsets, sample labels, descending wavenumber and per-spectrum
-  analysis. Explicit unshifted overlays still use coordinate intent.
+  analysis. When choosing named samples for an unshifted CSV/TSV overlay,
+  spectra may end on different rows. Only completely empty trailing sample
+  cells are excluded; a missing coordinate within a spectrum is not filled.
 - GPC–SEC accepts eligible single calibrated molar-mass/`dW/dLogM`
   distributions, including the exact supported adjacent `g/mol` and blank
   distribution unit row. The registered column header, not a user statement,

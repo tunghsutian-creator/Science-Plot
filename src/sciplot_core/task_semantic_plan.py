@@ -151,8 +151,8 @@ def _coordinate_decisions(sources: list[dict[str, Any]], intent: dict[str, Any],
     return decisions, bindings, views
 
 
-def prepare_plan(paths: list[Path], intent: dict[str, Any]) -> dict[str, Any]:
-    return _prepare_plan(paths, intent)
+def prepare_plan(paths: list[Path], intent: dict[str, Any], *, ftir_block_choice: bool = False) -> dict[str, Any]:
+    return _prepare_plan(paths, intent, ftir_block_choice=ftir_block_choice)
 
 
 def prepare_verified_curve_plan(
@@ -164,7 +164,8 @@ def prepare_verified_curve_plan(
 
 
 def _prepare_plan(paths: list[Path], intent: dict[str, Any], *,
-                  verified_pairs: list[dict[str, int]] | None = None) -> dict[str, Any]:
+                  verified_pairs: list[dict[str, int]] | None = None,
+                  ftir_block_choice: bool = False) -> dict[str, Any]:
     from sciplot_core.source_inspection.semantic_evidence import inspect_semantic_tables
     from sciplot_core.task_semantic_selection import select_source_blocks, source_observation_scope
 
@@ -183,6 +184,10 @@ def _prepare_plan(paths: list[Path], intent: dict[str, Any], *,
         source = {"source_id": f"source:{index}", "path": str(path), "name": path.name,
                   "sha256": evidence["sha256"], "candidates": evidence["candidates"],
                   "scientific_identity": evidence["scientific_identity"]}
+        if ftir_block_choice:
+            from sciplot_core.task_ftir_block_choice import observe_ftir_block_regions
+
+            observe_ftir_block_regions(source, intent["y"]["quantity"])
         sources.append(source)
     sources, selection = select_source_blocks(sources, intent.get("selection"))
     if scope is not None:

@@ -170,9 +170,13 @@ def test_daily_mcp_selects_raw_blocks_then_hands_off_only_pdf_and_tiff(tmp_path)
     from mcp import Client
     from test_mcp_stdio import _call, _parameters
     from test_task_semantic_creation import _single_table_spectral_control
+    from managed_plot_helpers import read_managed_head_and_ir
+    from sciplot_core.plot_backends.native_primitives import dataset_name
+    from sciplot_core.veusz_worker.document_edit import loaded_native_document
 
     source, intent = _single_table_spectral_control(tmp_path)
-    original = source.read_bytes()
+    original = source.read_bytes().replace(b"4000,55", b",")
+    source.write_bytes(original)
     task, out = tmp_path / "task", tmp_path / "figure"
     intent.pop("selection")
     intent.pop("labels")
@@ -188,10 +192,15 @@ def test_daily_mcp_selects_raw_blocks_then_hands_off_only_pdf_and_tiff(tmp_path)
             decision, = question["plan"]["decisions"]
             assert decision["field"] == "blocks" and len(decision["options"]) == 3
             answer = {"expected_question_id": question["question_id"], "confirm_plan": True,
-                      "choices": {"blocks": decision["options"][:2]}}
+                      "choices": {"blocks": [decision["options"][index] for index in (0, 2)]}}
             done = await _call(client, "sciplot_task_resume", {"task": str(task), "response": answer})
             assert done["ready_to_use"] is True and done["source_plan"]["selection"]["selected_block_count"] == 2
             assert done["result"]["revision"] == 0
+            selection = done["source_plan"]["selection"]
+            assert selection["selected_point_count"] == 5
+            assert [(entry["data_start_row"], entry["data_end_row"]) for entry in selection["selected"]] == [(3, 6), (3, 5)]
+            assert [entry["sample"] for entry in selection["selected"]] == ["Resin blue", "Excluded resin"]
+            assert [entry["block_id"] for entry in selection["excluded"]] == ["block:1"]
             files, = done["next_step"]["files"]
             assert set(files) == {"pdf", "tiff_300"}
             assert set(out.resolve().iterdir()) == {Path(path) for path in files.values()}
@@ -204,6 +213,14 @@ def test_daily_mcp_selects_raw_blocks_then_hands_off_only_pdf_and_tiff(tmp_path)
             reopened = await _call(client, "sciplot_task_inspect", {"task": str(task)})
             assert reopened["ready_to_use"] is True and reopened["project"] == done["project"]
             assert reopened["next_step"]["files"] == done["next_step"]["files"]
+            assert reopened["source_plan"]["selection"] == selection
+
+        head, ir = read_managed_head_and_ir(Path(done["project"]))
+        with loaded_native_document(Path(head["binding"]["document"])) as loaded:
+            for layer, x, y in zip(ir["views"][0]["layers"], [[700., 2600., 3900.], [800., 2700.]],
+                                   [[84., 62., 79.], [51., 43.]], strict=True):
+                assert loaded.data[dataset_name(layer["dataset_id"], "x")].data.tolist() == x
+                assert loaded.data[dataset_name(layer["dataset_id"], "y")].data.tolist() == y
 
     anyio.run(scenario)
     assert source.read_bytes() == original

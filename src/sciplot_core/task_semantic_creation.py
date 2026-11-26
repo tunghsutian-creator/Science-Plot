@@ -115,11 +115,16 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
         if not require_available_output(state):
             save_task(root, state)
             return
-        plan = prepare_plan([Path(value) for value in state["request"]["sources"]], state["request"]["intent"])
+        paths = [Path(value) for value in state["request"]["sources"]]
+        intent = state["request"]["intent"]
         if state["request"].get("choose_columns"):
             from sciplot_core.task_ftir_block_choice import advertise_ftir_blocks
+            from sciplot_core.task_semantic_plan import prepare_plan as prepare_block_plan
 
+            plan = prepare_block_plan(paths, intent, ftir_block_choice=True)
             advertise_ftir_blocks(plan, state["source_hashes"])
+        else:
+            plan = prepare_plan(paths, intent)
         state["semantic_plan"] = plan
         state.pop("blocker", None)
         if plan.get("decisions"):

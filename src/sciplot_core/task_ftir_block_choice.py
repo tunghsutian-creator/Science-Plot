@@ -51,6 +51,37 @@ def _require_file(source: Path) -> None:
                                "Select the exact original FTIR CSV or TSV file before choosing samples.")
 
 
+def observe_ftir_block_regions(source: dict[str, Any], mode: str) -> None:
+    """Observe a physical spectrum's end without discarding any original cells."""
+    from sciplot_core.data_mapping.original_tables import read_original_table
+    from sciplot_core.data_mapping.raw_tables import _original_text
+
+    if len(source["candidates"]) != 1:
+        return
+    table = source["candidates"][0]
+    if table.get("format") != "sample_column_blocks":
+        return
+    frame = read_original_table(Path(source["path"]), table["sheet"], source["sha256"])
+    for block in table["blocks"]:
+        coordinate_columns = [[column for column in block["columns"] if column["quantity"] == quantity]
+                              for quantity in ("wavenumber", mode)]
+        if any(len(columns) != 1 for columns in coordinate_columns):
+            continue
+        x, y = (columns[0]["numeric"] for columns in coordinate_columns)
+        start, table_end = block["data_start_row"], block["data_end_row"]
+        end = x["data_end_row"]
+        if not (end is not None and start + 2 <= end < table_end
+                and x["first_row"] == y["first_row"] == start and y["data_end_row"] == end
+                and x["point_count"] == y["point_count"] == end - start):
+            continue
+        # NaN, nonfinite placeholders and notes are not empty original cells.
+        if any(_original_text(value) for row in frame.iloc[end:table_end, block["column_indices"]].itertuples(index=False, name=None)
+               for value in row):
+            continue
+        block.update(data_end_row=end, point_count=end - start)
+        block["table_selection"]["data_end_row"] = end
+
+
 def advertise_ftir_blocks(plan: dict[str, Any], source_hashes: dict[str, str]) -> None:
     """Use already-resolved exact table evidence, not a new mapping format."""
     source, = plan["sources"]
