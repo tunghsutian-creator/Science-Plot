@@ -1,6 +1,7 @@
 """Reserve a new Managed project's root without giving it an external write grant."""
 
 from collections.abc import Callable
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -10,7 +11,7 @@ from sciplot_core.foundation.json_io import atomic_write_json, read_json_object
 from sciplot_core.foundation.research_destination import require_data_destination
 from sciplot_core.foundation.project_session_lease import external_project_session
 from sciplot_core.project_store.errors import ProjectRecoveryRequired
-from sciplot_core.project_store.io import STORE
+from sciplot_core.project_store.io import STORE, observe_existing_store
 from sciplot_core.project_store.repository import FileProjectStore
 
 from .errors import EngineError
@@ -18,6 +19,37 @@ from .paths import canonical_path
 from .repository import digest
 
 MANAGED_STORE_CLAIM = "managed-store-claim.json"
+
+
+def _managed_claim(request: dict[str, Any]) -> dict[str, Any]:
+    return {"kind": "sciplot_managed_store_claim", "version": 1, "request_sha256": digest(request)}
+
+
+@observe_existing_store()
+def has_committed_managed_store(root: Path, request: dict[str, Any]) -> bool:
+    """Prove this wire owns a committed attachment in the exact local Store."""
+    from .attachment_index import INDEX, attachment_id, validate_index
+
+    if not canonical_path(root / STORE / "head.json").is_file():
+        return False  # A claim or initialized directory alone cannot commit a plot.
+    store = FileProjectStore(root)
+    observed = store.observe_members((MANAGED_STORE_CLAIM, INDEX), projection=False, physical=(MANAGED_STORE_CLAIM,))
+    claim = observed.members[MANAGED_STORE_CLAIM].data
+    if claim is None or json.loads(claim) != _managed_claim(request):
+        return False
+    physical = observed.physical[MANAGED_STORE_CLAIM]
+    if physical is None or physical[0] != claim:
+        raise EngineError("document_state_changed", "The Managed Store root claim differs from its recorded bytes.")
+    index = observed.members[INDEX].data
+    if index is None:
+        return False
+    generation = observed.selected
+    key = "managed:" + request["idempotency_key"]
+    identifier = attachment_id(generation["project_id"], key)
+    entry = validate_index(json.loads(index), generation["project_id"])["attachments"].get(identifier)
+    # The checked generation validates the recorded member bytes. A registered
+    # attachment and a creation journal can both precede the first semantic head.
+    return bool(entry and entry["figure_id"] == key and f"{entry['namespace']}/head.json" in generation["files"])
 
 
 def managed_publication_target(root: Path, output: Path, sources: list[dict[str, Any]]) -> Path:
@@ -45,8 +77,7 @@ def open_managed_store(root: Path, request: dict[str, Any], *,
         path = canonical_path(Path(source["path"]))
         if path == root or path.is_relative_to(root) or root.is_relative_to(path):
             raise EngineError("managed_output_conflict", "The Managed store cannot overlap an original source.")
-    claim = {"kind": "sciplot_managed_store_claim", "version": 1, "request_sha256": digest(request)}
-    return open_claimed_store(root, claim, authorize_new=authorize_new)
+    return open_claimed_store(root, _managed_claim(request), authorize_new=authorize_new)
 
 
 def open_claimed_store(root: Path, claim: dict[str, Any], *,

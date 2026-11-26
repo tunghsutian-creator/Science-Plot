@@ -204,15 +204,15 @@ def resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
             raise TaskControlError("task_not_revisable", "This task already committed a plot. Continue its saved plot through an explicit scientific edit; a draft correction cannot replace committed science.")
         if "managed_request" not in state and (state.get("creation_attempts") or state.get("phase") in {"creating", "exporting", "finished"}):
             raise TaskControlError("task_not_revisable", "The prior native outcome lacks its frozen request. Recover that original outcome before replacing scientific intent.")
-        # A lost reply may have committed before the task adopted its receipt.
-        # Inspect the already frozen attempt's known Managed owner journal.
         wire = state.get("managed_request")
         if wire:
-            from sciplot_core.plot_engine.storage import digest
+            from sciplot_core.project_lifecycle.managed_creation_targets import has_committed_managed_creation
 
-            first = Path(wire["data_binding"]["data_sources"][0]["path"])
-            owner = first.parent / ".sciplot_documents" / "managed" / digest(wire["idempotency_key"])
-            if (owner / "head.json").exists():
+            try:
+                committed = has_committed_managed_creation(wire)
+            except (OSError, ValueError) as exc:
+                raise TaskControlError("task_not_revisable", "The prior creation outcome could not be verified. Retry this same task with its frozen request before changing intent.") from exc
+            if committed:
                 raise TaskControlError("task_not_revisable", "The prior attempt committed before its reply. Retry this same task to recover its saved plot; do not replace the request.")
         intent = validate_intent(response["revise_intent"])
         state.setdefault("intent_history", []).append({"intent_revision": state.get("intent_revision", 1),
