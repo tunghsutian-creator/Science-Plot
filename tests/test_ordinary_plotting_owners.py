@@ -726,7 +726,8 @@ def test_reviewed_strict_additions_extend_the_preserved_residual_scope_once():
     assert retired.isdisjoint(configured)
     assert all(not (ROOT / path).exists() for path in retired)
     assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS - FINAL_STRICT_ADDITIONS) == 195 - len(retired_residual)
-    from sciplot_core.verification.source_contracts import CHEAP_SOURCE_TARGETS, TYPE_SCOPE_PARTITION_TARGET
+    from sciplot_core.verification.input_scope import load_manifest
+    from sciplot_core.verification.source_contracts import CHEAP_SOURCE_TARGETS, IMPORT_GRAPH_TARGET, TYPE_SCOPE_PARTITION_TARGET
     from sciplot_core.verification.type_gate_owners import MYPY_SCOPE_CONFIGURATION_OWNER, SCIENTIFIC_TRANSACTION_TYPE_OWNER
 
     assert TYPE_SCOPE_PARTITION_TARGET in CHEAP_SOURCE_TARGETS
@@ -734,17 +735,25 @@ def test_reviewed_strict_additions_extend_the_preserved_residual_scope_once():
     assert TYPE_SCOPE_PARTITION_TARGET in MYPY_SCOPE_CONFIGURATION_OWNER.pytest_targets
     workflow = (ROOT / ".github/workflows/minimal-repository.yml").read_text()
     shared_step = workflow.split("      - name: Run shared source contracts\n", 1)[1].split("      - name:", 1)[0]
-    assert "source_contracts import CHEAP_SOURCE_TARGETS" in shared_step
-    assert "*CHEAP_SOURCE_TARGETS], check=True)" in shared_step
-    assert "steps.main-admission.outputs.referenced != 'true'" in shared_step
-    assert "steps.native-feedback.outputs.layer != 'affected'" in shared_step
-    assert "steps.native-feedback.outcome != 'success'" in shared_step
+    assert "targets = [target for target in CHEAP_SOURCE_TARGETS if target != IMPORT_GRAPH_TARGET]" in shared_step
+    assert "*targets], check=True)" in shared_step
+    manifest = load_manifest()
+    assert IMPORT_GRAPH_TARGET in CHEAP_SOURCE_TARGETS
+    assert IMPORT_GRAPH_TARGET in set(manifest["scopes"]["public"]) & set(manifest["tiers"]["focused"])
+    # The full stage has the same non-referenced/full-route guard, plus manual dispatch.
+    complete = workflow.split("      - name: Run reviewed complete public behavior\n", 1)[1].split("      - name:", 1)[0]
+    shared_if = next(line.strip() for line in shared_step.splitlines() if line.strip().startswith("if:"))
+    complete_if = next(line.strip() for line in complete.splitlines() if line.strip().startswith("if:"))
+    complete_if = complete_if.replace(" || github.event_name == 'workflow_dispatch'", "").replace("&& ((", "&& (").replace(")) }}", ") }}")
+    assert shared_if == complete_if
+    assert "run: python3 -m sciplot_core.verification.ci_public_profiles full" in complete
     assert workflow.index("Run lint gate") < workflow.index("Run shared source contracts")
     assert workflow.index("Run shared source contracts") < workflow.index("Run scoped static type gate")
     for changed in ("pyproject.toml", *sorted(CI_FEEDBACK_STRICT_ADDITIONS)):
         checks = _plan([changed])["checks"]
         shared = next(check for check in checks if check["check_id"] == "pytest_shared_contracts")
         assert TYPE_SCOPE_PARTITION_TARGET in shared["command"]
+        assert IMPORT_GRAPH_TARGET in shared["command"]
         assert checks.index(shared) < next(index for index, check in enumerate(checks)
                                           if check["check_id"] == "mypy_owned_scope")
     from sciplot_core.verification.ci_feedback import ci_feedback_plan
@@ -753,6 +762,7 @@ def test_reviewed_strict_additions_extend_the_preserved_residual_scope_once():
         affected = ci_feedback_plan([changed], ROOT)
         assert affected["layer"] == "affected"
         assert TYPE_SCOPE_PARTITION_TARGET in affected["targets"]
+        assert IMPORT_GRAPH_TARGET in affected["targets"]
     for path in FINAL_STRICT_ADDITIONS:
         assert (ROOT / path).is_file()
         owners = [owner for owner in CHANGED_OWNERS if owner.matches(path)]
