@@ -42,6 +42,20 @@ interrupted/failed records, including exact prior evidence scope, and use
 [task measurements](TASK_CAPABILITY_MEASUREMENTS.md) for operation data rather
 than comparing incompatible test counts or summing overlapping timers.
 
+## Local capture reports
+
+Keep the original observer streams and the access receipt. For the operator's
+report, run `python -m sciplot_core.verification.private_corpus --access-audit
+<receipt> --json` from the source checkout. This preflight verifies the capture
+and returns cases and issues. Do not save the intermediate `review_capture`
+dictionary as the report: it contains the raw frames already on disk.
+
+During verification, the receipt comparison retains only unmatched JSON rows.
+For 8,192 generated access rows in exporter order, peak Python allocations for
+that comparison fell from 11,414,542 to 6,351 bytes; for reversed order, from
+11,414,558 to 5,847,628 bytes. Reordering passes; changing one occurrence is
+rejected. These figures exclude loading the receipt and raw capture.
+
 ## Disposable storage boundary
 
 Routine quick/changed tests use an external tool-cache root shared across

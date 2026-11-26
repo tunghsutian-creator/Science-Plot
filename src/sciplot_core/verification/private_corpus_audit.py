@@ -7,6 +7,7 @@ The access receipt is development evidence and must remain local-only.
 
 from __future__ import annotations
 
+from collections import Counter
 import hashlib
 import json
 import os
@@ -66,6 +67,21 @@ def _validate_collection_events(
             raise ValueError("collector directory is missing or resolves outside its fixture namespace")
 
 
+def _same_access_rows(observed: list[dict[str, Any]], recorded: list[dict[str, Any]]) -> bool:
+    """Compare JSON multisets, retaining only rows not yet matched on both sides."""
+    if len(observed) != len(recorded):
+        return False
+    unmatched: Counter[str] = Counter()
+    for actual, claimed in zip(observed, recorded, strict=True):
+        left, right = json.dumps(actual, sort_keys=True), json.dumps(claimed, sort_keys=True)
+        if left != right:
+            for row, delta in ((left, 1), (right, -1)):
+                unmatched[row] += delta
+                if not unmatched[row]:
+                    del unmatched[row]
+    return not unmatched
+
+
 def _validate_supported_streams(receipt: dict[str, Any], *, repo_root: Path,
                                 nodeids: set[str], fixture_roots: dict[Path, str | None] | None) -> None:
     proof = receipt.get("capture_proof")
@@ -84,10 +100,8 @@ def _validate_supported_streams(receipt: dict[str, Any], *, repo_root: Path,
         if local_name is not None:
             aliases.append(((local_reference_root(repo_root=repo_root) / local_name).resolve(), prefix))
     raw_events, raw_collection = access_events(result, aliases)
-    def normalize(rows: list[dict[str, Any]]) -> list[str]:
-        return sorted(json.dumps(row, sort_keys=True) for row in rows)
-    if (normalize(raw_events) != normalize(receipt.get("events", []))
-            or normalize(raw_collection) != normalize(receipt.get("collection_events", []))):
+    if (not _same_access_rows(raw_events, receipt.get("events", []))
+            or not _same_access_rows(raw_collection, receipt.get("collection_events", []))):
         raise ValueError("receipt access or collection events differ from original raw streams")
 
 

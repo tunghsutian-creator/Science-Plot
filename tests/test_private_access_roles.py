@@ -265,8 +265,23 @@ def test_normalized_role_cannot_replace_the_original_raw_open_facts(
     monkeypatch.setattr(audit, "local_reference_root", lambda *, repo_root: tmp_path)
     receipt = {"capture_proof": proof, "events": events, "collection_events": collection}
     if mutation == "none":
-        audit._validate_supported_streams(receipt, repo_root=tmp_path, nodeids={NODE},
-                                          fixture_roots={Path("tests/fixtures/real_world"): "real_world"})
+        # Different raw visits can project to the same collector row.
+        frame = capture["frames"][1]
+        for seq, name in enumerate(("os.scandir", "os.scandir", "os.listdir"), start=2):
+            capture["frames"].append({**frame, "sequence": seq, "event": name, "nodeid": ""})
+        _, collection = access_events(capture, aliases)
+        receipt["collection_events"] = list(reversed(collection))
+        def validate():
+            audit._validate_supported_streams(receipt, repo_root=tmp_path, nodeids={NODE},
+                                              fixture_roots={Path("tests/fixtures/real_world"): "real_world"})
+        validate()  # Order can differ, multiplicity and exact raw facts cannot.
+        receipt["collection_events"][1] = receipt["collection_events"][0]
+        with pytest.raises(ValueError, match="differ from original raw streams"):
+            validate()
+        receipt["collection_events"] = collection
+        receipt["events"][0]["open"]["raw"]["sequence"] = True  # True == 1 in Python, not JSON.
+        with pytest.raises(ValueError, match="differ from original raw streams"):
+            validate()
     else:
         with pytest.raises(ValueError, match="differ from original raw streams"):
             audit._validate_supported_streams(receipt, repo_root=tmp_path, nodeids={NODE},
