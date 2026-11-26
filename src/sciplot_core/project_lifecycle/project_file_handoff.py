@@ -51,8 +51,6 @@ def project_file_handoff(service: "ProjectApplication", path: Path, request: dic
     validate_wire(request, figure_handoff_schema(), code="figure_handoff_invalid_request")
     if type(request["revision"]) is not int:
         raise EngineError("figure_handoff_invalid_request", "Use the integer revision from project.open.")
-    if "pdf" not in request["formats"]:
-        raise EngineError("project_file_handoff_unsupported", "Select PDF or PDF and 300 dpi TIFF for a .sciplot file.")
     with project_file_figure(path, request["plot_id"], exact_plot_id=True) as (session, owner, document):
         locator = {"project_file": str(session.path), "project_id": session.project_id}
         if (document["plot_id"], document["revision"]) != (request["plot_id"], request["revision"]):

@@ -1,6 +1,7 @@
-"""A relocated standalone project hands off only the two supported image choices."""
+"""A relocated standalone project hands off only its exact selected files."""
 
 from contextlib import closing
+import csv
 import json
 import os
 from pathlib import Path
@@ -31,6 +32,7 @@ def test_relocated_project_file_selected_handoff_through_cli_and_daily_mcp(tmp_p
     from socket_fixture_helpers import socket_directory
     from test_figure_document import request_for_figure
     from test_mcp_stdio import _parameters
+    from sciplot_core.veusz_worker.document_edit import loaded_native_document
 
     root = tmp_path.resolve()
     original = root / "old workspace"
@@ -39,8 +41,15 @@ def test_relocated_project_file_selected_handoff_through_cli_and_daily_mcp(tmp_p
     store = FileProjectStore(project)
     store.snapshot(import_legacy=True)
     with closing(PlotService()) as service:
-        saved = service.create(request_for_figure(original), project=project)
-        assert saved["ready_to_use"], saved
+        create = request_for_figure(original)
+        original_source, = create["data_binding"]["data_sources"]
+        created = service.create(create, project=project)
+        assert created["ready_to_use"], created
+        saved = service.patch(Path(created["plot"]), {"plot_id": created["plot_id"], "base_revision": 0,
+            "idempotency_key": "current-frequency-label", "intent_class": "presentation",
+            "changes": [{"op": "set", "target": ["axis:xb"], "property": "axis.label",
+                         "value": "Current frequency display"}]})
+        assert saved["ready_to_use"] and saved["revision"] == 1, saved
     [entry] = read_index(store)["attachments"].values()
     assert entry["plot_id"] == saved["plot_id"] != entry["figure_id"]
     generation = store.snapshot()["generation"]
@@ -63,7 +72,7 @@ def test_relocated_project_file_selected_handoff_through_cli_and_daily_mcp(tmp_p
     moved = archive.rename(destination / "频率数据.sciplot")
     shutil.rmtree(original)
     with project_file_figure(moved, saved["plot_id"]) as (_session, owner, document):
-        assert document["revision"] == 0
+        assert document["revision"] == saved["revision"]
         assert not owner.exists(owner.attachment.root / "export-cache.json")
 
     sentinel = destination / "keep.txt"
@@ -102,10 +111,12 @@ def test_relocated_project_file_selected_handoff_through_cli_and_daily_mcp(tmp_p
         files = {item["format"]: Path(item["path"]) for item in result["exports"]}
         assert files.keys() == set(formats) and set(output.iterdir()) == set(files.values())
         assert all(file_sha256(Path(row["path"])) == row["sha256"] for row in result["exports"])
-        assert files["pdf"].read_bytes().startswith(b"%PDF-")
+        if "pdf" in files:
+            assert files["pdf"].read_bytes().startswith(b"%PDF-")
         if "tiff_300" in files:
             with Image.open(files["tiff_300"]) as raster:
                 assert raster.format == "TIFF" and raster.info["dpi"] == pytest.approx((300, 300), abs=.1)
+        return files
 
     occupied = destination / "occupied"
     occupied.mkdir()
@@ -115,14 +126,25 @@ def test_relocated_project_file_selected_handoff_through_cli_and_daily_mcp(tmp_p
     cli(occupied, failure="figure_handoff_destination_exists")
     cli(refused, plot="plot:unknown", failure="project_file_figure_not_found")
     cli(refused, plot=entry["figure_id"], failure="project_file_figure_not_found")
-    cli(refused, rev=revision + 1, failure="figure_handoff_revision_conflict")
+    cli(refused, rev=revision - 1, failure="figure_handoff_revision_conflict")
+    for flag in ("--plotted-csv", "--editable-vsz"):
+        cli(refused, rev=revision - 1, flags=(flag,), failure="figure_handoff_revision_conflict")
     cli(refused, target=alias, failure="project_file_invalid")
-    cli(refused, flags=("--plotted-csv",), failure="project_file_handoff_unsupported")
     assert not refused.exists() and list(occupied.iterdir()) == [marker] and marker.read_bytes() == b"do not replace"
 
     pdf = destination / "just PDF"
     verify(cli(pdf), pdf, ["pdf"])
+    vsz = destination / "just editable VSZ"
+    result = cli(vsz, flags=("--editable-vsz",))
+    editable = verify(result, vsz, ["editable_vsz"])["editable_vsz"]
+    assert editable.name == "figure.vsz" and result["managed_project_included"] is False
+    assert result["mode"] == "independent_native_snapshot"
+    assert "Current frequency display" in editable.read_text(encoding="utf-8")
+    with loaded_native_document(editable) as reopened:
+        assert sorted(dataset.data.tolist() for dataset in reopened.data.values()) == [[0., 5., 10.], [1., 5., 15.]]
+
     both = destination / "PDF and TIFF"
+    data = destination / "just plotted CSV"
     with socket_directory(prefix="sp-file-handoff-", dir="/tmp") as directory:
         socket = Path(directory) / "engine.sock"
         parameters = _parameters(cli=True, profile="daily")
@@ -130,21 +152,37 @@ def test_relocated_project_file_selected_handoff_through_cli_and_daily_mcp(tmp_p
 
         async def mcp_export():
             async with Client(parameters, read_timeout_seconds=90) as mcp:
-                fields = {"output_dir": str(both), "plot_id": plot_id, "revision": revision, "formats": ["tiff_300", "pdf"]}
-                reply = await mcp.call_tool("sciplot_plot_export", {"plot": str(moved), "handoff": fields})
-                assert not reply.is_error, reply.content
-                assert str(scratch) not in str(reply.structured_content) and str(original) not in str(reply.structured_content)
-                return reply.structured_content
+                async def selected(output, formats):
+                    fields = {"output_dir": str(output), "plot_id": plot_id, "revision": revision, "formats": formats}
+                    reply = await mcp.call_tool("sciplot_plot_export", {"plot": str(moved), "handoff": fields})
+                    assert not reply.is_error, reply.structured_content
+                    assert str(scratch) not in str(reply.structured_content) and str(original) not in str(reply.structured_content)
+                    return reply.structured_content
+
+                verify(await selected(both, ["tiff_300", "pdf"]), both, ["pdf", "tiff_300"])
+                result = await selected(data, ["plotted_csv"])
+                table = verify(result, data, ["plotted_csv"])["plotted_csv"]
+                with table.open(newline="", encoding="utf-8") as stream:
+                    headers, *values = csv.reader(stream)
+                assert headers == ["Frequency", "Modulus"]
+                assert [list(map(float, row)) for row in values] == [[0., 1.], [5., 5.], [10., 15.]]
+                record, = result["exports"]
+                assert result["coordinate_space"] == "scientific_layer_inputs"
+                assert [column["unit"] for column in record["columns"]] == ["Hz", "Pa"]
+                assert record["layers"][0]["sample"] == "Modulus"
+                [provenance] = record["provenance"]["sources"]
+                assert {key: provenance[key] for key in ("source_id", "sha256", "table_selection")} == {
+                    key: original_source[key] for key in ("source_id", "sha256", "table_selection")}
 
         try:
-            verify(anyio.run(mcp_export), both, ["pdf", "tiff_300"])
+            anyio.run(mcp_export)
         finally:
             if socket.exists():
                 os.kill(read_owner(socket)["pid"], signal.SIGTERM)
 
     assert not original.exists() and not list(scratch.glob("sciplot-open-*"))
     assert file_sha256(moved) == archive_receipt.sha256 and sentinel.read_text() == "unrelated file"
-    assert set(destination.iterdir()) == {moved, occupied, sentinel, alias, pdf, both}
+    assert set(destination.iterdir()) == {moved, occupied, sentinel, alias, pdf, both, vsz, data}
 
     def never_build(*_args, **_kwargs):
         pytest.fail("An archive with an existing export cache must not rebuild it.")
@@ -156,9 +194,10 @@ def test_relocated_project_file_selected_handoff_through_cli_and_daily_mcp(tmp_p
         warm_export = service.export(warm, handoff=handoff)
         [warm_pdf] = warm_export["exports"]
         assert warm_pdf["sha256"] == next(item["sha256"] for item in saved["exports"] if item["format"] == "pdf")
-        with pytest.raises(EngineError, match="handoff does not rebuild") as error:
-            service.export(unready, handoff={**handoff, "output_dir": str(blocked)})
-        assert error.value.reason_code == "figure_handoff_publication_unready" and not blocked.exists()
+        for formats in (["pdf"], ["plotted_csv"], ["editable_vsz"]):
+            with pytest.raises(EngineError, match="handoff does not rebuild") as error:
+                service.export(unready, handoff={**handoff, "output_dir": str(blocked), "formats": formats})
+            assert error.value.reason_code == "figure_handoff_publication_unready" and not blocked.exists()
     assert file_sha256(warm) == warm_saved.sha256 and file_sha256(unready) == unready_saved.sha256
 
     def native_error(private_root):

@@ -9,7 +9,7 @@ from typing import Any
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_ir import validate_ir
-from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot
+from sciplot_core.source_coverage.file_snapshots import _physical_file_snapshot
 
 
 @dataclass(frozen=True)
@@ -19,7 +19,8 @@ class PlotData:
 
 
 def capture_plot_data(ir_path: Path, *, expected: dict[str, str], sha256: str | None = None) -> PlotData:
-    snapshot = stable_file_snapshot(ir_path, label="Managed delivery exact PlotIR", expected_sha256=sha256)
+    # Callers pass the audited publication's physical artifact, not an original source.
+    snapshot = _physical_file_snapshot(ir_path, literal=ir_path, label="Managed delivery exact PlotIR", expected_sha256=sha256)
     ir = validate_ir(json.loads(snapshot["bytes"]))
     if any(ir[key] != value for key, value in expected.items()):
         raise EngineError("managed_delivery_ir_changed", "The sealed dataset snapshot differs from its selected PlotIR/scientific/presentation binding.")

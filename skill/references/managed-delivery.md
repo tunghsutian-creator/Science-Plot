@@ -25,7 +25,8 @@ before selecting new files.
 
 For a standalone `.sciplot` file, pass its path as `PLOT` and use the exact
 `plot_id` and current `revision` from `plot open FILE.sciplot` or
-`sciplot_project_open`. PDF and PDF plus TIFF are the supported selections.
+`sciplot_project_open`. The same PDF, PDF plus TIFF, plotted CSV or editable
+VSZ selections apply.
 SciPlot leaves the project file unchanged. If its disposable export cache is
 absent, SciPlot can rebuild it privately from the saved figure. A present but
 unverified publication is refused, not replaced. For a directory-backed plot,
