@@ -87,6 +87,7 @@ def build_changed_verification_plan(
     feedback_base: str = "",
     scope_validator: ScopeValidator = scope_delta_is_reviewed,
     quick: bool = False,
+    omit_repeated_shared: bool = True,
 ) -> dict[str, Any]:
     """Map one changed snapshot to explicit focused checks and later gates."""
 
@@ -125,6 +126,7 @@ def build_changed_verification_plan(
         has_changes=bool(matched_owners),
         diff_base=str(comparison["resolved_base"]) if comparison else "HEAD",
         public_nodes=public_nodes,
+        omit_repeated_shared=omit_repeated_shared,
     )
     return {
         "kind": "sciplot_changed_verification",
@@ -184,7 +186,10 @@ def run_changed_verification(
             selected_paths, comparison = list(changed_paths), None
         else:
             selected_paths, comparison = _collect_scope(root, base, runner)
-        payload = build_changed_verification_plan(selected_paths, repo_root=root, comparison=comparison, quick=quick)
+        payload = build_changed_verification_plan(
+            selected_paths, repo_root=root, comparison=comparison, quick=quick,
+            omit_repeated_shared=record is None and reuse is None,
+        )
     except (OSError, RuntimeError, ValueError) as exc:
         payload = build_changed_verification_plan([], repo_root=root)
         payload.update(
@@ -272,6 +277,7 @@ def _planned_checks(
     has_changes: bool,
     diff_base: str = "HEAD",
     public_nodes: list[str] | None = None,
+    omit_repeated_shared: bool = True,
 ) -> list[dict[str, Any]]:
     checks: list[dict[str, Any]] = []
     if python_paths:
@@ -292,7 +298,7 @@ def _planned_checks(
         checks.append({
             "check_id": "mypy_owned_scope", "command": [sys.executable, "-m", "mypy"], "status": "planned",
         })
-    owner_args = _owner_pytest_args(pytest_targets, has_changes, public_nodes)
+    owner_args = _owner_pytest_args(pytest_targets, has_changes, public_nodes, omit_repeated_shared)
     if owner_args:
         checks.append({"check_id": "pytest_changed_owners",
                        "command": [sys.executable, "-m", "pytest", "-q", *owner_args],
@@ -308,7 +314,8 @@ def _planned_checks(
     return checks
 
 
-def _owner_pytest_args(targets: list[str], has_changes: bool, public_nodes: list[str] | None) -> list[str]:
+def _owner_pytest_args(targets: list[str], has_changes: bool, public_nodes: list[str] | None,
+                       omit_repeated_shared: bool) -> list[str]:
     if public_nodes is not None:
         if not public_nodes:
             return []
@@ -319,7 +326,16 @@ def _owner_pytest_args(targets: list[str], has_changes: bool, public_nodes: list
     if has_changes:
         # A module/class selector is not implied by an exact shared leaf.
         owner_targets = [target for target in owner_targets if target not in CHEAP_SOURCE_TARGETS]
-    return ["-m", "focused", *owner_targets] if owner_targets else []
+    if not owner_targets:
+        return []
+    selected = set(owner_targets)
+    exact_exclusion = has_changes and omit_repeated_shared and any(
+        target.split("::", 1)[0] in selected for target in CHEAP_SOURCE_TARGETS
+    )
+    args = ["-m", "focused"]
+    if exact_exclusion:
+        args.extend(("-p", "sciplot_core.verification.public_stage_selection", "--sciplot-omit-shared-contracts"))
+    return [*args, *owner_targets]
 
 
 def _deduplicated_targets(targets: list[str]) -> list[str]:

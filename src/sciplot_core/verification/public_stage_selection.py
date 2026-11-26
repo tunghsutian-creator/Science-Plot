@@ -64,6 +64,23 @@ def selected_public_nodes(manifest: dict[str, Any], source: dict[str, str], prof
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption("--sciplot-public-target", action="append", default=[],
                      help="Exact public feedback selectors admitted against complete collection of their test modules.")
+    parser.addoption("--sciplot-omit-shared-contracts", action="store_true",
+                     help="Omit exact shared source checks already run by unrecorded changed verification.")
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    if not config.getoption("sciplot_omit_shared_contracts"):
+        return
+    if config.getoption("input_scope", default=None) is not None:
+        from pytest import UsageError
+
+        raise UsageError("Shared-contract subtraction cannot alter an exact public or private profile.")
+    from sciplot_core.verification.source_contracts import CHEAP_SOURCE_TARGETS
+
+    shared = frozenset(CHEAP_SOURCE_TARGETS)
+    rejected = [item for item in items if item.nodeid in shared]
+    items[:] = [item for item in items if item.nodeid not in shared]
+    config.hook.pytest_deselected(items=rejected)
 
 
 def validate_profile_selectors(profile: str, targets: list[str] | None) -> None:

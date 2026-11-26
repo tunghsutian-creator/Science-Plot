@@ -105,9 +105,10 @@ results and deferred scope; the declared target count is not a test body count.
 
 Exact shared assertions run once, in the first shared gate. For a reviewed
 module selector the public-focused inventory gives the other exact nodes to
-run, without repeating any shared node. The broader `--changed` path keeps
-whole-module selectors intact. An empty remaining owner selection never becomes
-an unfiltered pytest command. Record mode preserves the original check scopes.
+run, without repeating any shared node. Unrecorded `--changed` keeps its
+whole-module selectors and omits those exact shared nodes from the second
+stage. An empty remaining owner selection never becomes an unfiltered pytest
+command. Record mode preserves the original commands and scopes.
 
 Component measurements retained 47 unique assertions while removing five exact
 repetitions: the changed API took 17.75 then 14.03 seconds, excluding the outer

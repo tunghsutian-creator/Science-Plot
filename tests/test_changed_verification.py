@@ -319,6 +319,28 @@ def test_changed_owners_build_one_deduplicated_focused_pass() -> None:
     assert "comprehensive" not in generated
 
 
+    # A whole module can still include exact source assertions already run in
+    # the prior phase. Retain it and remove only the precise shared node IDs.
+    from types import SimpleNamespace
+    from sciplot_core.verification.public_stage_selection import pytest_collection_modifyitems
+    from sciplot_core.verification.source_contracts import IMPORT_GRAPH_TARGET
+
+    changed = ["src/sciplot_core/cli/dispatch/project_revision.py"]
+    plans = [build_changed_verification_plan(changed, repo_root=REPO_ROOT, omit_repeated_shared=omit)
+             for omit in (False, True)]
+    old, new = (next(row["command"] for row in plan["checks"] if row["check_id"] == "pytest_changed_owners")
+                for plan in plans)
+    assert "tests/test_architecture_boundaries.py" in old and "tests/test_architecture_boundaries.py" in new
+    assert "--sciplot-omit-shared-contracts" not in old and "--sciplot-omit-shared-contracts" in new
+    shared = SimpleNamespace(nodeid=IMPORT_GRAPH_TARGET)
+    distinct = SimpleNamespace(nodeid=IMPORT_GRAPH_TARGET + "_other")
+    items = [shared, distinct]
+    deselected = []
+    config = SimpleNamespace(getoption=lambda key, default=None: key == "sciplot_omit_shared_contracts" or default,
+                             hook=SimpleNamespace(pytest_deselected=lambda *, items: deselected.extend(items)))
+    pytest_collection_modifyitems(config, items)
+    assert items == [distinct] and deselected == [shared]
+
 def test_automation_baseline_has_one_focused_evidence_owner() -> None:
     payload = build_changed_verification_plan(
         [
