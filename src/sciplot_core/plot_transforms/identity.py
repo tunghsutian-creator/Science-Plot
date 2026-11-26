@@ -105,6 +105,10 @@ def builtin_executor(kind: str | None = None, *, version: str | None = None) -> 
     return selected.descriptor()
 
 
+def builtin_version_root() -> Path:
+    return Path(__file__).with_name("versions")
+
+
 def builtin_files(kind: str | None = None, executor: dict[str, Any] | None = None) -> dict[str, str]:
     """Return expected pins, never bless current bytes by hashing them as a new version."""
     if kind is None:
@@ -115,7 +119,7 @@ def builtin_files(kind: str | None = None, executor: dict[str, Any] | None = Non
         descriptor = builtin_executor(kind) if executor is None else executor
         selected = _resolve(kind, descriptor)
         files = dict(_LEGACY_FILES) if descriptor == _LEGACY_DESCRIPTOR else dict(selected.files)
-    root = Path(__file__).with_name("versions")
+    root = builtin_version_root()
     return {str(root / name): sha for name, sha in files.items()}
 
 

@@ -360,3 +360,33 @@ def test_executor_wire_bridge_preserves_original_parameter_acceptance_and_reject
                 original.validate_node(projected)
             assert actual.value.reason_code == expected.value.reason_code
             assert actual.value.issues == expected.value.issues
+
+
+def test_registered_pin_relocation_requires_one_exact_closure_and_no_source_role_overlap(tmp_path):
+    from sciplot_core.plot_engine.builtin_history import _rebase
+
+    root = tmp_path / "previous-installation"
+    anchor = "sciplot_core/plot_transforms/versions/__init__.py"
+    relative = dict(identity._VERSIONS[("select", "1")].files)
+    layout = {str(Path(anchor).parent / path): sha for path, sha in relative.items()}
+    archived = {str(root / path): sha for path, sha in layout.items()}
+    installed = {str(tmp_path / "new" / path): sha for path, sha in layout.items()}
+    source = str(tmp_path / "input" / "columns.py")
+    files = {**archived, source: "e" * 64}
+    _rebase(files, layout, installed, {source}, anchor=anchor)
+    assert files == {**installed, source: "e" * 64}
+
+    guarded = str(root / Path(anchor).parent / "v1/columns.py")
+    assert guarded in archived
+    variants = [
+        (dict(archived), {guarded}),
+        ({name: sha for name, sha in archived.items() if name != guarded}, set()),
+        ({(str(Path(name).with_name("wrong.py")) if name == guarded else name): sha
+          for name, sha in archived.items()}, set()),
+        ({**archived, guarded: "0" * 64}, set()),
+        ({**archived, **{str(tmp_path / "another" / name): sha for name, sha in layout.items()}}, set()),
+    ]
+    for rejected, protected in variants:
+        before = dict(rejected)
+        _rebase(rejected, layout, installed, protected, anchor=anchor)
+        assert rejected == before

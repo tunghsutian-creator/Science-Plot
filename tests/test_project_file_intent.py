@@ -220,3 +220,70 @@ def test_relocated_project_file_axis_edit_is_saved_once_through_cli_and_daily_mc
         assert file_sha256(moved) == observed
     assert cli("open", moved)["revision"] == 2
     assert list(folder.iterdir()) == [moved]
+
+
+@pytest.mark.comprehensive
+def test_relocated_semantic_xy_can_save_twice_across_installations(tmp_path):
+    original = tmp_path.resolve() / "original analysis"
+    original.mkdir()
+    source = original / "experiment.csv"
+    raw = b"Temperature,Heat Flow\nC,W/g\nSample,Sample\n66,-0.023\n61,0.008\n61,\n53,-0.016\n"
+    source.write_bytes(raw)
+    # Run the producer and first edit from a genuinely distinct, byte-identical
+    # source installation. No old paths or user project will exist on the second edit.
+    old_install = tmp_path / "prior installation"
+    old_source = old_install / "src"
+    shutil.copytree(REPO_ROOT / "src/sciplot_core", old_source / "sciplot_core",
+                    ignore=shutil.ignore_patterns("__pycache__"))
+    env = {**os.environ, "SCIPLOT_PYTHON": sys.executable, "MPLCONFIGDIR": str(tmp_path / "mpl")}
+
+    def cli(*args, previous=False):
+        run = subprocess.run(
+            [str(REPO_ROOT / "skill/scripts/sciplot"), *map(str, args), "--json"],
+            env={**env, **({"SCIPLOT_SOURCE_ROOT": str(old_source)} if previous else {})},
+            cwd=tmp_path, capture_output=True, text=True, timeout=120, check=False,
+        )
+        assert run.returncode == 0, run.stdout + run.stderr
+        return json.loads(run.stdout)
+
+    request = original / "plot.json"
+    request.write_text(json.dumps({"version": 1, "action": "create", "sources": [str(source)],
+                                   "intent": {"x": {"quantity": "temperature"}, "y": {"quantity": "heat_flow"}},
+                                   "out": str(original / "delivery"), "formats": ["pdf"]}))
+    created = cli("task", "start", "--request", request, "--task-dir", original / "task", previous=True)
+    assert created["status"] == "complete" and created["scientific_presentation"]["rule_id"] == "ordinary_xy"
+    saved = created["result"]
+    archive = original / "thermal.sciplot"
+    packed = cli("project", "bundle-export", created["project"], "--out", archive, "--single-file", previous=True)
+    target = tmp_path / "thermal.sciplot"
+    archive.rename(target)
+    shutil.rmtree(original)
+    request = tmp_path / "edit.json"
+    before = saved
+
+    for revision, title in enumerate(("Acquisition temperature (C)", "Cooling temperature (C)"), 1):
+        request.write_text(json.dumps({"mode": "apply", "plot_id": saved["plot_id"], "base_revision": revision - 1,
+                                       "idempotency_key": f"edit-{revision}", "property": "axis.label",
+                                       "target_id": "axis:x", "value": title}))
+        applied = cli("plot", "intent", target, "--request", request, "--direct", previous=revision == 1)
+        assert applied["status"] == "saved" and applied["revision"] == revision
+        assert applied["project_id"] == packed["project_id"] and applied["plot_id"] == saved["plot_id"]
+        assert applied["scientific_hash"] == saved["scientific_hash"]
+        assert applied["presentation_hash"] != before["presentation_hash"]
+        with project_file_figure(target, saved["plot_id"]) as (session, owner, document):
+            attached = owner.attachment.root
+            previous_head = owner.load_revision(attached, revision - 1)
+            assert previous_head["document"]["presentation_hash"] == before["presentation_hash"]
+            assert document["revision"] == revision
+            pins = owner.read(attached / "revisions" / f"{revision:08d}.json")["binding"]["fingerprint"]["files"]
+            assert any(Path(name).is_relative_to(old_source) for name in pins) == (revision == 1)
+            [(source_id, versions)] = session.store.snapshot()["sources"].items()
+            [version] = versions
+            assert session.store.resolve_source(source_id, version).read_bytes() == raw
+        before = applied
+        if revision == 1:
+            shutil.rmtree(old_install)
+    assert not source.exists() and not old_install.exists()
+    current = cli("plot", "open", target, "--direct")
+    assert current["revision"] == 2 and current["edit_targets"]["axis:x"]["label"] == title
+    assert current["scientific_hash"] == saved["scientific_hash"] and current["plot_id"] == saved["plot_id"]
