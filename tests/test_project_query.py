@@ -309,15 +309,35 @@ def test_source_indicator_detects_changed_prepared_input_bytes(project):
     assert result["scientific_audit_evaluated"] is False
 
 
-def test_worker_race_rejects_a_target_from_different_saved_bytes(project, monkeypatch):
-    def inspect(path):
+def test_worker_race_rejects_a_target_from_different_saved_bytes(project, monkeypatch, capsys):
+    import anyio
+
+    from sciplot_core.cli import main
+    from sciplot_core.mcp_server.server import Adapter
+
+    adapter = Adapter("daily")
+
+    def inspect_document(path):
         digest = file_sha256(path)
-        path.write_text("changed concurrently")
+        with path.open("a") as document:
+            document.write("\nSaved by concurrent editor")
         return {"document": {"path": str(path), "sha256": digest}, "widgets": {}}
 
-    monkeypatch.setattr(query, "_inspect_document", inspect)
-    with pytest.raises(ValueError, match="changed during inspection"):
-        query.inspect_project(project, figure_id="first")
+    monkeypatch.setattr(query, "_inspect_document", inspect_document)
+    for figure_id, code, next_step in (
+        ("unchanged", "figure_selection_mismatch", "without a figure ID to list saved figures"),
+        ("first", "stale_revision", "Inspect the project again and use its current document hashes"),
+    ):
+        result = anyio.run(adapter.call, "sciplot_project_inspect",
+                           {"project": str(project), "figure_id": figure_id})
+        assert result.is_error
+        mcp = result.structured_content
+        assert main(["project", "inspect", str(project), "--figure", figure_id, "--json"]) == 1
+        cli = json.loads(capsys.readouterr().out)
+        assert mcp["error"]["code"] == cli["reason_code"] == code
+        assert mcp["error"]["message"] == cli["message"]
+        assert next_step in cli["message"]
+        assert mcp["repair"] == cli["repair"] == {"action": "inspect_project"}
 
 
 @pytest.mark.parametrize(
