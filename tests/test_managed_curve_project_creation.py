@@ -228,6 +228,7 @@ def test_source_only_uvvis_single_and_group_keep_managed_authority_through_retry
         assert (xy["x"], xy["y"]) == ([460.0, 400.0, 500.0], [5.0, 2.0, 1.0])
         assert [scale["unit"] for scale in ir["scales"]] == ["nm", "a.u."]
         wire = load_task(single_root if handle == single_handle else child)["managed_request"]
+        assert wire["storage"] == "project_store_v2" and "out" not in wire
         slot, = wire["data_binding"]["slots"].values()
         assert (slot["sample"], slot["x_unit"], slot["y_unit"]) == ("A", "nm", "a.u.")
         before = cold_plot("describe", handle["plot"], "--scope", "summary")

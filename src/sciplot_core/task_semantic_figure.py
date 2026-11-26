@@ -329,9 +329,9 @@ def _compose(state: dict[str, Any], records: list[dict[str, Any]], sources: list
     request = {"idempotency_key": key, "template_definition": {"kind": "sciplot_figure_template", "schema_version": 2,
                    "template_id": template, "figure_spec": figure}, "data_binding": binding,
                "rule_id": state["semantic_plan"]["resolved_rule_id"]}
-    if state.get("creation_admission", {}).get("route") == "managed_plot":
-        # Only a freshly lowered ordinary source task switches authority.
-        # It publishes separately to the original task's requested delivery.
+    if request["rule_id"] == "ordinary_xy" or state.get("creation_admission", {}).get("route") == "managed_plot":
+        # Both ordinary XY entry shapes use the Store; the task delivers its
+        # requested files separately. Resume continues the saved wire unchanged.
         request["storage"] = "project_store_v2"
         return request
     from sciplot_core.output_contract import resolve_user_output_layout

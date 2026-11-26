@@ -186,6 +186,7 @@ def test_no_experiment_numeric_xy_preserves_signed_ordered_missing_measurements_
     assert figure["guides"][0]["location"] == "inside-best"
     assert figure["rendering_contract"]["contract_id"] == CURRENT_HOUSE_CONTRACT_ID
     assert wire["rule_id"] == "ordinary_xy"
+    assert wire["storage"] == "project_store_v2" and "out" not in wire
     assert wire["data_binding"]["provenance"]["semantic_task"]["intent"] == intent
     assert {node["kind"] for node in wire["data_binding"]["transforms"]} <= {"select", "row_slice", "rename"}
     document = create_managed_document(wire["template_definition"], wire["data_binding"], plot_id="ordinary-control")
