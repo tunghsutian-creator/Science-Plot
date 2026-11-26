@@ -145,6 +145,15 @@ def test_only_multi_figure_projects_add_titles_or_necessary_stable_identity(grou
     figures[1]["title"] = "Observed curve"
     selection.start_group_paper(root, out=tmp_path / "out2", paper_dir=tmp_path / "paper2", item_ids=["A"])
     assert [item["label"] for item in saved[-1][0]["items"]] == ["P0_3_0_7_log_internal-A", "P0_3_0_7_log_internal-B"]
+    refs = [["B", "internal-B"], ["A", "internal-A"], ["B", "internal-A"]]
+    selection.start_group_paper(root, out=tmp_path / "out3", paper_dir=tmp_path / "paper3", figure_refs=refs)
+    assert [(Path(item["project"]).name, item["figure_id"]) for item in saved[-1][0]["items"]] == [
+        ("project-B", "internal-B"), ("project-A", "internal-A"), ("project-B", "internal-A")]
+    assert saved[-1][1]["selection_origin"]["request"]["figure_refs"] == refs
+    with pytest.raises(TaskControlError, match="distinct item/figure pairs") as duplicate:
+        selection.start_group_paper(root, out=tmp_path / "out4", paper_dir=tmp_path / "paper4", figure_refs=[refs[0]] * 2)
+    assert duplicate.value.reason_code == "paper_group_figures_invalid"
+
 
 
 

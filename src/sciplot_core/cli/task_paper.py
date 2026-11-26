@@ -24,7 +24,10 @@ def register_paper_commands(task_actions: Any) -> None:
             action.add_argument("--paper-dir", type=Path, required=True)
             action.add_argument("--out", type=Path, help="New output directory; required with --group.")
             action.add_argument("--title", help="Optional title for --group selection.")
-            action.add_argument("--item-id", action="append", dest="item_ids", help="Select group items in this explicit order.")
+            group_selection = action.add_mutually_exclusive_group()
+            group_selection.add_argument("--item-id", action="append", dest="item_ids", help="Select all figures from each item in this order.")
+            group_selection.add_argument("--figure", action="append", nargs=2, dest="figure_refs", metavar=("ITEM_ID", "FIGURE_ID"),
+                                         help="Select one registered figure from a group item. Repeat in paper order.")
         else:
             action.add_argument("target", type=Path)
 
@@ -41,10 +44,10 @@ def dispatch_paper(args: Any) -> int:
             if args.out is None:
                 raise ValueError("--group requires a new --out directory.")
             result = start_group_paper(args.group, paper_dir=args.paper_dir, out=args.out,
-                                      title=args.title, item_ids=args.item_ids)
+                                      title=args.title, item_ids=args.item_ids, figure_refs=args.figure_refs)
         else:
-            if args.out is not None or args.title is not None or args.item_ids is not None:
-                raise ValueError("--out/--title/--item-id select a current --group; explicit requests retain their closed wire contract.")
+            if any(value is not None for value in (args.out, args.title, args.item_ids, args.figure_refs)):
+                raise ValueError("--out/--title/--item-id/--figure select a current --group; explicit requests retain their closed wire contract.")
             request = args.request.expanduser().resolve()
             result = start_paper(json.loads(request.read_text(encoding="utf-8")), paper_dir=args.paper_dir, base_dir=request.parent)
     elif args.paper_action == "inspect":

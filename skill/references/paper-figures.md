@@ -7,15 +7,18 @@ registered figure order. It selects the originals, not exported copies.
 skill/scripts/sciplot task paper start --group GROUP_DIRECTORY --out NEW_OUTPUT --paper-dir NEW_PAPER_TASK --json
 ```
 
-Use repeated `--item-id ID` to select items in that explicit order and
-`--title TITLE` to override the group title. A single figure uses its group
-label, normalized to a safe filename; a multi-figure item adds its figure
-title or a stable ID.
+Use repeated `--item-id ID` to package every figure from those items.
+To select only specific figures across the group, repeat
+`--figure ITEM_ID FIGURE_ID` in manuscript order instead. Read the group
+item and registered figure IDs with `sciplot task group inspect GROUP_DIRECTORY --json`.
+For a standalone Managed figure, use the item's `plot_objects[].plot_id`
+as its figure ID. A multi-figure item adds the registered figure title or ID
+to its filename. Use `--title TITLE` to override the group title.
 
 - A Managed selection binds each figure's canonical `plot`, `plot_id` and
   current `revision`, including each registered frequency figure in order. It
-  uses the [Managed delivery](managed-delivery.md) publisher. To deliver only
-  a non-primary member alongside other selected Managed plots, use that route
+  uses the [Managed delivery](managed-delivery.md) publisher. To deliver exact
+  Managed figures from outside the same group, use that route
   with an ordered explicit `plot deliver` request.
 - A Legacy selection retains the saved native version and existing paper
   publisher. Its creation, presentation and export child tasks must finish.

@@ -36,11 +36,18 @@ def _label(item: dict[str, Any], figure: dict[str, Any], figures: list[dict[str,
 
 @managed_task_call
 def start_group_paper(group: Path, *, paper_dir: Path, out: Path, title: str | None = None,
-                      item_ids: list[str] | None = None) -> dict[str, Any]:
+                      item_ids: list[str] | None = None,
+                      figure_refs: list[list[str]] | None = None) -> dict[str, Any]:
     """Capture once, then use frozen versions on every retry; never render a gallery."""
     group, root, out = group_path(group), _path(paper_dir), canonical_path(out)
     origin = {"kind": "current_group_selection", "group": str(group),
               "item_ids": item_ids, "title": title, "out": str(out)}
+    if figure_refs is not None:
+        if (item_ids is not None or not figure_refs
+                or any(len(ref) != 2 or not all(ref) for ref in figure_refs)
+                or len(figure_refs) != len({tuple(ref) for ref in figure_refs})):
+            raise TaskControlError("paper_group_figures_invalid", "Select distinct item/figure pairs in paper order, without a separate item selection.")
+        origin["figure_refs"] = figure_refs
     if root.exists():
         with external_project_session(root):
             state = _load(root)
@@ -52,7 +59,8 @@ def start_group_paper(group: Path, *, paper_dir: Path, out: Path, title: str | N
     snapshot = stable_file_snapshot(group / "group.json", label="paper current group selection")
     state = load_group(group)
     indexed = {item["id"]: item for item in state["items"]}
-    order = list(indexed) if item_ids is None else item_ids
+    order = list(dict.fromkeys(ref[0] for ref in figure_refs)) if figure_refs is not None else (item_ids or list(indexed))
+    requested = None if figure_refs is None else {tuple(ref) for ref in figure_refs}
     if any(identifier not in indexed for identifier in order):
         raise TaskControlError("paper_group_items_invalid", "Select only current group item IDs.")
     registered: list[dict[str, Any]] = []
@@ -83,9 +91,17 @@ def start_group_paper(group: Path, *, paper_dir: Path, out: Path, title: str | N
             figures = observation.figures
             observation.require_current()
         for figure in figures:
+            if requested is not None and (identifier, figure["figure_id"]) not in requested:
+                continue
             registered.append({"item_id": identifier, "project": str(project), "figure": figure,
                                "label": _label(item, figure, figures),
                                "authority": "ManagedPlot" if frequency or handles else "LegacyPlot"})
+    if figure_refs is not None:
+        by_ref = {(item["item_id"], item["figure"]["figure_id"]): item for item in registered}
+        for item_id, figure_id in figure_refs:
+            if (item_id, figure_id) not in by_ref:
+                raise TaskControlError("paper_group_figures_invalid", f"Figure {figure_id!r} is not registered for group item {item_id!r}.")
+        registered = [by_ref[(item_id, figure_id)] for item_id, figure_id in figure_refs]
     authorities = {item["authority"] for item in registered}
     if len(authorities) > 1:
         error = TaskControlError("paper_group_mixed_authority", "Select separate Managed and legacy paper packages; nothing was packaged.")

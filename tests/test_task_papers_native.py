@@ -419,6 +419,27 @@ def test_public_paper_group_and_explicit_secondary_use_current_saved_figures(tmp
         assert explicit["status"] == "complete"
         _check_native_pair(explicit_out, selection, revised)
 
+        pair_dir, pair_out = tmp_path / "pair", tmp_path / "pair-out"
+        pair_start = ["task", "paper", "start", "--group", str(group_dir),
+                      "--out", str(pair_out), "--paper-dir", str(pair_dir)]
+        with local_managed_actions(_never_rebuild, service.describe, service.deliver):
+            wrong = cli([*pair_start, "--figure", "UV", secondary["figure_id"]], expected=1)
+            assert wrong["reason_code"] == "paper_group_figures_invalid"
+            assert not pair_dir.exists() and not pair_out.exists()
+            exact_choice = [*pair_start, "--figure", "frequency", secondary["figure_id"],
+                            "--figure", "UV", uv_handle["plot_id"]]
+            pair = cli(exact_choice)
+        assert pair["ready_to_use"] and not primary_pdf.exists()
+        paired_items = json.loads((pair_out / "index.json").read_bytes())["items"]
+        explicit_items = json.loads((explicit_out / "index.json").read_bytes())["items"]
+        assert [item["local_managed_continuation"] for item in paired_items] == selection[::-1]
+        assert [item["order"] for item in paired_items] == [1, 2]
+        for packaged, original in zip(paired_items, reversed(explicit_items), strict=True):
+            for format in ("pdf", "tiff_300"):
+                assert (pair_out / packaged["files"][format]).read_bytes() == (explicit_out / original["files"][format]).read_bytes()
+        # Reopening the existing ordered pair does not make another delivery.
+        assert cli(exact_choice)["delivery_request"] == pair["delivery_request"]
+
         paper_dir, paper_out = tmp_path / "paper", tmp_path / "paper-out"
         start = ["task", "paper", "start", "--group", str(group_dir), "--item-id", "frequency", "--item-id", "UV",
                  "--out", str(paper_out), "--paper-dir", str(paper_dir)]
