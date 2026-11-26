@@ -290,3 +290,96 @@ def test_source_only_uvvis_without_a_verified_sample_uses_native_and_reports_why
     assert result["status"] == "complete"
     assert Path(result["current_project"]["figures"][0]["document"]).is_file()
     assert raw.read_bytes() == original
+
+
+@pytest.mark.comprehensive
+def test_confirmed_single_uvvis_mapping_preserves_original_arrays_and_retries_delivery(tmp_path, capsys, monkeypatch):
+    from copy import deepcopy
+
+    import pymupdf
+
+    from sciplot_core import task_semantic_raw_analysis
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.plot_backends.native_primitives import dataset_name
+    from sciplot_core.task_storage import load_task
+    from sciplot_core.veusz_worker.document_edit import loaded_native_document
+
+    source = tmp_path / "Synthesis UV-vis.csv"
+    raw = b"Wavelength,Absorbance\nnm,a.u.\nSample A,Sample A\n480,2\n460,3\n460,4\n500,1\n,\n"
+    source.write_bytes(raw)
+    region = {"sheet": None, "header_rows": [0], "unit_row": 1, "sample_row": 2,
+              "data_start_row": 3, "data_end_row": 7}
+    request = {"version": 1, "action": "create", "source": str(source), "rule_id": "uvvis_spectrum",
+               "mapping": {"source_sha256": file_sha256(source), "table_selection": region,
+                           "column_mapping": {"x_column": 0, "y_column": 1}}}
+
+    def cli(args, *, expected=0):
+        result = main([*args, "--full", "--json"])
+        payload = json.loads(capsys.readouterr().out)
+        assert result == expected, payload
+        return payload
+
+    def start(wire, task, out, *, expected=0):
+        path = tmp_path / (task + "-request.json")
+        path.write_text(json.dumps({**wire, "out": str(tmp_path / out)}))
+        return cli(["task", "start", "--request", str(path), "--task-dir", str(tmp_path / task)], expected=expected)
+
+    def no_creation(*_args, **_kwargs):
+        pytest.fail("Publication recovery cannot create a second plot.")
+
+    # Exercise the retained exact native path with the same sealed mapping.
+    with monkeypatch.context() as legacy:
+        legacy.setattr(task_semantic_raw_analysis, "_admit_mapped_uvvis", lambda *_: False)
+        before = start(request, "legacy", "legacy-out")
+    assert before["status"] == "complete" and before["creation_admission"]["route"] == "native_compatibility"
+    assert before["result"]["studio_run"]["ready_to_use"]
+    old_spec = json.loads(Path(before["result"]["document"]).with_name("spec.json").read_bytes())
+    original, = old_spec["series"]
+    assert original["label"] == "Sample A"
+
+    service = make_service()
+    try:
+        def lost(request):
+            assert service.deliver(request)["status"] == "complete"
+            raise RuntimeError("Lost publication reply")
+
+        with local_managed_actions(service.create, service.describe, lost):
+            interrupted = start(request, "managed", "managed-out", expected=1)
+        assert interrupted["status"] == "blocked" and interrupted["phase"] == "delivering"
+        assert interrupted["creation_admission"]["route"] == "managed_plot"
+        assert (tmp_path / "managed-out" / "index.json").is_file()
+        plot = Path(interrupted["project"])
+        frozen = load_task(tmp_path / "managed")
+        assert frozen["initial_request"]["mapping"]["table_selection"] == region
+        assert frozen["managed_request"]["data_binding"]["data_sources"][0]["sha256"] == file_sha256(source)
+        monkeypatch.setattr(ManagedVeuszCompiler, "compile_ir", no_creation)
+        monkeypatch.setattr(ManagedVeuszCompiler, "export_ir", no_creation)
+        with local_managed_actions(no_creation, service.describe, service.deliver):
+            resumed = cli(["task", "resume", str(tmp_path / "managed"), "--retry"])
+        assert resumed["ready_to_use"] and Path(resumed["project"]) == plot
+        assert load_task(tmp_path / "managed")["creation_attempts"] == frozen["creation_attempts"]
+        head = _load_head(plot)
+        assert head["document"]["revision"] == 0
+        ir = json.loads(Path(head["binding"]["ir_path"]).read_bytes())
+        layer, = ir["views"][0]["layers"]
+        assert layer["label"] == original["label"]
+        assert [scale["unit"] for scale in ir["scales"]] == ["nm", "a.u."]
+        expected = ([480.0, 460.0, 460.0, 500.0], [2.0, 3.0, 4.0, 1.0])
+        assert (original["x_values"], original["y_values"]) == expected
+        with loaded_native_document(Path(head["binding"]["document"])) as native:
+            assert tuple(native.data[dataset_name(layer["dataset_id"], axis)].data.tolist()
+                         for axis in ("x", "y")) == expected
+        pdf = resumed["next_step"]["files"][0]["pdf"]
+        with pymupdf.open(pdf) as document:
+            assert "Wavelength (nm)" in document[0].get_text()
+            assert "Absorbance (a.u.)" in document[0].get_text()
+
+        invalid = deepcopy(request)
+        invalid["mapping"]["table_selection"]["data_end_row"] = 8
+        refused = start(invalid, "with-missing", "with-missing-out")
+        assert refused["status"] == "needs_input"
+        assert refused["mapping_error"]["reason_code"] == "invalid_mapping_selection"
+        assert not (tmp_path / "with-missing-out").exists()
+        assert source.read_bytes() == raw
+    finally:
+        service.close()

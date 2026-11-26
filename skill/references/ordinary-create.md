@@ -16,7 +16,11 @@ not sent to the native route. Supported defaults include:
 - **UV–vis, DSC, TGA, DTG, XRD, SAXS:** verified single-sample CSV/TSV without
   conversion, normalization or excluded points. DTG requires an observed
   derivative-mass header and retains the literal `%/C` values. SAXS retains
-  the registered log intensity axis and wide frame.
+  the registered log intensity axis and wide frame. A structured UV–vis
+  `task start` with an explicit single-pair `mapping.column_mapping`
+  (`x_column`, `y_column`) uses the same Managed route when the confirmed
+  rows, named sample and declared units exactly match its original CSV/TSV
+  table and the mapped values are unchanged.
 - **FTIR:** one source CSV/TSV with an explicitly identified transmittance
   (`%`) or absorbance (`a.u.`) response. Fully bound same-mode sample pairs
   in one file can use the default stack. It preserves each original grid,

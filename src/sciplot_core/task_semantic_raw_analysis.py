@@ -20,6 +20,9 @@ def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any],
     source = Path(request["source"])
     rule_id = plan["rule_id"]
     fields = sorted(set(request) - {"version", "action", "source", "out", "rule_id", "template"})
+    if (fields == ["mapping"] and rule_id == "uvvis_spectrum" and source.suffix.casefold() in {".csv", ".tsv"}
+            and _admit_mapped_uvvis(state, plan, source, observed)):
+        return True
     if fields:
         return _native_only(state, "raw_request_fields_not_managed",
                             "The source-only Managed curve contract does not cover: " + ", ".join(fields))
@@ -55,13 +58,52 @@ def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any],
                         "The registered plan and Managed binding do not prove identical original rows, samples, quantities and units without conversion or exclusion.")
 
 
+def _admit_mapped_uvvis(state: dict[str, Any], plan: dict[str, Any], source: Path,
+                         observed: ResolvedScientificSource | None) -> bool:
+    """Admit one literal, complete, user-confirmed UV-vis pair, not derived data."""
+    from sciplot_core.mapping_contract.source_identity import source_view_id
+
+    mapping = state["request"]["mapping"]
+    binding = plan.get("data_mapping")
+    pair = mapping.get("column_mapping", {})
+    if (binding is None or plan["template"] != "curve" or "source_options" in plan
+            or set(mapping) != {"source_sha256", "table_selection", "column_mapping"}
+            or set(pair) != {"x_column", "y_column"}):
+        return False
+    selection = mapping["table_selection"]
+    if (selection.get("sheet") is not None or set(selection) != {
+        "sheet", "header_rows", "unit_row", "sample_row", "data_start_row", "data_end_row",
+    }):
+        return False
+    group = source_view_id(str(source), selection, [pair["x_column"], pair["y_column"]])
+    if binding.get("source_group_ids") != [group] or binding["expected_sample_labels"] != [group]:
+        return False
+    if (observed is None or observed.transform is None or observed.figure_plan is None
+            or observed.rule_id != plan["rule_id"] or observed.source != Path(binding["effective_input"])
+            or observed.source_sha256 != binding["effective_input_sha256"]
+            or observed.figure_plan.plan_sha256 != plan["resolved_figure_plan"]["plan_sha256"]
+            or binding["original_input"] != str(source) or binding["original_input_sha256"] != state["source_sha256"]):
+        raise TaskControlError("source_changed", "The resolved observation does not match this confirmed original mapping.")
+    if observed.transform.contract.output.get("series_order") != [group]:
+        return False
+    try:
+        return _admit_verified_curve(state, plan, source, observed, mapping=mapping)
+    except TaskControlError as exc:
+        if exc.reason_code not in {"semantic_coordinate_mapping_required", "semantic_table_not_found", "semantic_table_region_ambiguous"}:
+            raise
+        if source_tree_sha256(source) != state["source_sha256"]:
+            raise TaskControlError("source_changed", "The original curve changed during Managed admission.") from exc
+        return False
+
+
 def _native_only(state: dict[str, Any], reason_code: str, message: str) -> bool:
     state["creation_admission"] = {"route": "native_compatibility", "reason_code": reason_code, "message": message}
     return False
 
 
 def _admit_verified_curve(state: dict[str, Any], plan: dict[str, Any], source: Path,
-                          observed: ResolvedScientificSource) -> bool:
+                          observed: ResolvedScientificSource, *,
+                          mapping: dict[str, Any] | None = None) -> bool:
     rule_id = observed.rule_id
     ftir = rule_id == "ftir_spectrum"
     gpc = rule_id == "gpc_sec_chromatogram"
@@ -75,7 +117,7 @@ def _admit_verified_curve(state: dict[str, Any], plan: dict[str, Any], source: P
     if not (len(columns) == len(series) == 1
             and output.get("series_order") == [series[0]["sample"]]
             and columns[0]["sample"] == series[0]["sample"]
-            and columns[0]["sources"] == [str(source)]
+            and columns[0]["sources"] == [str(observed.source)]
             and series[0]["excluded_point_count"] == 0
             and transform["normalizer"]["operation"] == "none"
             and transform["anchor"]["scope"] == "none"
@@ -99,6 +141,9 @@ def _admit_verified_curve(state: dict[str, Any], plan: dict[str, Any], source: P
             or output["y_unit"] != {"transmittance": "%", "absorbance": "a.u."}[ftir_mode]
             or columns[0]["response"]["response_mode_detection"] != "detected_from_explicit_response_header"):
         return False
+    indices = {role: (mapping["column_mapping"][role + "_column"] if mapping else
+                      columns[0][original_role]["column_index_zero_based"])
+               for role, original_role, _ in coordinates}
     for role, original_role, axis in coordinates:
         unit = output["y_unit"] if ftir and role == "y" else axis.canonical_unit
         compatibility = transform["axis_compatibility"][role]
@@ -117,7 +162,7 @@ def _admit_verified_curve(state: dict[str, Any], plan: dict[str, Any], source: P
         if (original["unit"] != unit or output.get(role + "_unit") != unit or not identity
                 or original["unit_detection"]["method"] not in methods):
             return False
-        intent[role] = {"quantity": ftir_mode if ftir and role == "y" else output[role + "_metric"], "column_id": f"column:{original['column_index_zero_based']}",
+        intent[role] = {"quantity": ftir_mode if ftir and role == "y" else output[role + "_metric"], "column_id": f"column:{indices[role]}",
                         "scale": axis.scale, "direction": "descending" if axis.reverse else "ascending"}
 
     if gpc:
@@ -132,19 +177,32 @@ def _admit_verified_curve(state: dict[str, Any], plan: dict[str, Any], source: P
 
         if _quantity(columns[0]["response"]["header"]) != "derivative_mass":
             return False  # A generic "Derivative" header does not prove the DTG unit context.
-    semantic = prepare_verified_curve_plan(source, intent, pairs=[
-        {role: columns[0][original_role]["column_index_zero_based"] for role, original_role, _ in coordinates}
-    ])
+    semantic = prepare_verified_curve_plan(source, intent, pairs=[indices])
     frozen = semantic["sources"][0]
     candidates = frozen["candidates"]
     bindings = semantic.get("resolved_bindings", [])
     if semantic["decisions"] or len(candidates) != 1 or len(candidates[0]["blocks"]) != 1 or len(bindings) != 1:
         return False
     block = candidates[0]["blocks"][0]
-    if (block.get("sample", source.stem if gpc else None) != series[0]["sample"]
+    sample = block.get("sample", source.stem if gpc else None)
+    if ((mapping is None and sample != series[0]["sample"])
             or block["point_count"] != series[0]["point_count"]
             or (gpc and block["table_selection"]["header_rows"] != [columns[0]["header_row_index"]])):
         return False
+    if mapping is not None:
+        from sciplot_core.data_mapping.original_tables import read_original_table
+
+        region = block["table_selection"]
+        if not sample or region != mapping["table_selection"] or frozen["sha256"] != mapping["source_sha256"]:
+            return False
+        raw = read_original_table(source, None, frozen["sha256"])
+        rows = raw.iloc[region["data_start_row"]:region["data_end_row"], [indices["x"], indices["y"]]]
+        try:
+            points = tuple((float(x), float(y)) for x, y in rows.itertuples(index=False, name=None))
+        except (TypeError, ValueError):
+            return False  # Leave other numeric encodings to their confirmed mapping owner.
+        if points != observed_transform.series[0].points:
+            return False
     if gpc:
         region = block["table_selection"]
         header = columns[0]["header_row_index"]
@@ -162,7 +220,7 @@ def _admit_verified_curve(state: dict[str, Any], plan: dict[str, Any], source: P
         unit = output[role + "_unit"]
         allowed = (expected, None) if rule_id in {"saxs_profile", "xrd_pattern", "gpc_sec_chromatogram"} else (expected,)
         if ((actual["column_index"], actual["header"], actual["observed_unit"], actual["unit"])
-                != (original["column_index_zero_based"], original["header"], unit, "1" if gpc and role == "y" else unit)
+                != (indices[role], original["header"], unit, "1" if gpc and role == "y" else unit)
                 or actual["observed_quantity"] not in allowed
                 or actual["unit_relation"]["kind"] != "identity"):
             return False
@@ -184,30 +242,36 @@ def _admit_verified_curve(state: dict[str, Any], plan: dict[str, Any], source: P
     axis_labels = {role: axis.display_label.replace("$^{-1}$", "⁻¹") for role, _, axis in coordinates}
     if ftir:
         axis_labels["y"] = "Transmittance (%)" if ftir_mode == "transmittance" else "Absorbance (a.u.)"
-    return _freeze_raw(state, plan, source, observed, intent, semantic, (size.width_mm, size.height_mm), axis_labels, presentation)
+    return _freeze_raw(state, plan, source, observed, intent, semantic, (size.width_mm, size.height_mm), axis_labels, presentation,
+                       mapped_sample=sample if mapping is not None else None)
 
 
 def _freeze_raw(state: dict[str, Any], plan: dict[str, Any], source: Path,
                 observed: ResolvedScientificSource, intent: dict[str, Any],
                 semantic: dict[str, Any], size: tuple[float, float], axis_labels: dict[str, str],
-                presentation: dict[str, Any]) -> bool:
+                presentation: dict[str, Any], *, mapped_sample: str | None = None) -> bool:
     request, rule_id = state["request"], plan["rule_id"]
     from sciplot_core.foundation.json_hashing import canonical_json_sha256
     from sciplot_core.materials_rules.analysis import compute_resolved_curve_metrics
     from sciplot_core.materials_rules.catalog import get_rule, semantic_payload_from_rule
 
     digest = semantic["sources"][0]["sha256"]
+    original_sha = state["source_sha256"] if mapped_sample is not None else observed.source_sha256
     if (
-        canonical_json_sha256({"kind": "file", "content_sha256": digest}) != observed.source_sha256
-        or source_tree_sha256(source) != observed.source_sha256
+        canonical_json_sha256({"kind": "file", "content_sha256": digest}) != original_sha
+        or source_tree_sha256(source) != original_sha
     ):
         raise TaskControlError("source_changed", "The original scientific curve changed before its analysis.")
     transform = observed.transform
     assert transform is not None
+    if mapped_sample is not None:
+        from dataclasses import replace
+
+        transform = replace(transform, series=(replace(transform.series[0], sample=mapped_sample),))
     analysis = compute_resolved_curve_metrics(
         transform, semantic=semantic_payload_from_rule(get_rule(rule_id), confidence=100.0),
     )
-    if source_tree_sha256(source) != observed.source_sha256:
+    if source_tree_sha256(source) != original_sha:
         raise TaskControlError("source_changed", "The original scientific curve changed during its analysis.")
     state.update(initial_request=deepcopy(request), analysis_metrics=analysis,
                  creation_admission={"route": "managed_plot", "reason_code": "verified_raw_curve"},
