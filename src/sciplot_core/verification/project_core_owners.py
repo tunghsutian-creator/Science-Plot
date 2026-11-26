@@ -31,6 +31,19 @@ from sciplot_core.verification.project_core_targets import (
 
 PROJECT_CORE_OWNERS = (
     ChangedOwner(
+        owner_id="managed_native_plot_editor",
+        exact_paths=frozenset({"src/sciplot_core/plot_editor.py"}),
+        owned_test_paths=frozenset({"tests/test_project_file_editor.py"}),
+        pytest_targets=(
+            "tests/test_managed_description_scopes.py::test_omitted_full_and_compact_open_describe_equivalence",
+            "tests/test_managed_description_scopes.py::test_compact_reads_keep_native_stale_and_pending_guards",
+            "tests/test_current_view.py::test_fixed_ticks_conflict_is_atomic_and_same_property_can_restore_auto",
+            "tests/test_project_file_editor.py",
+        ),
+        handoff_gates=("doctor",), final_milestone_gates=("smoke",),
+        release_gates=("full_pytest",),
+    ),
+    ChangedOwner(
         owner_id="scientific_source_artifact_identity",
         exact_paths=SCIENTIFIC_ARTIFACT_PATHS,
         owned_test_paths=frozenset({"tests/test_source_artifact_literals.py",

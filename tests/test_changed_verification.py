@@ -1602,6 +1602,20 @@ def test_quick_human_output_reports_selection_actual_summary_and_feedback_limit(
     assert exact == match_targets(public_focused, prose["public_feedback"]["targets"]) - shared
 
 
+    editor_path = "src/sciplot_core/plot_editor.py"
+    editor_test = "tests/test_project_file_editor.py"
+    editor = build_changed_verification_plan([editor_path, editor_test], repo_root=REPO_ROOT, quick=True)
+    owner, = editor["owners"]
+    assert owner["owner_id"] == "managed_native_plot_editor"
+    assert owner["changed_paths"] == sorted([editor_path, editor_test])
+    assert not editor["unowned_paths"] and editor["status"] == "planned"
+    owner_command = next(c["command"] for c in editor["checks"] if c["check_id"] == "pytest_changed_owners")
+    assert "-m" in owner_command and "focused" in owner_command
+    assert editor_test in owner_command
+    assert "tests/test_current_view.py::test_fixed_ticks_conflict_is_atomic_and_same_property_can_restore_auto" in owner_command
+    assert editor["public_feedback"]["reason"] == "conservative_risk"
+    assert "quick_scope" not in editor and editor["required_later"]["release"] == ["full_pytest"]
+
 @pytest.mark.parametrize("elapsed", [None, float("nan"), float("inf"), -1, "unknown"])
 def test_changed_reuse_blocked_human_output_preserves_missing_timing(elapsed, monkeypatch, capsys):
     from sciplot_core import cli, verification

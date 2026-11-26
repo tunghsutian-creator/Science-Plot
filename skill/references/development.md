@@ -94,6 +94,11 @@ owner checks or while adding tests that are not yet in the reviewed collection.
 Mixed changes outside the reviewed paths, deletions and shared contracts keep
 the broader owner checks; unknown owners still stop before running checks.
 
+An isolated native editor change runs the focused axis-description, stale revision
+and fixed-tick contracts through the changed-owner path. The two offscreen
+editor lifecycle tests remain comprehensive; to run them directly against a
+configured native runtime, use `.venv/bin/python -m pytest -q tests/test_project_file_editor.py`.
+
 Quick feedback cannot record or reuse evidence, or attach output/audit options.
 It is not merge acceptance. `--json` retains the plan, timings, actual check
 results and deferred scope; the declared target count is not a test body count.
