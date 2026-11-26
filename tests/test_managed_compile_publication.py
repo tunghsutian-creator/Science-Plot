@@ -1,6 +1,7 @@
 """Publish only a complete audited native Save, without replacing unknown bytes."""
 
 from contextlib import nullcontext
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -25,7 +26,17 @@ def test_managed_compile_stages_native_until_audited_and_rendered(tmp_path, monk
     source = tmp_path / "source.csv"
     source.write_bytes(b"original user bytes\n")
     ir = managed_ir()
+    ir_path = tmp_path / "ir.json"
+    ir_path.write_text(json.dumps(ir), encoding="utf-8")
     staged = []
+    read = managed._read_ir
+    snapshots = []
+
+    def read_once(path):
+        assert path == ir_path and not snapshots
+        result = read(path)
+        snapshots.append(result[0])
+        return result
 
     def save(path):
         path = Path(path)
@@ -36,7 +47,8 @@ def test_managed_compile_stages_native_until_audited_and_rendered(tmp_path, monk
         if failure == "save":
             raise RuntimeError("interrupted Save")
 
-    def inspect(_ir, candidate):
+    def inspect(validated, candidate):
+        assert validated is snapshots[0]
         assert not native.exists()
         return {"status": "unchanged", "document_sha256": file_sha256(candidate),
                 "scientific_audit": {"status": "passed"},
@@ -51,28 +63,29 @@ def test_managed_compile_stages_native_until_audited_and_rendered(tmp_path, monk
             native.write_bytes(b"unknown external native")
         return {"path": str(path), "sha256": file_sha256(path)}
 
-    monkeypatch.setattr(managed, "_read_ir", lambda _: ir)
+    monkeypatch.setattr(managed, "_read_ir", read_once)
     monkeypatch.setattr(managed, "fresh_document", lambda _: nullcontext(object()))
     monkeypatch.setattr(managed, "import_module", lambda _: SimpleNamespace(
         CommandInterface=lambda _: SimpleNamespace(Save=save)))
     monkeypatch.setattr(managed, "native_state", lambda _: {})
-    monkeypatch.setattr(managed, "inspect_plot_ir", inspect)
+    monkeypatch.setattr(managed, "_inspect_validated_ir", inspect)
     monkeypatch.setattr(managed, "loaded_native_document", lambda _: nullcontext(object()))
     monkeypatch.setattr(managed, "_preview", render)
     if failure:
         with pytest.raises((RuntimeError, ValueError, FileExistsError)):
-            managed.compile_plot_ir(tmp_path / "ir.json", native, preview)
+            managed.compile_plot_ir(ir_path, native, preview)
         assert not preview.exists()
         if failure == "concurrent_native":
             assert native.read_bytes() == b"unknown external native"
         else:
             assert not native.exists()
     else:
-        result = managed.compile_plot_ir(tmp_path / "ir.json", native, preview)
+        result = managed.compile_plot_ir(ir_path, native, preview)
         assert result["document"] == str(native)
         assert result["document_sha256"] == file_sha256(native)
         assert result["preview"]["path"] == str(preview)
         assert result["preview"]["sha256"] == file_sha256(preview)
         assert native.read_bytes() == b"complete native Save"
+    assert snapshots == [ir]
     assert source.read_bytes() == b"original user bytes\n"
     assert staged and not staged[0].exists()

@@ -77,36 +77,52 @@ def test_valid_ir_but_unsupported_backend_capability_is_explicit(tmp_path, unsup
 
 def test_compile_receipt_cannot_combine_old_audit_with_new_native_bytes(tmp_path, monkeypatch):
     from contextlib import nullcontext
+    import json
     from types import SimpleNamespace
 
     from sciplot_core.foundation.file_hashing import file_sha256
     from sciplot_core.veusz_worker import managed
 
-    document = tmp_path / "document.vsz"
+    document, preview = tmp_path / "document.vsz", tmp_path / "preview.png"
     ir = managed_ir()
+    ir_path = tmp_path / "ir.json"
+    ir_path.write_text(json.dumps(ir), encoding="utf-8")
     staged = []
 
     def save(path):
         staged.append(Path(path))
         Path(path).write_bytes(b"audited native")
 
-    monkeypatch.setattr(managed, "_read_ir", lambda _: ir)
     monkeypatch.setattr(managed, "fresh_document", lambda _: nullcontext(object()))
     monkeypatch.setattr(managed, "import_module", lambda _: SimpleNamespace(
         CommandInterface=lambda _: SimpleNamespace(Save=save)))
     monkeypatch.setattr(managed, "native_state", lambda _: {})
-    monkeypatch.setattr(managed, "inspect_plot_ir", lambda *_: {"status": "unchanged",
-        "document_sha256": file_sha256(staged[0]), "scientific_audit": {"status": "passed"}})
-    monkeypatch.setattr(managed, "loaded_native_document", lambda _: nullcontext(object()))
+    with monkeypatch.context() as mocks:
+        mocks.setattr(managed, "_inspect_validated_ir", lambda *_: {"status": "unchanged",
+            "document_sha256": file_sha256(staged[-1]), "scientific_audit": {"status": "passed"}})
+        mocks.setattr(managed, "loaded_native_document", lambda _: nullcontext(object()))
 
-    def raced_preview(*_):
-        staged[0].write_bytes(b"external changed native")
-        return {"path": "raced-preview.png"}
+        def raced_preview(*_):
+            staged[-1].write_bytes(b"external changed native")
+            return {"path": "raced-preview.png"}
 
-    monkeypatch.setattr(managed, "_preview", raced_preview)
-    with pytest.raises(ValueError, match="between its compilation audit and preview"):
-        managed.compile_plot_ir(tmp_path / "ir.json", document, tmp_path / "preview.png")
-    assert not document.exists()
+        mocks.setattr(managed, "_preview", raced_preview)
+        with pytest.raises(ValueError, match="between its compilation audit and preview"):
+            managed.compile_plot_ir(ir_path, document, preview)
+        assert not document.exists() and not preview.exists()
+
+        def changed_ir(*_):
+            ir_path.write_bytes(b"invalid replacement IR")
+            return {"path": "raced-preview.png"}
+
+        mocks.setattr(managed, "_preview", changed_ir)
+        with pytest.raises(ValueError, match="IR changed during compilation"):
+            managed.compile_plot_ir(ir_path, document, preview)
+        assert not document.exists() and not preview.exists()
+
+    # Public inspect must re-read and validate new input before opening a document.
+    with pytest.raises(json.JSONDecodeError):
+        managed.inspect_plot_ir(ir_path, document)
 
 
 def test_render_receipt_binds_the_exact_audited_native_bytes(tmp_path, monkeypatch):

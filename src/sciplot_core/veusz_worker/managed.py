@@ -1,6 +1,7 @@
 """Compile/audit complete PlotIR using fresh native documents, never legacy state."""
 
 from contextlib import contextmanager
+from hashlib import sha256
 from importlib import import_module
 import json
 import os
@@ -14,13 +15,13 @@ from sciplot_core.plot_backends.managed_plan import apply_plan, validate_capabil
 from sciplot_core.veusz_worker.document_edit import loaded_native_document, _preview
 
 
-def _read_ir(path: Path) -> dict[str, Any]:
+def _read_ir(path: Path) -> tuple[dict[str, Any], str]:
     from sciplot_core.plot_ir import validate_ir
 
-    ir = json.loads(path.read_text(encoding="utf-8"))
-    validated = validate_ir(ir)
+    payload = path.read_bytes()
+    validated = validate_ir(json.loads(payload.decode("utf-8")))
     validate_capabilities(validated)
-    return validated
+    return validated, sha256(payload).hexdigest()
 
 
 @contextmanager
@@ -53,7 +54,7 @@ def fresh_document(ir: dict[str, Any]) -> Iterator[Any]:
 def compile_plot_ir(ir_path: Path, document: Path, preview: Path) -> dict[str, Any]:
     if document.resolve() == preview.resolve():
         raise ValueError("A compile preview cannot overwrite its native document.")
-    ir = _read_ir(ir_path)
+    ir, ir_sha256 = _read_ir(ir_path)
     if document.exists():
         raise ValueError("Managed compilation requires a new artifact path; existing native bytes are never replaced.")
     document.parent.mkdir(parents=True, exist_ok=True)
@@ -67,7 +68,8 @@ def compile_plot_ir(ir_path: Path, document: Path, preview: Path) -> dict[str, A
         with fresh_document(ir) as expected:
             import_module("veusz.document").CommandInterface(expected).Save(str(candidate))
             expected_hash = content_hash(native_state(expected))
-        result = inspect_plot_ir(ir_path, candidate)
+        # Rebuild the reference and reopen the Save without revalidating its input snapshot.
+        result = _inspect_validated_ir(ir, candidate)
         if result["status"] != "unchanged" or result["scientific_audit"]["status"] != "passed":
             raise ValueError(f"Saved managed artifact failed native fidelity: {result}")
         if result.get("publication_qa", {}).get("status", "passed") != "passed":
@@ -89,6 +91,8 @@ def compile_plot_ir(ir_path: Path, document: Path, preview: Path) -> dict[str, A
             raise ValueError("Managed native document changed between its compilation audit and preview.")
         with candidate.open("rb") as saved:
             os.fsync(saved.fileno())
+        if file_sha256(ir_path) != ir_sha256:
+            raise ValueError("Managed IR changed during compilation.")
         # link is an atomic, no-clobber publication of these exact audited
         # bytes. replace would silently overwrite a concurrently created VSZ.
         os.link(candidate, document)
@@ -105,7 +109,11 @@ def compile_plot_ir(ir_path: Path, document: Path, preview: Path) -> dict[str, A
 
 
 def inspect_plot_ir(ir_path: Path, document: Path) -> dict[str, Any]:
-    ir = _read_ir(ir_path)
+    ir, _ = _read_ir(ir_path)
+    return _inspect_validated_ir(ir, document)
+
+
+def _inspect_validated_ir(ir: dict[str, Any], document: Path) -> dict[str, Any]:
     before = file_sha256(document)
     qa: dict[str, Any] | None = None
     with fresh_document(ir) as expected, loaded_native_document(document) as actual:
