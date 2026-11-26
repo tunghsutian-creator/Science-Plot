@@ -239,6 +239,21 @@ def find_saved_work(source: Path, *, search_roots: list[Path] | None = None,
                                          "message": "Inspect this recorded task; its project path is historical and was not repaired or recreated."}})
     values.sort(key=lambda item: item["target"])
     complete = not truncated and issues_count == 0 and source_error is None
+    if not values:
+        if source_error is not None:
+            message = "Restore access to the original source or select its current path, then search again."
+        elif not complete:
+            message = "Search the specific project folder or resolve the listed search issues, then search again."
+        else:
+            message = "No saved plot matched this source. Check the source and search the folder where the project was saved."
+        next_step = {"action": "find_saved_work_again", "message": message,
+                     "arguments": {"source": str(source), "search_roots": [str(root) for root in roots]}}
+    elif len(values) > 1 or not complete:
+        next_step = {"action": "select_saved_target",
+                     "message": "Choose the exact saved target from these results."}
+    else:
+        next_step = {"action": "continue_saved_work",
+                     "message": "Continue with the matched target; SciPlot checks its current revision again."}
     return {"kind": "sciplot_saved_work_search", "version": 1, "status": "ok",
             "source": str(source), "source_sha256": source_sha, "source_error": source_error,
             "search_roots": [str(root) for root in roots],
@@ -248,8 +263,7 @@ def find_saved_work(source: Path, *, search_roots: list[Path] | None = None,
             "matches": values[:limit], "has_more_matches": len(values) > limit,
             "selection_required": len(values) > 1 or not complete,
             "ready_to_use": None, "readiness_evaluated": False,
-            "next_step": {"action": "select_saved_target" if len(values) > 1 or not complete else "continue_saved_work",
-                          "message": "Choose an exact target when results are ambiguous or incomplete. Source hashes filter candidates; continuation rechecks its current authority."}}
+            "next_step": next_step}
 
 
 def _require_same_search_source(found: dict[str, Any]) -> None:
@@ -281,7 +295,11 @@ def continue_saved_work(source: Path, *, search_roots: list[Path] | None = None,
     selected = canonical_path(target) if target is not None else Path(found["matches"][0]["target"])
     matches = [item for item in found["matches"] if item["target"] == str(selected)]
     if not matches:
-        return {**base, "status": "blocked", "reason_code": "selected_target_not_discovered", "search": found}
+        next_step = ({"action": "select_saved_target", "message": "Choose a target from the current matches, or search its new folder."}
+                     if found["match_count"] else found["next_step"])
+        return {**base, "status": "blocked", "reason_code": "selected_target_not_discovered",
+                "message": "The selected target is not in the current search results.",
+                "search": found, "next_step": next_step}
     match = matches[0]
     source_review_available = False
     if match["kind"] == "managed_plot":
@@ -290,7 +308,9 @@ def continue_saved_work(source: Path, *, search_roots: list[Path] | None = None,
             require_matching_figure(figure_id, plot_id=document["plot_id"], saved_figure_id=document["figure_id"])
         except EngineError as exc:
             return {**base, "status": "blocked", "reason_code": exc.reason_code,
-                    "message": str(exc), "selected": match}
+                    "message": str(exc), "selected": match,
+                    "next_step": {"action": "select_saved_target",
+                                  "message": "Use the selected plot's saved figure ID, or choose the project that contains the requested figure."}}
         source_review_available = (match["state"] == "document_conflict" and document["pending"] is None
                                    and match["source_relation"] == "recorded_path" and found["source_sha256"] is not None
                                    and document["changed_inputs"] == [found["source"]] and Path(found["source"]).is_file())
@@ -321,9 +341,11 @@ def continue_saved_work(source: Path, *, search_roots: list[Path] | None = None,
             try:
                 publication = inspect_managed_publication(selected, plot_id=current["plot_id"],
                                                           revision=current["revision"])["export_current"]
-            except (OSError, ValueError, RuntimeError, KeyError, TypeError) as exc:
-                if getattr(exc, "reason_code", None) == "managed_publication_selection_changed":
+            except EngineError as exc:
+                if exc.reason_code == "managed_publication_selection_changed":
                     raise
+                publication = {"current": False, "validation": "unknown"}
+            except (OSError, ValueError, RuntimeError, KeyError, TypeError):
                 publication = {"current": False, "validation": "unknown"}
             current["export_current"] = publication
             arguments = {"target": str(selected)}
@@ -373,7 +395,8 @@ def continue_saved_work(source: Path, *, search_roots: list[Path] | None = None,
                 "next_step": ({"action": "find_saved_work_again", "arguments": {
                     "source": found["source"], "search_roots": found["search_roots"]}}
                     if code == "source_changed_during_continuation" else
-                    {"action": "inspect_selected_conflict", "target": str(selected)})}
+                    {"action": "inspect_selected_conflict", "target": str(selected),
+                     "message": "Open the selected project again and check its current revision before retrying."})}
 
 
 __all__ = ["find_saved_work", "continue_saved_work"]

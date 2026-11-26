@@ -306,7 +306,9 @@ def test_managed_discovery_and_continuation_use_existing_seals_without_native_or
         assert opened["scientific_hash"] == continued["current"]["scientific_hash"]
         wrong = work.continue_saved_work(source, search_roots=[tmp_path], target=root, figure_id="other-figure")
         assert wrong["status"] == "blocked" and wrong["reason_code"] == "figure_selection_mismatch"
-        assert "current" not in wrong and "next_step" not in wrong
+        assert "current" not in wrong
+        assert wrong["next_step"]["action"] == "select_saved_target"
+        assert "saved figure ID" in wrong["next_step"]["message"]
         with pytest.raises(EngineError) as caught:
             service.open(root, figure_id="other-figure")
         assert caught.value.reason_code == "figure_selection_mismatch"
@@ -373,7 +375,10 @@ def test_same_name_different_bytes_never_match(managed, tmp_path):
     other = tmp_path / "elsewhere" / source.name
     other.parent.mkdir()
     other.write_text("different content")
-    assert work.find_saved_work(other, search_roots=[root])["match_count"] == 0
+    found = work.find_saved_work(other, search_roots=[root])
+    assert found["match_count"] == 0
+    assert found["next_step"]["action"] == "find_saved_work_again"
+    assert "where the project was saved" in found["next_step"]["message"]
 
 
 def test_exact_path_changed_bytes_points_to_the_same_figure_for_review(tmp_path):
@@ -991,3 +996,5 @@ def test_explicit_target_must_belong_to_discovered_candidates(managed, tmp_path)
     root, source, _ = managed
     result = work.continue_saved_work(source, search_roots=[root], target=tmp_path / "other")
     assert result["status"] == "blocked" and result["reason_code"] == "selected_target_not_discovered"
+    assert result["next_step"]["action"] == "select_saved_target"
+    assert "current matches" in result["next_step"]["message"]
