@@ -50,3 +50,18 @@ rechecks the current state. The text itself is literal. For an axis label,
 verify that any unit you write agrees with the returned scale unit; SciPlot
 will not invent or convert it. For other properties, use the summary's chosen
 target/property with `plot describe --scope edit`, then the existing `plot.patch`.
+
+## A single saved project file
+
+For a regular `.sciplot` file, use `plot open FILE.sciplot --scope summary`
+to get the saved plot ID and revision. Use that file as `plot` in the same
+`plot.intent` request above. This path supports `axis.label` only. A plan stays
+read-only. Apply uses the existing typed patch and native audit in a private
+workspace; it reports `saved` only after the same archive is replaced. It does
+not place an export or an editable workspace beside the file.
+
+A stale revision is rejected. If the file replacement failed, reopen the
+unchanged file before retrying. If acknowledgment was uncertain, retry the exact
+request and key. An already published command returns `already_saved` from the
+archive journal without rendering or replacing the file again. Its `revision`
+is the saved edit's revision; `current_revision` may be later.

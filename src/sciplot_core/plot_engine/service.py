@@ -161,6 +161,11 @@ class PlotService(ProjectApplication):
         return super().export(plot)
 
     def intent(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
+        plot = plot.expanduser()
+        if plot.suffix == ".sciplot" and (plot.is_symlink() or not plot.is_dir()):
+            from sciplot_core.project_lifecycle.project_file_intent import project_file_axis_intent
+
+            return project_file_axis_intent(self, plot, request)
         self.require_editable(plot)
         return super().intent(plot, request)
 

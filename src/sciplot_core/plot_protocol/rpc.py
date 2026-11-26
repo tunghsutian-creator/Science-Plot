@@ -143,7 +143,11 @@ def _invoke_validated(service: Service, method: str, params: dict[str, Any]) -> 
                 if "project" in params else service.create(params["request"]))
     if method == "plot.deliver":
         return service.deliver(params["request"])
-    plot = Path(params["plot"]).expanduser().resolve()
+    plot = Path(params["plot"]).expanduser()
+    if method == "plot.intent":
+        # The project-file owner must observe the final path entry, not its symlink target.
+        return service.intent(plot, params["request"])
+    plot = plot.resolve()
     if method == "plot.describe":
         if "description" in params:
             return service.describe(plot, description=params["description"])
@@ -156,8 +160,6 @@ def _invoke_validated(service: Service, method: str, params: dict[str, Any]) -> 
         return service.patch(plot, params["request"])
     if method == "plot.resume":
         return service.resume(plot, params["request"])
-    if method == "plot.intent":
-        return service.intent(plot, params["request"])
     if method == "plot.rollback":
         return service.rollback(plot, params["request"])
     return service.decide(plot, params["request"])
