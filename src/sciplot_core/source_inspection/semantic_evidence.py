@@ -11,7 +11,9 @@ from typing import Any
 
 import pandas as pd
 
-from sciplot_core.data_mapping.original_tables import read_original_table, source_table_snapshot, table_position
+from sciplot_core.data_mapping.original_tables import (
+    read_original_table, source_table_catalog, source_table_snapshot, table_position,
+)
 from sciplot_core.data_mapping.raw_tables import _original_text
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.semantic_sources.paired_curve_table_metadata import explicit_header_unit, header_quantity_text, looks_like_unit
@@ -247,27 +249,58 @@ def _candidate(frame: pd.DataFrame, sheet: str | None, position: int, *, source:
             **({'format': 'sample_column_blocks'} if sample_row is not None else {})}
 
 
+def _bound_ftir_spectra(frame: pd.DataFrame, blocks: list[dict[str, Any]], response: str) -> None:
+    """Use the observed frame to bound complete pairs without truncating data."""
+    for block in blocks:
+        coordinate_columns = [[column for column in block["columns"] if column["quantity"] == quantity]
+                              for quantity in ("wavenumber", response)]
+        if any(len(columns) != 1 for columns in coordinate_columns):
+            continue
+        x, y = (columns[0]["numeric"] for columns in coordinate_columns)
+        start, table_end = block["data_start_row"], block["data_end_row"]
+        end = x["data_end_row"]
+        if not (end is not None and start + 2 <= end < table_end
+                and x["first_row"] == y["first_row"] == start and y["data_end_row"] == end
+                and x["point_count"] == y["point_count"] == end - start):
+            continue
+        # NaN, nonfinite placeholders and notes are not empty original cells.
+        if any(_original_text(value) for row in frame.iloc[end:table_end, block["column_indices"]].itertuples(index=False, name=None)
+               for value in row):
+            continue
+        block.update(data_end_row=end, point_count=end - start)
+        block["table_selection"]["data_end_row"] = end
+
+
 @with_table_reads
 def inspect_semantic_tables(path: str | Path, *, rule_id: str | None = None,
-                            sheets: list[str | None] | None = None) -> dict[str, Any]:
+                            sheets: list[str | None] | None = None,
+                            ftir_response: str | None = None) -> dict[str, Any]:
     """Expose original columns and stage candidates for the existing task owner.
 
     ``rule_id`` records caller context only; it never changes observed metadata,
-    chooses an X axis, or confirms a percentage column as mass.
+    chooses an X axis, or confirms a percentage column as mass. Opted-in
+    FTIR block selection bounds each complete spectrum in this same frame.
     """
     source = Path(path).expanduser().resolve()
     require_source_file(source)
     digest = file_sha256(source)
-    snapshot = source_table_snapshot(source, rule_id=rule_id, sheets=sheets)
+    # FTIR block selection binds one CSV or TSV; its single frame also owns
+    # sample extents, so a separate preview snapshot is unnecessary.
+    exact_ftir_table = ftir_response is not None and sheets is None and source.suffix.casefold() in {".csv", ".tsv"}
+    snapshot = (source_table_catalog(source, expected_sha256=digest) if exact_ftir_table else
+                source_table_snapshot(source, rule_id=rule_id, sheets=sheets))
     if snapshot is None:
         return {'kind': 'sciplot_semantic_table_evidence', 'version': 1, 'source': str(source),
                 'sha256': digest, 'candidates': [], 'scientific_identity': {'confirmed': False, 'rule_candidates': []}}
     candidates = []
     for index, table in enumerate(snapshot['tables']):
         position = table_position(table, index)
-        if not table['row_count']:
+        if not table.get('row_count', True):
             continue
-        frame = read_original_table(source, table['sheet'], digest)
+        try:
+            frame = read_original_table(source, table['sheet'], digest)
+        except pd.errors.EmptyDataError:
+            continue
         from sciplot_core.source_inspection.rheology_evidence import instrument_candidate
 
         candidate = instrument_candidate(frame, sheet=table['sheet'], position=position, source=source,
@@ -275,6 +308,8 @@ def inspect_semantic_tables(path: str | Path, *, rule_id: str | None = None,
         if candidate is None:
             candidate = _candidate(frame, table['sheet'], position, source=source, rule_id=rule_id)
         if candidate is not None:
+            if exact_ftir_table and ftir_response is not None and candidate.get('format') == 'sample_column_blocks':
+                _bound_ftir_spectra(frame, candidate['blocks'], ftir_response)
             candidates.append(candidate)
     if file_sha256(source) != digest:
         raise ValueError('Source bytes changed while gathering semantic evidence.')

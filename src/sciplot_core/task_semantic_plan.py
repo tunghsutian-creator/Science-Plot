@@ -176,7 +176,8 @@ def _prepare_plan(paths: list[Path], intent: dict[str, Any], *,
         observed_sheets = scope[f"source:{index}"]["observed_sheets"] if scope is not None else None
         if observed_sheets == []:
             continue
-        evidence = inspect_semantic_tables(path, rule_id=intent.get("rule_id"), sheets=observed_sheets)
+        evidence = inspect_semantic_tables(path, rule_id=intent.get("rule_id"), sheets=observed_sheets,
+                                          ftir_response=intent["y"]["quantity"] if ftir_block_choice else None)
         if scope is not None and evidence["sha256"] != scope[f"source:{index}"]["sha256"]:
             raise ValueError("Source bytes changed after resolving table observation scope.")
         if not evidence["candidates"]:
@@ -184,10 +185,6 @@ def _prepare_plan(paths: list[Path], intent: dict[str, Any], *,
         source = {"source_id": f"source:{index}", "path": str(path), "name": path.name,
                   "sha256": evidence["sha256"], "candidates": evidence["candidates"],
                   "scientific_identity": evidence["scientific_identity"]}
-        if ftir_block_choice:
-            from sciplot_core.task_ftir_block_choice import observe_ftir_block_regions
-
-            observe_ftir_block_regions(source, intent["y"]["quantity"])
         sources.append(source)
     sources, selection = select_source_blocks(sources, intent.get("selection"))
     if scope is not None:

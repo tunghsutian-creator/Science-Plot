@@ -598,12 +598,23 @@ def test_opted_in_ftir_raw_overlay_asks_exact_blocks_and_resumes_same_task(tmp_p
     from hashlib import sha256
 
     from sciplot_core import task_control as control, task_semantic_creation as semantic
+    from sciplot_core.source_inspection import semantic_evidence
 
     source, intent = _single_table_spectral_control(tmp_path)
     original = source.read_bytes().replace(b"4000,55", b",")
     source.write_bytes(original)
     digest = sha256(original).hexdigest()
     calls = []
+    observations = []
+    real_read = semantic_evidence.read_original_table
+
+    def read_atomic(path, sheet, digest, **options):
+        observations.append((path, sheet, digest))
+        return real_read(path, sheet, digest, **options)
+
+    monkeypatch.setattr(semantic_evidence, "read_original_table", read_atomic)
+    monkeypatch.setattr(semantic_evidence, "source_table_snapshot",
+                        lambda *_a, **_k: pytest.fail("The FTIR block table does not need a separate preview snapshot."))
 
     def reached_native(state, wire):
         calls.append((state["task_dir"], wire))
@@ -616,6 +627,7 @@ def test_opted_in_ftir_raw_overlay_asks_exact_blocks_and_resumes_same_task(tmp_p
     task = tmp_path / "task"
     result = control.start_task(request, task_dir=task)
     assert result["status"] == "needs_input" and not calls
+    assert observations == [(source.resolve(), None, digest)]
     assert not (tmp_path / "deliver").exists() and not (tmp_path / ".sciplot_documents").exists()
     question = result["question"]
     plan = question["plan"]
