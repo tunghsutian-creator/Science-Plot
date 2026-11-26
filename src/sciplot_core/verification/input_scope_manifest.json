@@ -10297,7 +10297,9 @@
       "tests/test_task_selected_delivery.py::test_daily_mcp_selects_raw_blocks_then_hands_off_only_pdf_and_tiff",
       "tests/test_task_selected_delivery.py::test_formats_are_normalized_and_only_accepted_for_standalone_semantic_creation",
       "tests/test_task_selected_delivery.py::test_identical_foreign_output_winning_install_race_is_never_claimed",
-      "tests/test_task_selected_delivery.py::test_interruption_after_atomic_install_recovers_without_another_install"
+      "tests/test_task_selected_delivery.py::test_interruption_after_atomic_install_recovers_without_another_install",
+      "tests/test_project_file_intent.py::test_relocated_semantic_xy_can_save_twice_across_installations",
+      "tests/test_operator_versions.py::test_registered_pin_relocation_requires_one_exact_closure_and_no_source_role_overlap"
     ],
     "private": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
@@ -20392,7 +20394,8 @@
       "tests/test_task_saved_work.py::test_source_review_requires_only_the_selected_source_to_have_changed[unselected_source]",
       "tests/test_task_selected_delivery.py::test_formats_are_normalized_and_only_accepted_for_standalone_semantic_creation",
       "tests/test_task_selected_delivery.py::test_identical_foreign_output_winning_install_race_is_never_claimed",
-      "tests/test_task_selected_delivery.py::test_interruption_after_atomic_install_recovers_without_another_install"
+      "tests/test_task_selected_delivery.py::test_interruption_after_atomic_install_recovers_without_another_install",
+      "tests/test_operator_versions.py::test_registered_pin_relocation_requires_one_exact_closure_and_no_source_role_overlap"
     ],
     "comprehensive": [
       "tests/test_annotation_operations_native.py::test_initial_crop_can_be_reviewed_and_exported_without_regeneration",
@@ -20928,7 +20931,8 @@
       "tests/test_task_ordinary_raw_points_native.py::test_public_no_experiment_xy_creates_native_original_values_and_archives_context[selected]",
       "tests/test_task_ordinary_raw_points_native.py::test_public_no_experiment_xy_creates_native_original_values_and_archives_context[snapshot]",
       "tests/test_task_selected_delivery.py::test_cli_first_figure_can_deliver_only_pdf_and_reopen_same_project",
-      "tests/test_task_selected_delivery.py::test_daily_mcp_selects_raw_blocks_then_hands_off_only_pdf_and_tiff"
+      "tests/test_task_selected_delivery.py::test_daily_mcp_selects_raw_blocks_then_hands_off_only_pdf_and_tiff",
+      "tests/test_project_file_intent.py::test_relocated_semantic_xy_can_save_twice_across_installations"
     ]
   },
   "private_failure_responsibilities": [
