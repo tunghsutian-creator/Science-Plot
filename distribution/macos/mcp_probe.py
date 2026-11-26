@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 import json
 import tomllib
 from pathlib import Path
@@ -20,18 +21,13 @@ def read_connection(directory: Path, command: Path) -> tuple[str, list[str]]:
     return wire["command"], wire["args"]
 
 
-async def _verify_first_figure(client, directory: Path) -> dict:
+async def verify_first_figure(
+    call: Callable[[str, dict], Awaitable[dict]], directory: Path, *, claim: str,
+) -> dict:
     directory = directory.resolve()
     directory.mkdir()
     source = directory / FIRST_FIGURE_NAME
     source.write_text(FIRST_FIGURE_CSV, encoding="utf-8")
-
-    async def call(tool: str, arguments: dict) -> dict:
-        result = await client.call_tool(tool, arguments)
-        payload = result.structured_content
-        if result.is_error or not isinstance(payload, dict):
-            raise RuntimeError(f"{tool} did not return a successful synthetic first-figure result: {result.content}")
-        return payload
 
     started = monotonic()
     pending = await call("sciplot_task_start", {
@@ -66,7 +62,7 @@ async def _verify_first_figure(client, directory: Path) -> dict:
             or source.read_text(encoding="utf-8") != FIRST_FIGURE_CSV):
         raise RuntimeError("The training result did not reopen the same editable project with the original source intact")
     return {
-        "status": "passed", "claim": "synthetic_first_figure_over_stdio_not_real_ai_client_acceptance",
+        "status": "passed", "claim": claim,
         "project": completed["project"], "files": files[0], "plotting_data": next_step["plotting_data"],
         "summary_labels": {
             "axes": [opened["edit_targets"][axis]["label"] for axis in ("axis:x", "axis:y")],
@@ -112,7 +108,16 @@ def verify_mcp(command: Path, environment: dict[str, str], connection_directory:
                 "claim": "bundled_connection_and_tool_catalog_not_client_or_figure_acceptance",
             }
             if first_figure_directory is not None:
-                report["first_figure"] = await _verify_first_figure(client, first_figure_directory)
+                async def call(tool: str, arguments: dict) -> dict:
+                    response = await client.call_tool(tool, arguments)
+                    payload = response.structured_content
+                    if response.is_error or not isinstance(payload, dict):
+                        raise RuntimeError(f"{tool} failed the synthetic first-figure test: {response.content}")
+                    return payload
+
+                report["first_figure"] = await verify_first_figure(
+                    call, first_figure_directory, claim="synthetic_first_figure_over_stdio_not_real_ai_client_acceptance",
+                )
             return report
 
     return anyio.run(scenario)

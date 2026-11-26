@@ -44,6 +44,21 @@ runtime smoke，不重复跑 quick。验证不调用模型，也不等于真实 
 状态失败同样不能通过。欢迎页提供不含数据、路径、
 错误全文或密钥的 `feedback.json`；本地页面下载用内嵌内容，避免浏览器阻止 file 链接下载。
 
+开发机另可用已安装的 Codex CLI 验证实际客户端。将欢迎页生成的两个配置文件放入同一目录，
+把 `--output` 指向尚不存在的目录：
+
+```bash
+python -m distribution.macos.codex_probe \
+  --codex "$(command -v codex)" \
+  --connection-directory "$welcome_directory" \
+  --command "$app/Contents/MacOS/sciplot" \
+  --output "$artifact_root/codex-first-figure"
+```
+
+探针使用临时 Codex 配置目录，通过 Codex App Server 调用工具而不启动模型回合。
+它用合成 CSV 完成列选择、首图导出和重开同一项目。它不使用当前客户配置，也不代表
+正式客户端对话、独立用户或干净 Mac 验收。
+
 公测候选归档使用独立的新目录：
 
 ```bash
