@@ -86,6 +86,17 @@ def test_legacy_open_and_redraw_read_exact_saved_vsz_without_writing_project(tmp
     assert reopened["read_only"] and reopened["document"]["path"] == str(snapshot)
     assert _tree(portable) == saved_delivery
 
+    from sciplot_core.mcp_server.services import invoke_owner
+
+    portable_output = tmp_path / "portable-redraw"
+    repeated = invoke_owner("sciplot_project_legacy_redraw", {
+        "target": str(portable), "output_dir": str(portable_output), "formats": ["png_300"],
+    })
+    assert repeated["document_sha256"] == reopened["document"]["sha256"]
+    with Image.open(expected["exports"][0]["path"]) as original, Image.open(repeated["exports"][0]["path"]) as actual:
+        assert ImageChops.difference(original.convert("RGB"), actual.convert("RGB")).getbbox() is None
+    assert _tree(portable) == saved_delivery
+
     from sciplot_core.plot_protocol import socket_client
     from sciplot_core.plot_protocol.server import make_service
 
@@ -165,6 +176,19 @@ def test_exact_legacy_vsz_rejects_output_inside_original_project(tmp_path, capsy
     assert main(["project", "legacy-redraw", str(native), "--out", str(project / "export"), "--json"]) == 1
     assert "outside the original project" in capsys.readouterr().out
     assert _tree(project) == old_tree
+
+    from delivery_identity_helpers import write_legacy_delivery_launcher
+
+    portable = tmp_path / "historical"
+    launcher = write_legacy_delivery_launcher(portable)
+    copy = portable / "project" / "saved.vsz"
+    copy.parent.mkdir()
+    copy.write_bytes(native.read_bytes())
+    historical_tree = _tree(portable)
+    for target in (launcher, copy):
+        assert main(["project", "legacy-redraw", str(target), "--out", str(portable / "export"), "--json"]) == 1
+        assert "outside the original project" in capsys.readouterr().out
+        assert _tree(portable) == historical_tree
 
 
 def test_committed_legacy_head_is_read_only_even_with_a_real_revision_pointer(tmp_path, monkeypatch):

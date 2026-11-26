@@ -84,7 +84,7 @@ def dispatch_interfaces(
         if studio_target is not None and not args.qt_smoke:
             from sciplot_core.project_lifecycle.legacy_public_policy import require_public_editable
 
-            from sciplot_core.studio_core.legacy_saved_plot import is_standalone_export_target
+            from sciplot_core.project_lifecycle.legacy_saved_target import is_standalone_export_target
 
             standalone_export = (
                 delivery_target is None and studio_target.suffix.lower() == ".vsz"

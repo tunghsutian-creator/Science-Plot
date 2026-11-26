@@ -61,7 +61,7 @@ class FilesystemProjectTargets:
         from .repository_router import ComposedProjectRepository
         from .store_composition import existing_store
         from sciplot_core.project_store.io import STORE
-        from sciplot_core.studio_core.legacy_saved_plot import _saved_plot
+        from sciplot_core.project_lifecycle.legacy_saved_target import saved_native_target
 
         def stored(root: Path) -> tuple[Path, Path] | None:
             envelope = observe_plot_head(root, owner=self.repository)
@@ -102,9 +102,9 @@ class FilesystemProjectTargets:
 
         explicit_vsz = target.is_file() and target.suffix.lower() == ".vsz"
         if explicit_vsz:
-            from sciplot_core.studio_core.legacy_saved_plot import _native_file_root
+            from sciplot_core.project_lifecycle.legacy_saved_target import native_file_root
 
-            root = _native_file_root(target)
+            root = native_file_root(target)
         else:
             root = target.parent if target.name == "plot_request.json" else target
         with self.repository.query_scope(root):
@@ -126,7 +126,7 @@ class FilesystemProjectTargets:
             if not explicit_vsz and not ((root / "plot_request.json").is_file()
                     and (root / "studio" / "document.vsz").is_file()):
                 return None
-            saved = _saved_plot(target, figure_id)
+            saved = saved_native_target(target, figure_id)
             if store is not None and _prepared_native_figure(store, saved[1]):
                 return None
             return saved

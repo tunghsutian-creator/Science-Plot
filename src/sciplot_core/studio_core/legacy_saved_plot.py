@@ -6,55 +6,19 @@ from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.foundation.file_hashing import file_sha256
 
 
-def _native_owner_root(target: Path) -> Path | None:
-    from sciplot_core.delivery_identity import DELIVERY_IDENTITY
+def resolve_legacy_plot(target: Path, figure_id: str | None) -> tuple[Path, Path]:
+    """Use the same saved authority as public open, without attaching or importing it."""
+    from sciplot_core.project_lifecycle.errors import EngineError
+    from sciplot_core.project_lifecycle.repository_router import ComposedProjectRepository
+    from sciplot_core.project_lifecycle.target_adapter import FilesystemProjectTargets
 
-    return next((parent for parent in target.parents
-                 if (parent / "plot_request.json").is_file() or (parent / DELIVERY_IDENTITY).is_file()),
-                None)
-
-
-def _native_file_root(target: Path) -> Path:
-    return _native_owner_root(target) or target.parent
-
-
-def is_standalone_export_target(document: Path, output: Path) -> bool:
-    """Allow exact export only from an unowned VSZ into a separate artifact tree."""
-    from sciplot_core.policy import DELIVERY_LAUNCHER, DELIVERY_PROJECT_DIR
-
-    document = canonical_path(document)
-    if not document.is_file() or _native_owner_root(document) is not None:
-        return False
-    if any(parent.name == DELIVERY_PROJECT_DIR and (parent.parent / DELIVERY_LAUNCHER).is_file()
-           for parent in document.parents):
-        return False
-    destination = canonical_path(output)
-    source = document.parent
-    return not (destination.is_relative_to(source) or source.is_relative_to(destination))
-
-
-def _saved_plot(target: Path, figure_id: str | None) -> tuple[Path, Path]:
-    target = canonical_path(target)
-    if target.is_file() and target.suffix.lower() == ".vsz":
-        root = _native_file_root(target)
-        if figure_id is not None:
-            from sciplot_core.project_lifecycle.figure_observation import observe_legacy_project
-
-            if not (root / "plot_request.json").is_file():
-                raise ValueError("Select a project directory to use a figure ID.")
-            observation = observe_legacy_project(root)
-            selected = observation.select(figure_id)
-            observation.require_current(selected=selected)
-            if selected["document"] != str(target):
-                raise ValueError("The figure ID does not match this saved VSZ.")
-        return root, target
-    if not ((target.is_dir() and (target / "plot_request.json").is_file())
-            or (target.is_file() and target.name == "plot_request.json")):
-        raise ValueError("Select a saved project directory, plot_request.json or exact .vsz file.")
-    from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure
-
-    selected = resolve_project_figure(target, figure_id)
-    return Path(selected["project"]), Path(selected["document"])
+    repository = ComposedProjectRepository()
+    with repository.invocation_scope():
+        saved = FilesystemProjectTargets(repository).read_legacy_saved(canonical_path(target), figure_id)
+    if saved is None:
+        raise EngineError("legacy_plot_not_found", "Select a saved legacy project, delivery, or exact .vsz file.",
+                          action="select_legacy_plot")
+    return saved
 
 
 def open_legacy_document(root: Path, document: Path) -> dict[str, Any]:
@@ -86,9 +50,9 @@ def redraw_legacy_plot(target: Path, *, output: Path, formats: list[str],
     from sciplot_core.policy import normalize_export_formats
     from sciplot_core.veusz_worker.operations import export_document
 
-    root, document = _saved_plot(target, figure_id)
+    root, document = resolve_legacy_plot(target, figure_id)
     destination = canonical_path(output)
-    if destination.is_relative_to(root):
+    if destination.is_relative_to(root) or destination.is_relative_to(canonical_path(target)):
         raise ValueError("Legacy redraw output must be outside the original project directory.")
     require_data_destination(destination)
     selected_formats = list(normalize_export_formats(formats, default=("pdf",)))

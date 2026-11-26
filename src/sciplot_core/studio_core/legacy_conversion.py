@@ -14,7 +14,7 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.foundation.research_destination import require_data_destination
 from sciplot_core.plot_document import DocumentError
-from sciplot_core.studio_core.legacy_saved_plot import _saved_plot
+from sciplot_core.studio_core.legacy_saved_plot import resolve_legacy_plot
 
 
 def _inspect(document: Path) -> dict[str, Any]:
@@ -108,9 +108,9 @@ def convert_legacy_plot(target: Path, *, output: Path, figure_id: str | None = N
                         x_unit: str | None = None, y_unit: str | None = None) -> dict[str, Any]:
     from sciplot_core.plot_engine.service import PlotService
 
-    root, document = _saved_plot(target, figure_id)
+    root, document = resolve_legacy_plot(target, figure_id)
     destination = canonical_path(output)
-    if destination.is_relative_to(root):
+    if destination.is_relative_to(root) or destination.is_relative_to(canonical_path(target)):
         raise ValueError("The converted copy must be outside the original project directory.")
     require_data_destination(destination)
     checkpoint = canonical_path(destination / "legacy-conversion.json")
