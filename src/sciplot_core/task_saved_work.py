@@ -228,7 +228,7 @@ def find_saved_work(source: Path, *, search_roots: list[Path] | None = None,
                               "message": "This exported copy does not establish current project or source authority."}}
         except (OSError, ValueError, TypeError, KeyError) as exc:
             issue(delivery, exc)
-    values = sorted(matches.values(), key=lambda item: item["target"])
+    values = list(matches.values())
     for receipt in receipts:
         if receipt["project"] not in matches:
             values.append({"target": receipt["task_dir"], "kind": "task", "state": "historical_task",
@@ -341,11 +341,9 @@ def continue_saved_work(source: Path, *, search_roots: list[Path] | None = None,
             try:
                 publication = inspect_managed_publication(selected, plot_id=current["plot_id"],
                                                           revision=current["revision"])["export_current"]
-            except EngineError as exc:
-                if exc.reason_code == "managed_publication_selection_changed":
+            except (OSError, ValueError, RuntimeError, KeyError, TypeError) as exc:
+                if isinstance(exc, EngineError) and exc.reason_code == "managed_publication_selection_changed":
                     raise
-                publication = {"current": False, "validation": "unknown"}
-            except (OSError, ValueError, RuntimeError, KeyError, TypeError):
                 publication = {"current": False, "validation": "unknown"}
             current["export_current"] = publication
             arguments = {"target": str(selected)}
