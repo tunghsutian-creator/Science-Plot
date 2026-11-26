@@ -56,7 +56,12 @@ def saved_figure(tmp_path, monkeypatch):
     save_task(root, {"kind": "sciplot_task", "version": 1, "task_dir": str(root), "intent_revision": 1,
                     "phase": "delivering", "status": "running", "project": str(plot), "result": result,
                     "request": _request(source, out, ["pdf"]), "source_hashes": {str(source): file_sha256(source)}})
-    monkeypatch.setattr(figure_handoff, "_publication", lambda *a: (token, result["exports"]))
+
+    def publication(_root, _out, _request, _backend, *, cold_export=False):
+        assert not cold_export
+        return token, result["exports"]
+
+    monkeypatch.setattr(figure_handoff, "_publication", publication)
 
     def handoff(path, request, **options):
         assert path == plot
