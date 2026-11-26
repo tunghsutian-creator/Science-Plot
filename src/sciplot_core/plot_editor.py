@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from contextlib import ExitStack, closing
+from contextlib import ExitStack
 from hashlib import sha256
 from importlib import import_module
 from math import isfinite
@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+from sciplot_core.archive_plot_view import archive_axis_intent, archive_plot_view, editor_target_path, is_archive_target
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_protocol.client import call
 from sciplot_core.plot_protocol.paths import TransportError
@@ -26,7 +27,7 @@ class PlotEditor(QtWidgets.QMainWindow):
     def __init__(self, plot: Path, *, socket_path: Path | None, timeout: float, figure_id: str | None = None) -> None:
         super().__init__()
         self.plot = plot
-        self.archive = plot.suffix == ".sciplot" and (plot.is_symlink() or not plot.is_dir())
+        self.archive = is_archive_target(plot)
         self.figure_id = figure_id
         self.archive_project_id: str | None = None
         self.archive_request: tuple[RevisionToken, dict[str, Any]] | None = None
@@ -170,26 +171,16 @@ class PlotEditor(QtWidgets.QMainWindow):
                 self.figures.setCurrentIndex(self.figures.findData(self.figure_id))
             self.status.setText(f"无法打开所选图：{exc}")
 
-    def _check_archive_identity(self, project_id: str) -> None:
-        if self.archive_project_id is not None and project_id != self.archive_project_id:
-            raise ValueError("这个路径上的项目已被替换。请关闭窗口，再打开要编辑的项目。")
-
     def _load_archive(self, selection: str | None = None) -> None:
-        from sciplot_core.archive_plot_view import archive_plot_view
-
         target = self.figure_id if selection is None else selection
         with ExitStack() as staged:
-            try:
-                summary, native, seal = staged.enter_context(archive_plot_view(self.plot, target))
-            except EngineError as exc:
-                if target is not None or exc.reason_code != "project_file_figure_ambiguous":
-                    raise
-                project_id = exc.repair["project_id"]
-                self._check_archive_identity(project_id)
-                self.archive_project_id = project_id
-                self._show_figure_choices(exc.repair["figures"])
+            summary, native, seal = staged.enter_context(
+                archive_plot_view(self.plot, target, expected_project_id=self.archive_project_id))
+            if native is None:
+                self.archive_project_id = summary["project_id"]
+                self._show_figure_choices(summary["figures"])
                 return
-            self._check_archive_identity(summary["project_id"])
+            assert seal is not None
             self._view(native, seal, lifetime=staged)
         self.archive_project_id = summary["project_id"]
         self.figure_id = summary["plot_id"]
@@ -335,18 +326,11 @@ class PlotEditor(QtWidgets.QMainWindow):
         return self._confirm(f"核对{label}", f"现在：{display(plan['before'])}\n改为：{display(plan['after'])}\n"
                              f"坐标轴单位不变：{plan['target_context']['unit']}")
 
-    def _archive_intent(self, expected: RevisionToken, request: dict[str, Any]) -> dict[str, Any]:
-        from sciplot_core.plot_engine.service import public_plot_service
-        from sciplot_core.project_lifecycle.project_file_intent import project_file_axis_intent
-
-        with closing(public_plot_service()) as service:
-            return project_file_axis_intent(service, self.plot, request, expected_project_id=self.summary["project_id"],
-                                            expected_revision=expected)
-
     def _edit_archive(self, request: dict[str, Any]) -> None:
         expected = self.summary["revision_token"]
         try:
-            plan = self._archive_intent(expected, {**request, "mode": "plan"})
+            plan = archive_axis_intent(self.plot, {**request, "mode": "plan"},
+                                       expected_project_id=self.summary["project_id"], expected_revision=expected)
         except (OSError, ValueError, RuntimeError, KeyError) as exc:
             self._disable_editing()
             self.status.setText(f"未保存：{exc} 请读取最新版本。")
@@ -368,7 +352,8 @@ class PlotEditor(QtWidgets.QMainWindow):
 
     def _save_archive(self, expected: RevisionToken, request: dict[str, Any]) -> None:
         try:
-            receipt = self._archive_intent(expected, request)
+            receipt = archive_axis_intent(self.plot, request, expected_project_id=self.summary["project_id"],
+                                          expected_revision=expected)
         except EngineError as exc:
             if exc.reason_code == "project_file_save_unconfirmed" or self.archive_request is not None:
                 self.archive_request = expected, request
@@ -409,11 +394,7 @@ def run_editor(plot: Path, *, socket_path: Path | None, timeout: float, figure_i
     app: QtCore.QCoreApplication | None = QtCore.QCoreApplication.instance()
     if app is None:
         app = QtWidgets.QApplication([])
-    plot = plot.expanduser()
-    if plot.suffix != ".sciplot" or (not plot.is_symlink() and plot.is_dir()):
-        if figure_id is not None:
-            raise ValueError("--figure 只用于 .sciplot 项目文件。")
-        plot = plot.resolve()
+    plot = editor_target_path(plot, figure_id)
     window = PlotEditor(plot, socket_path=socket_path, timeout=timeout, figure_id=figure_id)
     window.show()
     return QtWidgets.QApplication.exec()
