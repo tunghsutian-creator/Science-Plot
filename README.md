@@ -146,8 +146,11 @@ or PDF with 300 dpi TIFF, select the saved revision with the separate
 
 On a Qt desktop, `sciplot plot editor PLOT` opens the exact Managed FigureSpec v2
 `plot` path from that summary. The native view is read-only. Choose an axis,
-check the before/after display text and save through the same plot transaction
-used by CLI and MCP. This changes only the title, not the scale, units or data.
+check the before/after values and save through the same plot transaction used by
+CLI and MCP. Directory-backed Managed figures support axis titles and major
+ticks; enter comma-separated numbers, or clear the field to restore automatic
+ticks on current-view figures. Standalone `.sciplot` files support titles. These
+edits leave the scale, units and data intact.
 If another client saved first, read the latest revision and choose the change
 again; the editor will not overwrite it. A missing current verified native
 artifact must be rebuilt through the existing project command before editing.

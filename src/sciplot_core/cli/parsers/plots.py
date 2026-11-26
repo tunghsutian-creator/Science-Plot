@@ -36,7 +36,7 @@ def register_plot_commands(subparsers: Any) -> None:
         action.add_argument("--socket", type=Path, help="Private local engine socket; defaults to this checkout's engine.")
         action.add_argument("--timeout", type=float, default=600.0)
         action.add_argument("--direct", action="store_true", help="Call the same local engine in this process.")
-    editor = actions.add_parser("editor", help="Open one saved Managed v2 figure in the local axis-title editor.")
+    editor = actions.add_parser("editor", help="Open one saved Managed v2 figure in the local axis editor.")
     editor.add_argument("plot", type=Path, help="Exact saved plot path or standalone .sciplot file.")
     editor.add_argument("--figure", help="Exact plot or figure ID within a .sciplot file with several figures.")
     editor.add_argument("--socket", type=Path, help="Use the same local engine as an existing client.")

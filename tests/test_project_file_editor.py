@@ -1,4 +1,4 @@
-"""A real native edit and the daily MCP operate on one relocated standalone file."""
+"""Native Qt edits and command clients share the same saved figure revisions."""
 
 from contextlib import closing
 import os
@@ -179,3 +179,119 @@ def test_project_file_editor_and_daily_mcp_share_one_archive(tmp_path, monkeypat
         [(source_id, versions)] = session.store.snapshot()["sources"].items()
         assert session.store.resolve_source(source_id, next(iter(versions))).read_bytes() == source
     assert not original.exists() and list(destination.iterdir()) == [moved]
+
+
+@pytest.mark.comprehensive
+def test_managed_editor_and_cli_share_axis_ticks_on_same_native_figure(tmp_path):
+    import json
+    import subprocess
+
+    from PyQt6 import QtCore, QtTest, QtWidgets
+    from socket_fixture_helpers import socket_directory
+    from test_current_view import current
+    from test_figure_document import request_for_figure
+
+    from sciplot_core.plot_editor import PlotEditor
+
+    project = tmp_path.resolve() / "project"
+    project.mkdir()
+    FileProjectStore(project).snapshot(import_legacy=True)
+    request = request_for_figure(project)
+    request["template_definition"]["figure_spec"] = current()[0]
+    source_bytes = (project / "figure.csv").read_bytes()
+    create_request = project.parent / "create.json"
+    create_request.write_text(json.dumps(request))
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    cli = Path(__file__).resolve().parents[1] / "skill/scripts/sciplot"
+    target = "axis:xb"
+
+    with socket_directory(prefix="sp-edit-ticks-") as directory:
+        socket = Path(directory) / "engine.sock"
+
+        def command(action, *parameters):
+            result = subprocess.run([cli, "plot", action, "--socket", socket, "--json", *parameters],
+                                    capture_output=True, text=True, timeout=75)
+            assert result.returncode == 0, result.stdout + result.stderr
+            return json.loads(result.stdout)
+
+        def describe():
+            return command("describe", plot, "--scope", "edit", "--target-id", target, "--property", "axis.ticks")
+
+        def click(widget):
+            QtTest.QTest.mouseClick(widget, QtCore.Qt.MouseButton.LeftButton)
+
+        def choose_ticks(window):
+            window.axes.setCurrentIndex(window.axes.findData(target))
+            window.edit_property.setCurrentIndex(window.edit_property.findData("axis.ticks"))
+            assert window.review.isEnabled()
+
+        def press_save(window, *, save=True):
+            prompts = []
+
+            def decide():
+                dialog = app.activeModalWidget()
+                if dialog is None:
+                    return
+                labels = dialog.findChildren(QtWidgets.QLabel)
+                if not prompts:
+                    assert dialog.windowTitle() == "核对主刻度"
+                    assert any("Hz" in label.text() for label in labels)
+                prompts.append(dialog.windowTitle())
+                buttons = dialog.findChild(QtWidgets.QDialogButtonBox)
+                click(buttons.button(buttons.StandardButton.Save if save else buttons.StandardButton.Cancel))
+
+            QtCore.QTimer.singleShot(0, decide)
+            click(window.review)
+            return prompts
+
+        window = None
+        try:
+            created = command("create", "--request", create_request, "--project", project)
+            assert created["ready_to_use"], created
+            plot = Path(created["plot"])
+            assert describe()["export_current"]["publication"]["ready_to_use"]
+            window = PlotEditor(plot, socket_path=socket, timeout=75)
+            window.show()
+            choose_ticks(window)
+            assert window.label.text() == "" and "自动" in window.label.placeholderText()
+            window.label.setText("nan")
+            click(window.review)
+            assert "有限数字" in window.status.text() and describe()["revision"] == 0
+            window.label.setText("2，6，9")
+            assert press_save(window, save=False) == ["核对主刻度"]
+            assert describe()["current_value"] == {"mode": "automatic"}
+            assert press_save(window)[0] == "核对主刻度"
+            manual = describe()
+            assert manual["revision"] == 1 and manual["current_value"] == [2, 6, 9]
+            assert manual["scientific_hash"] == created["scientific_hash"]
+            assert "Set('MajorTicks/manualTicks', [2.0, 6.0, 9.0])" in Path(manual["artifact"]).read_text()
+            choose_ticks(window)
+
+            # The AI command changes the exact same target via the public CLI.
+            patch = project.parent / "agent-change.json"
+            patch.write_text(json.dumps({"plot_id": manual["plot_id"], "base_revision": 1,
+                "idempotency_key": "foreign-tick-step", "intent_class": "presentation",
+                "changes": [{"op": "set", "target": [target], "property": "axis.ticks", "value": [1, 3, 7]}]}))
+            agent = command("patch", plot, "--request", patch)
+            assert agent["ready_to_use"] and agent["revision"] == 2
+            window.label.setText("4, 8")
+            assert press_save(window) == ["核对主刻度"]
+            assert "无法确认保存" in window.status.text() and not window.review.isEnabled()
+            assert describe()["current_value"] == [1, 3, 7]
+            click(window.refresh)
+            choose_ticks(window)
+            assert [float(number) for number in window.label.text().split(",")] == [1, 3, 7]
+            assert window.viewer.__class__.__module__ == "veusz.windows.plotwindow"
+            window.label.clear()
+            assert press_save(window)[0] == "核对主刻度"
+            final = describe()
+            assert final["revision"] == 3 and final["current_value"] == {"mode": "automatic"}
+            assert final["plot_id"] == created["plot_id"] and final["scientific_hash"] == created["scientific_hash"]
+            assert final["target_context"]["domain"] == manual["target_context"]["domain"]
+            assert (project / "figure.csv").read_bytes() == source_bytes
+        finally:
+            if window is not None:
+                window.close()
+                QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.Type.DeferredDelete)
+            if socket.exists():
+                os.kill(read_owner(socket)["pid"], signal.SIGTERM)
