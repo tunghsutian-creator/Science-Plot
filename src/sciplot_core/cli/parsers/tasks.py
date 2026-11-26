@@ -40,6 +40,8 @@ def register_task_commands(subparsers: Any) -> None:
     continuation.add_argument("--target", type=Path, help="Explicit exact discovered target when copies or versions are ambiguous.")
     continuation.add_argument("--figure", help="Exact registered figure identity.")
     continuation.add_argument("--json", action="store_true")
+    continuation.add_argument("--shareable-diagnostic", action="store_true",
+                              help="Print a copyable summary without file paths, source data, or local diagnostics.")
     start = actions.add_parser("start", help="Execute a complete structured request locally.")
     start.add_argument("--request", type=Path, required=True, metavar="JSON_FILE", help="Path to the complete task JSON file; use task create flags for semantic attachment plotting.")
     start.add_argument("--task-dir", type=Path)

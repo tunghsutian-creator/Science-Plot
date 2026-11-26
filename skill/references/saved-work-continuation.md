@@ -80,6 +80,15 @@ or recreates an absent project.
 not certify delivery readiness: `ready_to_use` remains null and
 `readiness_evaluated` remains false.
 
+## Copy a diagnostic summary
+
+Use `sciplot task continue SOURCE --search-root FOLDER --shareable-diagnostic`
+to print only the copyable diagnostic JSON instead of the detailed result.
+It reports the continuation status, a known reason code, and a next step
+without paths, figure or sample names, values, or local diagnostic contents.
+The command does not create a report file or send anything. Copy the JSON if
+you choose to share it; keep the ordinary result and terminal log local.
+
 ## Adapter integration
 
 `sciplot_core.task_saved_work.find_saved_work(source, search_roots=..., tasks_root=..., limit=...)`

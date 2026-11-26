@@ -127,8 +127,18 @@ def dispatch_task(args: Any) -> int:
     if action == "continue":
         from sciplot_core.task_saved_work import continue_saved_work
 
-        result = continue_saved_work(args.source, search_roots=args.search_root, tasks_root=args.tasks_root,
-                                     target=args.target, figure_id=args.figure)
+        try:
+            result = continue_saved_work(args.source, search_roots=args.search_root, tasks_root=args.tasks_root,
+                                         target=args.target, figure_id=args.figure)
+        except Exception as exc:
+            if not args.shareable_diagnostic:
+                raise
+            # The detailed exception belongs to the ordinary local command.
+            result = {"status": "blocked", "reason_code": getattr(exc, "reason_code", None)}
+        if args.shareable_diagnostic:
+            from sciplot_core.task_error_feedback import shareable_saved_work_summary
+
+            result = shareable_saved_work_summary(result)
     elif action == "compare":
         from sciplot_core.task_comparisons import inspect_comparison, resume_comparison, select_comparison, start_comparison
         from sciplot_core.task_comparison_contract import comparison_request_schema, comparison_selection_schema

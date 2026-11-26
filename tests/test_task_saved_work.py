@@ -992,9 +992,42 @@ def test_default_scopes_are_source_adjacent_named_paths_and_broad_scopes_are_rej
         work.find_saved_work(source, search_roots=[])
 
 
-def test_explicit_target_must_belong_to_discovered_candidates(managed, tmp_path):
+def test_explicit_target_must_belong_to_discovered_candidates(managed, tmp_path, capsys):
+    from sciplot_core.cli import main
+    from sciplot_core.task_error_feedback import shareable_saved_work_summary
+
     root, source, _ = managed
-    result = work.continue_saved_work(source, search_roots=[root], target=tmp_path / "other")
+    marker = "synthetic-private-sample-or-credential"
+    target = tmp_path / marker
+    result = work.continue_saved_work(source, search_roots=[root], target=target)
     assert result["status"] == "blocked" and result["reason_code"] == "selected_target_not_discovered"
     assert result["next_step"]["action"] == "select_saved_target"
     assert "current matches" in result["next_step"]["message"]
+
+    before = inventory(tmp_path)
+    argv = ["task", "continue", str(source), "--search-root", str(root), "--target", str(target)]
+    assert main([*argv, "--shareable-diagnostic"]) == 1
+    response = capsys.readouterr().out
+    assert json.loads(response) == {
+        "kind": "sciplot_shareable_diagnostic", "version": 1, "workflow": "saved_work_continuation",
+        "status": "blocked", "reason_code": "selected_target_not_discovered",
+        "message": "The requested target is not in the current search results.",
+        "next_step": {"action": "select_saved_target",
+                      "message": "Choose the exact project and figure from the local results."},
+    }
+    assert str(source) not in response and marker not in response
+    assert inventory(tmp_path) == before
+
+    # A typed input failure is also projected rather than printed with its local context.
+    assert main(["task", "continue", str(source), "--search-root", str(source), "--shareable-diagnostic"]) == 1
+    typed = capsys.readouterr().out
+    assert str(source) not in typed and json.loads(typed)["reason_code"] == "invalid_search_root"
+    private_details = {"status": "blocked", "reason_code": marker, "message": marker,
+                       "next_step": {"action": marker, "arguments": {"path": str(source), "sample": marker}},
+                       "diagnostics": {"path": str(source)}, "values": [marker]}
+    fallback = shareable_saved_work_summary(private_details)
+    assert fallback["reason_code"] == "saved_work_unavailable"
+    assert marker not in json.dumps(fallback) and str(source) not in json.dumps(fallback)
+
+    assert main([*argv, "--json"]) == 1
+    assert str(source) in capsys.readouterr().out
