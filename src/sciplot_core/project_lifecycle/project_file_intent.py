@@ -18,7 +18,7 @@ from .project_file import ProjectFileSaveUnconfirmed
 from .project_file_summary import project_file_figure
 
 if TYPE_CHECKING:
-    from sciplot_core.plot_engine.service import PlotService
+    from .application import ProjectApplication
 
 
 def _published_intent(owner: AttachedProjectRepository, request: dict[str, Any]) -> dict[str, Any] | None:
@@ -53,7 +53,7 @@ def _receipt(status: str, locator: dict[str, Any], document: dict[str, Any], *,
             **{key: document[key] for key in ("revision", "scientific_hash", "presentation_hash")}, **details}
 
 
-def project_file_axis_intent(service: "PlotService", path: Path, request: dict[str, Any], *,
+def project_file_axis_intent(service: "ProjectApplication", path: Path, request: dict[str, Any], *,
                              expected_project_id: str | None = None,
                              expected_revision: RevisionToken | None = None) -> dict[str, Any]:
     """Only the archive owner may acknowledge a saved edit, not its disposable Store."""

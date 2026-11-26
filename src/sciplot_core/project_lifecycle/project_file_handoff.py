@@ -11,10 +11,10 @@ from .errors import EngineError
 from .project_file_summary import project_file_figure
 
 if TYPE_CHECKING:
-    from sciplot_core.plot_engine.service import PlotService
+    from .application import ProjectApplication
 
 
-def project_file_handoff(service: "PlotService", path: Path, request: dict[str, Any]) -> dict[str, Any]:
+def project_file_handoff(service: "ProjectApplication", path: Path, request: dict[str, Any]) -> dict[str, Any]:
     validate_wire(request, figure_handoff_schema(), code="figure_handoff_invalid_request")
     if type(request["revision"]) is not int:
         raise EngineError("figure_handoff_invalid_request", "Use the integer revision from project.open.")
