@@ -40,6 +40,10 @@ export DYLD_LIBRARY_PATH="$SCIPLOT_BUNDLED_QT_LIB"
 export SCIPLOT_STUDIO_QT_RUNTIME=1
 export PATH="$(dirname -- "$0"):/usr/bin:/bin:/usr/sbin:/sbin"
 unset PYTHONSTARTUP PYTHONUSERBASE QT_QPA_PLATFORM_PLUGIN_PATH QML2_IMPORT_PATH || true
+if [[ "${1:-}" == "--finder" ]]; then
+  shift
+  exec "$SCIPLOT_PYTHON" "$BUNDLE_RESOURCES/distribution-source/finder.py" "$@"
+fi
 if [[ "${1:-}" == "--welcome" ]]; then
   shift
   exec "$SCIPLOT_PYTHON" "$BUNDLE_RESOURCES/welcome.py" "$@"
@@ -50,7 +54,7 @@ exec "$SCIPLOT_PYTHON" -m sciplot_core.cli "$@"
     write_executable(contents / "MacOS" / "SciPlotLauncher", '''#!/bin/bash
 set -euo pipefail
 APP_EXECUTABLES="$(cd -- "$(dirname -- "$0")" && pwd)"
-exec "$APP_EXECUTABLES/sciplot" --welcome "$@"
+exec "$APP_EXECUTABLES/sciplot" --finder "$@"
 ''')
     # Doctor and generated delivery launchers retain the public wrapper contract.
     write_executable(resources / "app" / "skill" / "scripts" / "sciplot", '''#!/bin/bash
@@ -69,6 +73,18 @@ exec "$APP_ROOT/../../MacOS/sciplot" "$@"
             "CFBundlePackageType": "APPL",
             "LSUIElement": True,
             "NSHighResolutionCapable": True,
+            "CFBundleDocumentTypes": [{
+                "CFBundleTypeName": "SciPlot 项目",
+                "CFBundleTypeRole": "Viewer",
+                "LSHandlerRank": "Owner",
+                "LSItemContentTypes": ["local.sciplot.desktop.project"],
+            }],
+            "UTExportedTypeDeclarations": [{
+                "UTTypeIdentifier": "local.sciplot.desktop.project",
+                "UTTypeDescription": "SciPlot 项目",
+                "UTTypeConformsTo": ["public.data"],
+                "UTTypeTagSpecification": {"public.filename-extension": ["sciplot"]},
+            }],
             **({"LSMinimumSystemVersion": platform.mac_ver()[0]} if platform.mac_ver()[0] else {}),
         }, stream)
 

@@ -6,7 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 
-/* Finder needs a native executable. All plotting remains in the public CLI. */
+/* Keep the process launched by Finder for Qt's native document-open events. */
 int main(int argc, char **argv) {
     char executable[PATH_MAX];
     char resolved[PATH_MAX];
@@ -27,7 +27,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     arguments[0] = resolved;
-    arguments[1] = "--welcome";
+    arguments[1] = "--finder";
     for (int index = 1; index < argc; ++index) arguments[index + 1] = argv[index];
     execv(resolved, arguments);
     perror("SciPlot: cannot start bundled runtime");

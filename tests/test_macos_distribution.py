@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import plistlib
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -65,6 +67,17 @@ def test_bundle_entrypoint_uses_only_moved_bundle_runtime(tmp_path: Path) -> Non
     runtime_python.parent.mkdir(parents=True)
     runtime_python.write_text('#!/bin/bash\nprintf "%s\\n" "$SCIPLOT_REPO" "$PYTHONPATH" "$SCIPLOT_BUNDLED_QT_LIB" "$*"\n')
     runtime_python.chmod(0o755)
+    document = tmp_path / "研究 图.sciplot"
+    finder = app / "Contents/MacOS/SciPlotLauncher"
+    launched = subprocess.run([str(finder), str(document)], check=True, capture_output=True, text=True)
+    assert launched.stdout.splitlines()[-1] == f"{resources / 'distribution-source/finder.py'} {document}"
+    with (app / "Contents/Info.plist").open("rb") as stream:
+        info = plistlib.load(stream)
+    [handler] = info["CFBundleDocumentTypes"]
+    [project_type] = info["UTExportedTypeDeclarations"]
+    assert handler["CFBundleTypeRole"] == "Viewer"
+    assert handler["LSItemContentTypes"] == [project_type["UTTypeIdentifier"]]
+    assert project_type["UTTypeTagSpecification"] == {"public.filename-extension": ["sciplot"]}
     result = subprocess.run(
         [str(resources / "app/skill/scripts/sciplot"), "mcp"],
         check=True, capture_output=True, text=True,
@@ -75,6 +88,47 @@ def test_bundle_entrypoint_uses_only_moved_bundle_runtime(tmp_path: Path) -> Non
     assert str(resources / "app") in result.stdout
     assert str(resources / "runtime/lib/python3.14/site-packages/PyQt6/Qt6/lib") in result.stdout
     assert result.stdout.splitlines()[-1] == "-m sciplot_core.cli mcp"
+
+
+def test_finder_qt_intake_handles_cold_and_warm_file_events(tmp_path: Path) -> None:
+    cold = tmp_path / "冷 启动.sciplot"
+    warm = tmp_path / "已 打开.sciplot"
+    # PyQt receives native QFileOpenEvent objects but cannot construct them.
+    # Deliver a Qt event of the same type and surface in an isolated process.
+    driver = """
+import sys
+from pathlib import Path
+from PyQt6.QtCore import QCoreApplication, QEvent, QTimer, QUrl
+from distribution.macos.finder import FinderApplication
+
+class OpenEvent(QEvent):
+    def __init__(self, url):
+        super().__init__(QEvent.Type.FileOpen)
+        self._url = url
+    def url(self):
+        return self._url
+    def file(self):
+        assert self._url.isEmpty()
+        return cold
+
+mode, cold, warm = sys.argv[1:]
+opened = []
+app = FinderApplication(["sciplot"], lambda path: opened.append(str(path)), lambda: opened.append("rejected"))
+app.start([], lambda: opened.append("welcome"))
+if mode == "events":
+    QCoreApplication.postEvent(app, OpenEvent(QUrl()))
+    QTimer.singleShot(475, lambda: QCoreApplication.postEvent(app, OpenEvent(QUrl.fromLocalFile(warm))))
+    QTimer.singleShot(515, lambda: QCoreApplication.postEvent(app, OpenEvent(QUrl("https://invalid.test/remote.sciplot"))))
+    QTimer.singleShot(575, app.quit)
+app.exec()
+assert opened == ([cold, warm, "rejected"] if mode == "events" else ["welcome"]), opened
+"""
+    for mode in ("events", "welcome"):
+        result = subprocess.run(
+            [sys.executable, "-c", driver, mode, str(cold), str(warm)],
+            capture_output=True, text=True, timeout=10, env=os.environ | {"QT_QPA_PLATFORM": "offscreen"},
+        )
+        assert result.returncode == 0, result.stderr
 
 
 def test_build_refuses_existing_output_before_copying(tmp_path: Path) -> None:
