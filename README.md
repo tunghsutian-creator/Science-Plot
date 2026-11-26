@@ -140,7 +140,9 @@ change an axis label in place, use
 `sciplot_plot_intent`, with the file as `plot`. Use the returned plot ID,
 revision as `base_revision`, and axis ID as `target_id`. Success is reported
 only after the file is replaced.
-This route does not open a window or deliver exports.
+Saving audits the figure without rendering PDF or TIFF. To deliver PDF alone
+or PDF with 300 dpi TIFF, select the saved revision with the separate
+`plot export` command.
 
 On a Qt desktop, `sciplot plot editor PLOT` opens the exact Managed FigureSpec v2
 `plot` path from that summary. The native view is read-only. Choose an axis,

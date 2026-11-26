@@ -17,7 +17,7 @@ from .execution import advance, replay
 
 def execute_patch(root: Path, request: RequestInput, backend: PlotBackend,
                   *, rollback_request: dict[str, Any] | None = None,
-                  comparison: dict[str, Any] | None = None) -> dict[str, Any]:
+                  comparison: dict[str, Any] | None = None, defer_export: bool = False) -> dict[str, Any]:
     patch = admit_patch(request)
     request = patch.to_payload()
     saved = transaction_path(root, request["idempotency_key"])
@@ -61,8 +61,8 @@ def execute_patch(root: Path, request: RequestInput, backend: PlotBackend,
                 or bool(diff) != comparison["changed"]):
             raise EngineError("comparison_selection_changed", "The current patch does not reproduce the selected presentation.")
         tx["comparison_selection"] = comparison
-        if not comparison["export"]:
-            tx["export_deferred"] = True
+    if defer_export or comparison is not None and not comparison["export"]:
+        tx["export_deferred"] = True
     reserve_repair(root, tx, repair, backend)
     if not diff and not tx.get("export_deferred"):
         cached = cached_export(root, head)

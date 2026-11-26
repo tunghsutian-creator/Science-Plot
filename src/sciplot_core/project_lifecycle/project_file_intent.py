@@ -90,15 +90,21 @@ def project_file_axis_intent(service: "ProjectApplication", path: Path, request:
         if request["mode"] == "plan":
             return {**plan, **locator, "saved": False}
 
+        cache = owner.runtime_path(owner.attachment.root / "export-cache.json")
+        had_cache = cache.exists()
         try:
             with project_runtime(session.store):
-                result = service.intent(owner.attachment.root, request)
+                result = service._apply_intent(owner.attachment.root, request, defer_export=True)
             if result.get("status") != "complete":
                 raise EngineError("project_file_edit_not_saved", "The axis edit could not complete; no file was replaced.")
             edited = observe_plot_head(owner.attachment.root, owner=owner)
             if (edited is None or edited["document"]["scientific_hash"] != before["scientific_hash"]
                     or edited["document"]["revision"] != before["revision"] + bool(result.get("changed"))):
                 raise EngineError("project_file_edit_not_saved", "The private edit did not produce the expected revision.")
+            if result["changed"] or not had_cache:
+                # Keep a no-op's existing cache. A lease can materialize an older
+                # archived cache, which must not become the current derivative.
+                cache.unlink(missing_ok=True)
             generation = session.store.snapshot()["generation"]
         except (OSError, ValueError, KeyError, TypeError) as exc:
             raise EngineError("project_file_edit_not_saved", "The axis edit could not complete; no file was replaced.",

@@ -116,7 +116,7 @@ def _publication(root: Path, out: Path, request: dict[str, Any],
 def handoff_figure(root: Path, request: dict[str, Any], backend: PlotBackend, *,
                    before_install: Callable[[FigureInstall], None] | None = None,
                    installed: FigureInstall | None = None,
-                   rebuild_missing: Callable[[], None] | None = None) -> dict[str, Any]:
+                   rebuild_missing: Callable[[str], bool] | None = None) -> dict[str, Any]:
     """Install a new visible delivery, or only verify one task's frozen installation."""
     validate_wire(request, figure_handoff_schema(), code="figure_handoff_invalid_request")
     if type(request["revision"]) is not int:
@@ -132,9 +132,10 @@ def handoff_figure(root: Path, request: dict[str, Any], backend: PlotBackend, *,
     try:
         token, evidence = _publication(root, out, request, backend, cold_export=rebuild_missing is not None)
     except EngineError as exc:
-        if rebuild_missing is None or exc.reason_code != "figure_handoff_cache_missing":
+        if (rebuild_missing is None or exc.reason_code not in {
+                "figure_handoff_cache_missing", "figure_handoff_publication_unready"}
+                or not rebuild_missing(exc.reason_code)):
             raise
-        rebuild_missing()
         token, evidence = _publication(root, out, request, backend)
     result = {"kind": "sciplot_figure_handoff", "version": 1, "status": "exported", "ready_to_use": True,
               "plot": str(root), "plot_id": token.plot_id, "revision": token.revision, "output_dir": str(out)}

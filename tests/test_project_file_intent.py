@@ -17,8 +17,18 @@ from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.service import PlotService
 from sciplot_core.plot_protocol.paths import read_owner
 from sciplot_core.project_lifecycle import project_file
+from sciplot_core.project_lifecycle.attachment_index import INDEX, Attachment, encode, read_index
+from sciplot_core.project_lifecycle.context import transaction_path
+from sciplot_core.project_lifecycle.project_file_summary import project_file_figure
 from sciplot_core.project_lifecycle.project_file import ProjectFileSaveUnconfirmed, create_project_file, open_project_file
 from sciplot_core.project_store.repository import FileProjectStore
+
+
+def _write_fixture_resources(store, name, writes):
+    snapshot = store.snapshot()
+    read_set = {path: snapshot["files"].get(path, {}).get("sha256") for path in writes}
+    store.reserve(name, name, expected_generation=snapshot["generation"], read_set=read_set, write_set=sorted(writes))
+    store.publish(name, name, writes=writes, result={})
 
 
 @pytest.mark.comprehensive
@@ -41,6 +51,15 @@ def test_relocated_project_file_axis_edit_is_saved_once_through_cli_and_daily_mc
     with closing(PlotService()) as service:
         saved = service.create(request, project=project)
         assert saved["ready_to_use"], saved
+    # Model the Store's immutable initial publication, as retained when importing
+    # an attached figure. Its still-valid bytes must survive a newer edit.
+    index = read_index(store)
+    [entry] = index["attachments"].values()
+    attachment = Attachment(store, entry)
+    original_cache = (attachment.cache / "state" / "export-cache.json").read_bytes()
+    archived = attachment.logical(attachment.root / "archive" / "export-cache.json")
+    entry["archived_derivatives"]["export-cache.json"] = archived
+    _write_fixture_resources(store, "initial-export-fixture", {INDEX: encode(index), archived: original_cache})
     snapshot = store.snapshot()
     archive = original / "模量数据.sciplot"
     initial = create_project_file(archive, store, expected_generation=snapshot["generation"])
@@ -113,8 +132,62 @@ def test_relocated_project_file_axis_edit_is_saved_once_through_cli_and_daily_mc
         [(source_id, versions)] = session.store.snapshot()["sources"].items()
         [version] = versions
         assert session.store.resolve_source(source_id, version).read_bytes() == raw
+    with project_file_figure(moved, saved["plot_id"]) as (_session, owner, document):
+        attached = owner.attachment.root
+        journal = owner.read(transaction_path(attached, intent["idempotency_key"]))
+        assert journal["phase"] == "complete" and journal["document"] == document
+        assert journal["export_deferred"] is True and "export" not in journal
+        assert journal["review"]["scientific_audit"]["status"] == "passed"
+        assert not owner.runtime_path(attached / "export-cache.json").exists()
+        assert owner.exists(attached / "export-cache.json")
+        assert owner.attachment.store.read_bytes(archived) == original_cache
     assert not original.exists() and not list(scratch.iterdir())
     assert list(folder.iterdir()) == [moved] and file_sha256(moved) == published
+
+    no_op = {**intent, "idempotency_key": "same-title", "base_revision": 1}
+    request_json.write_text(json.dumps(no_op))
+    unchanged = cli("intent", moved, "--request", request_json)
+    assert unchanged["revision"] == 1 and unchanged["presentation_hash"] == result["presentation_hash"]
+    published = file_sha256(moved)
+    assert cli("intent", moved, "--request", request_json) == {**unchanged, "status": "already_saved"}
+    assert file_sha256(moved) == published
+
+    output = root / "current handoff"
+    delivery = cli("export", moved, "--output-dir", output, "--plot-id", saved["plot_id"],
+                   "--revision", "1", "--tiff")
+    assert delivery["revision"] == 1 and delivery["scientific_hash"] == saved["scientific_hash"]
+    assert delivery["presentation_hash"] == result["presentation_hash"]
+    files = {entry["format"]: Path(entry["path"]) for entry in delivery["exports"]}
+    assert set(files) == {"pdf", "tiff_300"} and files["pdf"].read_bytes().startswith(b"%PDF-")
+    from PIL import Image
+
+    with Image.open(files["tiff_300"]) as raster:
+        assert raster.info["dpi"] == pytest.approx((300, 300), abs=.1)
+    assert file_sha256(moved) == published
+
+    for bad_cache in ("current", "archived"):
+        unready = root / f"unready-{bad_cache}.sciplot"
+        with project_file_figure(moved, saved["plot_id"]) as (session, owner, _document):
+            attached = owner.attachment.root
+            cache = owner.runtime_path(attached / "export-cache.json")
+            assert not cache.exists()
+            record = json.loads(original_cache)
+            record["export"]["publication_qa"]["status"] = "failed"
+            if bad_cache == "current":
+                record["export"]["ir_hash"] = owner.load_head(attached)["binding"]["ir_hash"]
+                cache.write_bytes(encode(record))
+            else:
+                _write_fixture_resources(session.store, "failed-archive-fixture", {archived: encode(record)})
+            generation = session.store.snapshot()["generation"]
+            unready_saved = create_project_file(unready, session.store, expected_generation=generation)
+        destination = root / f"no retry {bad_cache}"
+        with closing(PlotService()) as service, monkeypatch.context() as fault:
+            fault.setattr(service, "_export", lambda *_: pytest.fail("An invalid cache must not rebuild."))
+            with pytest.raises(EngineError) as failed:
+                service.export(unready, handoff={"output_dir": str(destination), "plot_id": saved["plot_id"],
+                                                "revision": 1, "formats": ["pdf"]})
+            assert failed.value.reason_code == "figure_handoff_publication_unready"
+        assert not destination.exists() and file_sha256(unready) == unready_saved.sha256
 
     next_intent = {**intent, "base_revision": 1, "idempotency_key": "second-axis", "value": "Frequency / Hz"}
     true_publish = project_file._publish

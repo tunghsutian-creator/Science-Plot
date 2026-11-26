@@ -151,9 +151,17 @@ class ProjectApplication(ManagedPlotApplication, CommandDispatch):
                 if pending and pending["phase"] not in {"complete", "rejected"}:
                     raise _pending_edit_error(root, pending, "An edit began while planning this request.")
                 return {"plot": str(root), **plan}
+        return self._apply_intent(root, request)
+
+    @usecase
+    def _apply_intent(self, root: Path, request: dict[str, Any], *, defer_export: bool = False) -> dict[str, Any]:
         with external_project_session(root), admitted(root, "intent", request) as command:
-            # Admission resolved against current or saved.before exactly once.
-            return self._patch(root, admit_patch(command.business_request))
+            patch = admit_patch(command.business_request)
+            if defer_export:
+                from .patch_execution import execute_patch
+
+                return execute_patch(root, patch, self.backend, defer_export=True)
+            return self._patch(root, patch)
 
     def _patch(self, root: Path, request: RequestInput, *, rollback_request: dict[str, Any] | None = None) -> dict[str, Any]:
         from .patch_execution import execute_patch
