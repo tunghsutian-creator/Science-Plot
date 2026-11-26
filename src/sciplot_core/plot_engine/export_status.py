@@ -1,4 +1,4 @@
-"""Verify existing publication evidence in its owning service environment only."""
+"""Verify sealed publication bytes separately from current render-cache reuse."""
 from pathlib import Path
 from typing import Any
 
@@ -67,3 +67,22 @@ def current_export(root: Path, head: dict[str, Any], *, eligible: bool) -> dict[
             "artifact_build_key": cache["build_key"] if cache is not None else None,
             "validation": "current" if ready else "stale_or_missing",
             **({"publication": publication} if publication is not None else {})}
+
+
+def sealed_publication(root: Path, head: dict[str, Any]) -> dict[str, Any] | None:
+    """Read exact audited bytes for copying, not the current runtime's build cache."""
+    path = root / "export-cache.json"
+    if not exists(path):
+        return None
+    cache = read(path)
+    binding, exported, files = head["binding"], cache["export"], cache["artifact_files"]
+    proof = exported.get("native_export_audit")
+    if (not isinstance(proof, dict) or not proof.get("native_state_hash")
+            or proof.get("ir_hash") != binding.get("ir_hash")
+            or proof.get("canonical_sha256") != binding.get("canonical_sha256")
+            or not proof.get("ir_sha256") or files.get(binding.get("ir_path")) != proof["ir_sha256"]
+            or not proof.get("document_sha256") or files.get(binding.get("document")) != proof["document_sha256"]
+            or not evidence_current(files, cache.get("evidence_inventories"))):
+        return None
+    publication = _publication(cache, head)
+    return {**publication, "ir_sha256": proof["ir_sha256"]} if publication is not None else None

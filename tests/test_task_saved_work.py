@@ -277,8 +277,13 @@ def delivery(root, source, owner=None):
     return root
 
 
-def test_managed_discovery_and_continuation_use_existing_seals_without_native_or_writes(managed, tmp_path, monkeypatch):
-    root, source, _ = managed
+def test_managed_discovery_and_continuation_use_existing_seals_without_native_or_writes(tmp_path, monkeypatch):
+    from sciplot_core.project_lifecycle.errors import EngineError
+
+    root, document, binding = _canonical(tmp_path)
+    binding["figure_id"] = "saved-figure"
+    commit(root, document, binding, "managed_creation")
+    source = Path(document["scientific"]["data_sources"][0]["path"])
     before = inventory(tmp_path)
     monkeypatch.setattr(subprocess, "run", lambda *_a, **_k: pytest.fail("read started native worker"))
     found = work.find_saved_work(source, search_roots=[tmp_path])
@@ -299,8 +304,20 @@ def test_managed_discovery_and_continuation_use_existing_seals_without_native_or
         opened = service.open(Path(continued["next_step"]["arguments"]["target"]))
         assert opened["plot_id"] == continued["current"]["plot_id"]
         assert opened["scientific_hash"] == continued["current"]["scientific_hash"]
+        wrong = work.continue_saved_work(source, search_roots=[tmp_path], target=root, figure_id="other-figure")
+        assert wrong["status"] == "blocked" and wrong["reason_code"] == "figure_selection_mismatch"
+        assert "current" not in wrong and "next_step" not in wrong
+        with pytest.raises(EngineError) as caught:
+            service.open(root, figure_id="other-figure")
+        assert caught.value.reason_code == "figure_selection_mismatch"
+        for exact in (binding["figure_id"], document["plot_id"]):
+            explicit = work.continue_saved_work(source, search_roots=[tmp_path], target=root, figure_id=exact)
+            assert explicit["status"] == "current"
+            assert explicit["next_step"]["arguments"] == {"target": str(root), "figure_id": exact}
+            assert service.open(root, figure_id=exact)["plot_id"] == opened["plot_id"]
     finally:
         service.close()
+    assert inventory(tmp_path) == before
 
 
 def test_renamed_or_copied_source_is_candidate_evidence_without_rebinding(managed, tmp_path):
@@ -314,6 +331,7 @@ def test_renamed_or_copied_source_is_candidate_evidence_without_rebinding(manage
     source.unlink()
     stale = work.continue_saved_work(renamed, search_roots=[root])
     assert stale["status"] == "blocked" and stale["reason_code"] == "document_conflict"
+    assert stale["next_step"]["action"] == "resolve_saved_authority"
     assert inventory(tmp_path) == {path: value for path, value in before.items() if path != str(source)}
 
 
@@ -358,12 +376,51 @@ def test_same_name_different_bytes_never_match(managed, tmp_path):
     assert work.find_saved_work(other, search_roots=[root])["match_count"] == 0
 
 
-def test_exact_path_changed_bytes_reports_conflict_not_a_fresh_authority(managed):
-    root, source, _ = managed
-    source.write_text("different content")
-    continued = work.continue_saved_work(source, search_roots=[root])
-    assert continued["status"] == "blocked"
-    assert str(source) in continued["selected"]["document"]["changed_inputs"]
+def test_exact_path_changed_bytes_points_to_the_same_figure_for_review(tmp_path):
+    root, document, binding = _canonical(tmp_path)
+    binding["figure_id"] = "saved-figure"
+    commit(root, document, binding, "managed_creation")
+    source = Path(document["scientific"]["data_sources"][0]["path"])
+    source.write_bytes(source.read_bytes().replace(b"0,2", b"0,9"))
+    before = inventory(tmp_path)
+    continued = work.continue_saved_work(source, search_roots=[root], target=root, figure_id="managed-external")
+    assert continued["status"] == "blocked" and continued["reason_code"] == "document_conflict"
+    assert continued["selected"]["document"]["changed_inputs"] == [str(source)]
+    step = continued["next_step"]
+    assert step["action"] == "plot.open" and step["plot_id"] == "managed-external" and step["revision"] == 0
+    assert step["arguments"] == {"target": str(root), "figure_id": "saved-figure",
+                                  "description": {"scope": "summary"}}
+    assert step["cli_argv"] == ["sciplot", "plot", "open", str(root), "--figure", "saved-figure",
+                                "--scope", "summary", "--json"]
+    assert inventory(tmp_path) == before
+
+
+@pytest.mark.parametrize("second_conflict", ["missing_source", "another_source", "unselected_source", "native", "pending"])
+def test_source_review_requires_only_the_selected_source_to_have_changed(managed, second_conflict):
+    from sciplot_core.plot_engine.storage import transaction_path
+
+    root, source, binding = managed
+    if second_conflict == "missing_source":
+        source.unlink()
+    else:
+        source.write_bytes(source.read_bytes().replace(b"0,2", b"0,9"))
+    if second_conflict == "another_source":
+        second = source.with_name("B.csv")
+        second.write_bytes(second.read_bytes().replace(b"0,1", b"0,8"))
+    if second_conflict == "native":
+        native = Path(binding["document"])
+        native.parent.mkdir(parents=True)
+        native.write_bytes(b"external native save")
+    if second_conflict == "pending":
+        journal = transaction_path(root, "unfinished")
+        journal.parent.mkdir(parents=True)
+        journal.write_text(json.dumps({"id": "pending-edit", "phase": "applying",
+                                       "request": {"idempotency_key": "unfinished"}}))
+        (root / "active.json").write_text(json.dumps({"key": "unfinished"}))
+    selected = source.with_name("B.csv") if second_conflict == "unselected_source" else source
+    result = work.continue_saved_work(selected, search_roots=[root], target=root)
+    assert result["status"] == "blocked" and result["reason_code"] == "document_conflict"
+    assert result["next_step"]["action"] == "resolve_saved_authority"
 
 
 def test_copied_managed_root_cannot_operate_original_absolute_binding(managed, tmp_path):
@@ -585,6 +642,14 @@ def test_saved_work_reads_the_current_attachment_without_materializing_or_adopti
     else:
         result = evidence.document_evidence(root)  # Direct Managed discovery uses the same Core reader.
         assert result['plot_id'] == created['plot_id']
+        assert result['figure_id'] == entry['figure_id']
+        if state == 'current':
+            for exact in (entry['figure_id'], entry['plot_id']):
+                continuation = work.continue_saved_work(project / 'A.csv', search_roots=[project],
+                                                         target=root, figure_id=exact)
+                assert continuation['status'] == 'current', continuation
+                assert continuation['current']['figure_id'] == entry['figure_id']
+                assert continuation['next_step']['arguments'] == {'target': str(root), 'figure_id': exact}
         assert (result['pending'] is not None) == (state == 'pending')
         assert result['current'] is (state == 'current')
     assert inventory(tmp_path) == before

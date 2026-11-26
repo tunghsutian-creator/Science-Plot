@@ -20,7 +20,7 @@ class Service(Protocol):
     def resume(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
     def intent(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
     def render(self, plot: Path) -> dict[str, Any]: ...
-    def export(self, plot: Path) -> dict[str, Any]: ...
+    def export(self, plot: Path, *, handoff: dict[str, Any] | None = None) -> dict[str, Any]: ...
     def rollback(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
     def create(self, request: dict[str, Any], *, project: Path | None = None) -> dict[str, Any]: ...
     def deliver(self, request: dict[str, Any]) -> dict[str, Any]: ...
@@ -90,7 +90,7 @@ def validate_params(method: str, params: dict[str, Any]) -> None:
         "plot.deliver": ({"request"}, {"request"}),
         "plot.describe": ({"plot"}, {"plot", "description"}),
         "plot.render": ({"plot"}, {"plot"}),
-        "plot.export": ({"plot"}, {"plot"}),
+        "plot.export": ({"plot"}, {"plot", "handoff"}),
         "plot.patch": ({"plot", "request"}, {"plot", "request"}),
         "plot.resume": ({"plot", "request"}, {"plot", "request"}),
         "plot.intent": ({"plot", "request"}, {"plot", "request"}),
@@ -111,8 +111,9 @@ def validate_params(method: str, params: dict[str, Any]) -> None:
             issues.append({"path": f"/params/{key}", "constraint": "nonempty_string"})
         elif key in {"target", "plot", "project"} and key in params and not Path(params[key]).is_absolute():
             issues.append({"path": f"/params/{key}", "constraint": "absolute_path"})
-    if "request" in params and not isinstance(params["request"], dict):
-        issues.append({"path": "/params/request", "constraint": "object"})
+    for key in ("request", "handoff"):
+        if key in params and not isinstance(params[key], dict):
+            issues.append({"path": f"/params/{key}", "constraint": "object"})
     if "description" in params:
         issues.extend(selector_issues(params["description"], path="/params/description"))
     if issues:
@@ -124,10 +125,19 @@ def invoke(service: Service, method: str, params: dict[str, Any]) -> dict[str, A
     return _invoke_validated(service, method, params)
 
 
+def _project_target(target: Path, *, legacy_directories: bool = False) -> Path:
+    if target.suffix == ".sciplot" and not (legacy_directories and target.is_dir()):
+        return target
+    resolved = target.resolve()
+    # Preserve legacy location handling, but don't turn a differently named
+    # alias into admission to the regular project-file reader.
+    return target if resolved.suffix == ".sciplot" and not resolved.is_dir() else resolved
+
+
 def _invoke_validated(service: Service, method: str, params: dict[str, Any]) -> dict[str, Any]:
     """Dispatch an admitted call synchronously within the owning RPC boundary."""
     if method == "project.open":
-        target = Path(params["target"]).expanduser().resolve()
+        target = _project_target(Path(params["target"]).expanduser())
         if "description" in params:
             return service.open(target, figure_id=params.get("figure_id"), description=params["description"])
         return service.open(target, figure_id=params.get("figure_id"))
@@ -136,7 +146,13 @@ def _invoke_validated(service: Service, method: str, params: dict[str, Any]) -> 
                 if "project" in params else service.create(params["request"]))
     if method == "plot.deliver":
         return service.deliver(params["request"])
-    plot = Path(params["plot"]).expanduser().resolve()
+    plot = Path(params["plot"]).expanduser()
+    if method == "plot.intent":
+        # The project-file owner must observe the final path entry, not its symlink target.
+        return service.intent(plot, params["request"])
+    if method == "plot.export" and "handoff" in params:
+        return service.export(_project_target(plot, legacy_directories=True), handoff=params["handoff"])
+    plot = plot.resolve()
     if method == "plot.describe":
         if "description" in params:
             return service.describe(plot, description=params["description"])
@@ -149,8 +165,6 @@ def _invoke_validated(service: Service, method: str, params: dict[str, Any]) -> 
         return service.patch(plot, params["request"])
     if method == "plot.resume":
         return service.resume(plot, params["request"])
-    if method == "plot.intent":
-        return service.intent(plot, params["request"])
     if method == "plot.rollback":
         return service.rollback(plot, params["request"])
     return service.decide(plot, params["request"])

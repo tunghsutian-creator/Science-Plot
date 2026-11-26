@@ -5,6 +5,7 @@ from typing import Any
 from sciplot_core.project_store.io import observe_existing_store
 
 from .context import repository_scope
+from .errors import EngineError
 from .paths import canonical_path
 from .ports import ProjectRepository
 
@@ -26,3 +27,10 @@ def observe_plot_head(plot: Path, *, owner: ProjectRepository,
         if owner.content_snapshot(pointer)["sha256"] != before:
             raise ValueError("The selected plot revision changed during observation.")
         return head
+
+
+def require_matching_figure(figure_id: str | None, *, plot_id: str, saved_figure_id: str | None) -> None:
+    """An exact path and a supplied ID must identify the same authority."""
+    if figure_id is not None and figure_id not in (plot_id, saved_figure_id):
+        raise EngineError("figure_selection_mismatch", "The supplied figure ID does not match this saved plot.",
+                          figure_id=figure_id, plot_id=plot_id, saved_figure_id=saved_figure_id)

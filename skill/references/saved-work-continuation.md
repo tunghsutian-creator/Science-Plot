@@ -57,6 +57,10 @@ For a ManagedPlot it checks the sealed head, canonical model, complete recorded
 input closure and pending transaction, then returns `plot.open` arguments for
 the existing document editor. Missing disposable native artifacts retain
 semantic authority and are rebuilt by the existing export owner.
+If only the selected original source file has changed bytes at its recorded path,
+continuation returns `plot.open --scope summary` for the same saved figure. Its
+summary points to the existing `source.sha256` review. Inspect and authorize the
+change there before editing or exporting.
 
 An exported delivery is separately identified as a snapshot unless the existing
 launcher owner proves its canonical project binding. Modified visible copies or
@@ -66,7 +70,7 @@ cannot silently overwrite the original handoff.
 
 Missing/stale scientific files, external native saves, copied ManagedPlot roots
 with original absolute bindings, malformed paths, symlinks, incomplete receipts
-and uncertain tasks fail closed. Source-revision guidance uses the existing
+and uncertain tasks fail closed. Studio source-revision guidance uses the existing
 `update_source` request. That owner may require restoration of missing raw or
 prepared evidence before it can create a valid review. Discovery never rewrites
 old task/project paths, imports an unbound snapshot, replays a historical apply,
@@ -100,6 +104,10 @@ protection, a real source-update review and missing-raw rejection.
 
 ## Relocate an existing Store
 
+The daily MCP profile has three different paths. Use `sciplot_plot_deliver` to
+hand off snapshots for a paper. Use Store relocation to edit the same project
+from a new location. Use Save As to make a separate editable copy of one figure.
+
 Use the exact root of an already versioned Store, not a figure handle, raw
 VSZ, task directory or paper package. Choose new paths under existing research
 directories:
@@ -109,19 +117,56 @@ sciplot project bundle-export STORE_ROOT --out NEW_BUNDLE --json
 sciplot project bundle-import BUNDLE_ROOT --out NEW_PROJECT_PATH --json
 ```
 
-The expert MCP tools are `sciplot_project_bundle_export` and
-`sciplot_project_bundle_import`. They use the same Store owner as the CLI.
+In daily or expert MCP, call `sciplot_project_bundle_export` with
+`project` (the exact Store root) and `output_dir` (a new bundle directory).
+Then call `sciplot_project_bundle_import` with the returned `bundle` path and
+an unused `output_dir` for the project. Both tools use the same Store owner as
+the CLI.
 Compare returned `project_id` and `generation` before continuing at the new
-location. Import preserves the project and admitted history, without granting
-executor permissions or external export destinations from another host. New
-exports stay with the moved Store; use a new delivery destination for a visible
-package. An installed paper snapshot still cannot recover the original Store.
+location. Use the returned `project` path to reopen it. Import preserves the
+project and admitted history, without granting executor permissions or external
+export destinations from another host. New exports stay with the moved Store;
+use a new delivery destination for a visible package. An installed paper
+snapshot still cannot recover the original Store.
+
+If the original input path is gone, open the imported project directly rather
+than using `task continue SOURCE`, which searches from a readable input:
+
+```bash
+sciplot plot open NEW_PROJECT_PATH --figure SAVED_PLOT_ID --scope summary --json
+```
+
+Use the returned plot handle to edit. The relocated Store supplies the exact
+saved source versions. If bundle verification fails, use an intact verified
+bundle. If an older project reports a missing unsaved source, restore that
+exact source version before bundling. A same-named file or a paper snapshot
+is not a substitute.
 
 Keep using one active location for the project. This operation does not give
 two independently writable identities and does not remove the previous
 location. Export rejects unadmitted project changes. Neither command replaces
-an existing destination; inspect any directory left by an interrupted
-operation before choosing a new destination.
+an existing destination; inspect any path left by an interrupted operation
+before choosing a new destination.
+
+### Save the same project as one `.sciplot` file
+
+```bash
+sciplot project bundle-export SAVED_PLOT_OR_STORE --single-file --out NEW_PROJECT.sciplot --json
+sciplot plot open NEW_PROJECT.sciplot --figure SAVED_PLOT_ID --json
+```
+
+With `--single-file`, you can pass the exact saved Managed v2 plot handle from
+`task create` or `plot open`, or the exact Store root. Either input saves the
+**whole project**, including its other figures, source versions and history.
+The project and plot IDs do not change. Use `--expected-generation` to require
+an already observed Store generation; otherwise SciPlot captures the current
+admitted generation. The receipt identifies the new `project_file`, generation,
+and archive SHA-256. Open that file directly; `bundle-import` is for directory
+bundles. In daily or expert MCP, use the existing
+`sciplot_project_bundle_export` with `single_file: true`, the `.sciplot`
+filename in `output_dir` and optional `expected_generation`, then
+`sciplot_project_open` with the file. If there are multiple figures, specify the
+exact plot ID when opening; saving does not select or discard any figure.
 
 ## Make a new, independently editable copy
 
@@ -148,5 +193,5 @@ This command does not transfer executor permissions. Plots that declare
 external executors are refused; restore or operate on them in their original
 project. For a standalone old VSZ, use the explicit legacy conversion if the
 old figure is supported. Moving an entire project with its history and same
-identity is a different operation. MCP's `sciplot_project_save_as` takes
-`plot`, `plot_id`, `revision` and `output_dir`.
+identity is a different operation. In daily or expert MCP,
+`sciplot_project_save_as` takes `plot`, `plot_id`, `revision` and `output_dir`.

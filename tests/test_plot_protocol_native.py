@@ -246,13 +246,20 @@ def test_native_mutation_lost_reply_and_daemon_restart_replay_once(tmp_path):
 @pytest.mark.comprehensive
 def test_native_frozen_recovery_survives_lost_reply_and_restart_via_cli_mcp(tmp_path, monkeypatch):
     """Only three original binding fields cross the recovery transports."""
+    import base64
+    from contextlib import closing
     from managed_plot_helpers import patch, request_for_source
+    from sciplot_core.plot_engine.service import PlotService
     from sciplot_core.plot_protocol import client
     from sciplot_core.plot_protocol.paths import TransportError
+    from sciplot_core.project_store.repository import FileProjectStore
 
     create_request = request_for_source(tmp_path)
     source = Path(create_request["data_binding"]["data_sources"][0]["path"])
     source_hash = file_sha256(source)
+    project = tmp_path / "project"
+    project.mkdir()
+    FileProjectStore(project).snapshot(import_legacy=True)
     with socket_directory(prefix="spr2-", dir="/tmp") as temporary:
         socket_path = Path(temporary) / "engine.sock"
         environment = {**os.environ, "SCIPLOT_ENGINE_SOCKET": str(socket_path)}
@@ -320,10 +327,16 @@ def test_native_frozen_recovery_survives_lost_reply_and_restart_via_cli_mcp(tmp_
             pytest.fail("The owned terminated daemon still accepts connections.")
 
         try:
-            created = call("plot.create", {"request": create_request}, socket_path=socket_path)
+            other = call("plot.create", {"request": request_for_source(tmp_path, "B"), "project": str(project)},
+                         socket_path=socket_path)
+            assert other["ready_to_use"]
+            created = call("plot.create", {"request": create_request, "project": str(project)}, socket_path=socket_path)
             assert created["ready_to_use"] and created["revision"] == 0
             engine_pid = read_owner(socket_path)["pid"]
             root = Path(created["plot"])
+            assert created["plot_id"] != other["plot_id"] and root.is_relative_to(project)
+            other_document = Path(other["plot"]) / "head.json"
+            other_hash = file_sha256(other_document)
             described = call("plot.describe", {"plot": str(root)}, socket_path=socket_path)
             native = Path(load_head(root)["binding"]["document"])
             initial_native_hash = file_sha256(native)
@@ -342,9 +355,48 @@ def test_native_frozen_recovery_survives_lost_reply_and_restart_via_cli_mcp(tmp_
             assert engine_pid != first_pid
             assert resumed["status"] == "needs_review" and resumed["preview"] == frozen["recovery"]["preview"]
             assert file_sha256(native) == initial_native_hash and load_head(root)["document"]["revision"] == 0
-            accepted = call("plot.decide", {"plot": str(root), "request": frozen["next_step"]["request"]}, socket_path=socket_path)
+            daily_parameters = StdioServerParameters(command=str(REPO_ROOT / "skill/scripts/sciplot"),
+                args=["mcp", "--profile", "daily"], cwd=REPO_ROOT, env=environment)
+            exact = {"target": str(project), "figure_id": created["plot_id"], "description": {"scope": "summary"}}
+
+            async def reopen_review():
+                async with Client(daily_parameters, read_timeout_seconds=180) as mcp:
+                    result = await mcp.call_tool("sciplot_project_open", exact)
+                    assert not result.is_error, result.content
+                    summary = result.structured_content
+                    assert summary["plot"] == str(root) and summary["revision"] == 0
+                    assert summary["next_step"] == frozen["next_step"]
+                    assert summary["recovery"]["preview"] == resumed["preview"]
+                    resource = await mcp.read_resource(summary["preview_resource"])
+                    assert base64.b64decode(resource.contents[0].blob) == Path(resumed["preview"]["path"]).read_bytes()
+
+            anyio.run(reopen_review)
+            with closing(PlotService(read_only_legacy=True)) as interrupted, monkeypatch.context() as fault:
+                fault.setattr(interrupted.backend, "export", lambda _: {"ready_to_use": False})
+                pending = interrupted.decide(root, frozen["next_step"]["request"])
+            assert pending["commit_status"] == "committed" and pending["export_status"] == "pending"
+            saved = root / "revisions/00000001.json"
+            saved_hash = file_sha256(saved)
+
+            async def finish_export():
+                async with Client(daily_parameters, read_timeout_seconds=180) as mcp:
+                    result = await mcp.call_tool("sciplot_project_open", exact)
+                    assert not result.is_error, result.content
+                    summary = result.structured_content
+                    assert summary["plot"] == str(root) and summary["revision"] == 1
+                    assert summary["recovery"]["commit_status"] == "committed"
+                    assert summary["pending"]["phase"] == "export_pending"
+                    assert summary["next_step"] == {"action": "plot.export", "plot": str(root)}
+                    assert "preview_resource" not in summary
+                    exported = await mcp.call_tool("sciplot_plot_export", {"plot": summary["next_step"]["plot"]})
+                    assert not exported.is_error, exported.content
+                    return exported.structured_content
+
+            accepted = anyio.run(finish_export)
             assert accepted["ready_to_use"] and accepted["revision"] == 1
             assert accepted["scientific_hash"] == created["scientific_hash"]
+            assert file_sha256(saved) == saved_hash and len(list(root.glob("revisions/*.json"))) == 2
+            assert file_sha256(other_document) == other_hash and file_sha256(source) == source_hash
             described = call("plot.describe", {"plot": str(root)}, socket_path=socket_path)
             edit = patch(described, "lost-width", "style.line.width", "1.2pt", "series:A")
             repair = lose_reply({"plot": str(root), "request": edit})

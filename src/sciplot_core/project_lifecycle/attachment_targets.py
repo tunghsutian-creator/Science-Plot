@@ -11,6 +11,7 @@ from .repository import FileProjectRepository, digest, document_root
 from .repository_router import ComposedProjectRepository
 from .targets import ImportTarget, ManagedCreationLocation, OpenTarget, StoredTarget
 from .errors import EngineError
+from .head_observation import observe_plot_head, require_matching_figure
 from .legacy_namespace import known_head
 from .store_composition import existing_store, tracked_namespace_store
 from .paths import canonical_path
@@ -28,7 +29,8 @@ def _store(repository: ComposedProjectRepository, target: Path | None = None) ->
     return None
 
 
-def _stored(repository: ComposedProjectRepository, attachment: Attachment) -> OpenTarget:
+def _stored(repository: ComposedProjectRepository, attachment: Attachment, figure_id: str | None = None) -> OpenTarget:
+    require_matching_figure(figure_id, plot_id=attachment.entry["plot_id"], saved_figure_id=attachment.entry["figure_id"])
     selected = repository.select(attachment)
     if selected.has_head(attachment.root):
         return StoredTarget(attachment.root)
@@ -58,7 +60,7 @@ def resolve_attached_open(repository: ComposedProjectRepository, target: Path, f
                 raise EngineError("semantic_attachment_owner_conflict", "The pending transfer requires its exact original namespace and figure.") from exc
             selected = repository.select(attach_existing(store, marker[0], figure_id=owner["figure_id"], validate=repository.validate_attachment))
         if selected is not None:
-            return _stored(repository, selected.attachment)
+            return _stored(repository, selected.attachment, figure_id)
     if store is None:
         return None
     try:
@@ -71,7 +73,19 @@ def resolve_attached_open(repository: ComposedProjectRepository, target: Path, f
     for entry in index["attachments"].values():
         attachment = Attachment(store, entry)
         if attachment.relative(target) is not None:
-            return _stored(repository, attachment)
+            return _stored(repository, attachment, figure_id)
+    if target != store.root and (known_head(store, target) or FileProjectRepository().has_head(target)):
+        # An exact old head takes precedence over a project-wide search by ID.
+        # Validate before attaching this namespace, never a sibling's match.
+        selected_id = None
+        if figure_id is not None:
+            head = observe_plot_head(target, owner=repository)
+            assert head is not None
+            selected_id = head["binding"].get("figure_id")
+            require_matching_figure(figure_id, plot_id=head["document"]["plot_id"], saved_figure_id=selected_id)
+        attachment = attach_existing(store, target, figure_id=selected_id, validate=repository.validate_attachment)
+        repository.select(attachment)
+        return StoredTarget(attachment.root)
     matches = [item for item in index["attachments"].values()
                if figure_id is not None and figure_id in {item["figure_id"], item["plot_id"]}]
     if figure_id is None and target == store.root and len(index["attachments"]) == 1:
@@ -81,12 +95,6 @@ def resolve_attached_open(repository: ComposedProjectRepository, target: Path, f
     if len(matches) > 1 or target == store.root and figure_id is None and len(index["attachments"]) > 1:
         raise EngineError("semantic_attachment_ambiguous", "Choose one exact attached figure or plot ID.",
                           figures=[item["figure_id"] for item in index["attachments"].values()])
-    if (known_head(store, target) or FileProjectRepository().has_head(target)) and target != store.root:
-        # The human/host supplied this one exact old namespace; never enumerate
-        # its source parent's other .sciplot_documents records.
-        attachment = attach_existing(store, target, figure_id=figure_id, validate=repository.validate_attachment)
-        repository.select(attachment)
-        return StoredTarget(attachment.root)
     resolve = resolve_figure
     if resolve is None:
         from sciplot_core.project_lifecycle.figure_observation import resolve_project_figure

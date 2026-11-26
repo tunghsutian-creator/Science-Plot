@@ -120,7 +120,7 @@ def document_evidence(root: Path, *, attachment: Attachment | None = None,
             raise ValueError("The selected disposable managed artifact changed during discovery.")
     if attachment.store.snapshot()["generation"] != snapshot["generation"]:
         raise ValueError("The project generation changed during saved-work discovery.")
-    return result
+    return {**result, "figure_id": attachment.entry["figure_id"]}
 
 
 def _document_evidence(root: Path, *, head: dict[str, Any] | None = None,

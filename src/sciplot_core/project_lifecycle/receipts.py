@@ -74,6 +74,8 @@ def receipt(root: Path, transaction: dict[str, Any], *, replay: bool = False) ->
                     result["next_step"] = {"action": "plot.resume", "plot": str(root), "request": {
                         "plot_id": doc["plot_id"], "base_revision": transaction["request"]["base_revision"],
                         "idempotency_key": transaction["request"]["idempotency_key"]}}
+            elif phase == "export_pending" and result["next_step"]["action"] == "retry_export":
+                result["next_step"] = {"action": "plot.export", "plot": str(root)}
             if ((phase == "planned" and transaction["error"]["stage"] == "preview"
                  or phase == "resolving" and transaction["error"]["stage"] == "resolving") and "native_result" not in transaction):
                 result["discard_request"] = {"decision_id": transaction["id"],

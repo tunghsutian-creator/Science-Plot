@@ -1,309 +1,62 @@
-# AI-only scientific application: complexity reduction
+# SciPlot complexity: retained design and evidence
 
-Status: bounded remaining work, reconciled 2026-11-16.
-Current main: `30de8f1c06b656e1a36032bece7478040969231f`.
-The measurements below describe their original executions, not current timings.
-The cancelled SavedWork release and older worktrees remain separate.
+The [development roadmap](../DEVELOPMENT_ROADMAP.md) owns work order and completion
+criteria. This reference records boundaries and historical observations, not
+current-run results or another active queue.
 
-The application uses external AI conversation and deterministic local commands.
-The delivered baseline retires the manual product editors, consolidates command
-and project writers, and reads basic notes on a separate PDF with the checked
-original figure/project. These are bounded completed responsibilities, not proof
-that the whole project has no duplication. Historical implementation and acceptance
-records belong to Git and the retained local receipts, rather than an expanding
-sequence of competing status paragraphs in this plan.
+## Ownership and deletion boundaries
 
-## Delivered reader/resolver batch and its measured limits
+| Concern | Authority and constraint |
+| --- | --- |
+| Original data | Original bytes/hash, source membership, physical table/row identity and explicit selection. One observation can supply an operation; never pool or truncate original observations to match rendering. Raw bytes, scientific UUIDs, exact file/tree versions, admitted source members, host paths and executable views are different facts. |
+| Scientific preparation | The sealed operator version, confirmed units, source bindings, transform and sample identities. Display/view aliases or inferred labels cannot supply science. Rendering prepared TTS coordinates does not perform or validate scientific shifting/fitting. |
+| Figure and rendering | Managed document and deterministic IR for new work; existing VSZ bytes where the old figure is unrepresented. Python owns application/science and Veusz/Qt owns native rendering. Retiring manual Qt/React authoring does not retire headless Qt, native rendering, or AI-driven layout. |
+| Edit, publication and history | The existing command and Store generation owners hold scientific/revision and writing authority; ownership stays distinct from source, export and QA receipts. The detached candidate may not authorize a write by itself. Keep preview/approval, exact version and recovery; read-only queries do not materialize or recover data. |
+| Interfaces and compatibility | CLI and MCP route to the same owner. A bounded older reader is not a second writer. Immutable normalized commands retain actual payload, journal/digest and strict JSON semantics; a digest is not authorization. A separate PDF review copy is a reference, not saved state or a source of values. Keep disclosure, transport/cancellation and actual provider facts separate from permissions and edits. |
+| Verification | Actual child startup, wait, exit and executed assertions; source/runtime, capture and original input bytes; same-operation evidence remains bound to that operation. Unknown observations, changed input or missing evidence cannot use a cached pass. Distinct public, private access, real science, independent usability and supported-platform gates retain their meanings. |
 
-The current successful Mac execution had 10,189 passed bodies. Its original
-pytest elapsed time was 14,938.07 seconds; subsequent capture finalization took
-221.70 seconds and strict access export took 800.82 seconds. The long mapping
-CALL took 610.07 seconds. These are costs from one accepted execution, not a
-baseline/candidate acceleration comparison. The interrupted prior execution and
-its missing exit evidence remain recorded separately.
+Retirement evidence connects actual consumers, the remaining owner, the
+deleted path, and equal scientific results or preserved refusal/recovery.
+Equivalent serialization and absent imports are insufficient if saved task
+or native callers remain. See [architecture](ARCHITECTURE.md) and
+[project Core migration](DESIGN_PROJECT_CORE_MIGRATION.md) for live owner contracts.
+A migration that leaves a second active orchestrator or writer has not retired it.
 
-The two original branches are integrated in main (`90be13d2`, `782a98cf`).
-The table records their scope and stop conditions, not outstanding implementation.
+## Measured history
 
-| Line | Complete deliverable | Boundary and stop condition |
-| --- | --- | --- |
-| Strict access operation | Attribute repeated review, parsing and hashing in the real call chain; remove a proven same-operation duplicate with all callers migrated | Preserve fresh source/stream/permission observations, original actor/phase/wait validation and final drift refusal. No PASS cache across operations or retained multi-GB object. Stop if improvement requires a new certificate/scheduler framework or weaker evidence. |
-| Mapping lifecycle | Profile the complete existing create, source-update, cold import and offline publication node; simplify only a measured repeated responsibility | Keep all original raw arrays, units, source versions, explicit native styles, preview/accept/retry, cold conditions, scientific audits and worker-exit assertions. Necessary cold/native work is not a duplicate merely because it takes time. |
+These are observations on their original inputs, toolchains, modes and source.
+Do not represent them as a later candidate's result or as cross-platform savings.
 
-Use existing pytest durations and stdlib cProfile/pstats or a finite forwarding
-measurement around real owners. Compare identical node sets, source inputs,
-runtime and evidence mode, reporting profiler overhead and distinct operations.
-Standalone ordinary execution cannot be compared with an old full capture as
-causal speedup. Do not sum overlapping inclusive timers. If a hotspot has no
-safe useful replacement, record that result instead of adding a cache.
+| Observation | Measurement and limit |
+| --- | --- |
+| Historical Mac full | 10,189 passed bodies; pytest 14,938.07 s, capture finalization 221.70 s, strict access export 800.82 s, and a mapping CALL 610.07 s. These are not independent additive times or a before/after comparison. |
+| Access/capture evidence size | 258 original streams, 2,047,284,070 bytes; derived `capture-review.json` 4,970,691,114 bytes. Size is not wall-time attribution. The three-review recipe was an external local operator; production `private_corpus_preflight` reviews once. Preserve original streams, report, actual waits/exits and negative evidence. |
+| Resolver and reader (integrated `90be13d2`, `782a98cf`) | Same Store lock promoted the selected generation's reachability into first admission for the ordinary resolver, retaining same-operation scope and active-window exceptions. Ordinary generated mapping was 197.19 → 158.01 s in one pair. Holding the same bytes for hashing and parsing reduced reads 12 → 6, but alternating medians were 0.876958 → 0.880154 s. That is a byte-consistency repair, not a measured speedup. |
+| Snapshot batching | One matched native case was 1709.20 → 1161.73 s with unchanged assertions. This does not establish full-suite or cross-platform speedup. |
+| Daily check and native preparation | A typed-intent change ran the same 32 bodies and four checks in 11.00 s vs. 10.09 s previously. A separate native memo pair kept 1,260 bodies and four checks at 159.81 → 148.87 s with different index fingerprints. Neither establishes a general suite speedup. A text-projection memo trial's 2.28% difference with different inherited environments was rejected. |
+| Comparable full CI | [Run 44228764028](https://github.com/tunghsutian-creator/Science-Plot/actions/runs/44228764028) passed both public tiers in 3h03m30s on its own source/environment. This is not a target or a completion receipt for a new run. |
 
-During development, run the exact relevant counterexamples and existing quick
-shared/static gates. A coherent integrated verifier change needs its own final
-capture/access proof; the delivered baseline's proof remains attached to its
-original source. Do not repeat completed full/CI merely for a new plan, or run a
-full suite independently in each worker. Direct xdist and a new multi-worker
-acceptance protocol are outside this batch.
+Existing native evidence uses original environment/source/fixture delivery
+bindings; read current results separately. Retain the original success and
+interrupted/failed records, including exact prior evidence scope, and use
+[task measurements](TASK_CAPABILITY_MEASUREMENTS.md) for operation data rather
+than comparing incompatible test counts or summing overlapping timers.
 
-Basic PDF feedback remains positions/text plus the original figure/project.
-No Foxit testing, new editor, vector-to-scientific-object recognition, real model
-call or user-data transmission is part of the work.
+## Disposable storage boundary
 
-The isolated implementation now moves selected-generation reachability into
-the first source admission, in the same Store lock, while retaining current
-source membership and the selected snapshot's UUID/version/name. It removes the
-adjacent repeated full admission only for the concrete resolver without active
-owned IO. Extensions and active history windows retain their original fence.
-The complete ordinary generated mapping node measured 197.19 then 158.01 seconds
-in one before/after pair with all original assertions; this is not a stable
-whole-suite or cross-platform percentage.
+Routine quick/changed tests use an external tool-cache root shared across
+worktrees. Completed pytest successes are removable; the lease-aware policy
+retains up to two failures and one successful cache per tool, with seven idle
+days and 512 MiB accounted bytes, and a 5 GiB capacity warning. Active, unknown,
+caller-owned, recorded and captured outputs are outside this policy.
+The 175 custom mypy and 11 Swift cache roots seen historically illustrate why a
+folder name is not proof of ownership. Neither a worktree nor a mixed
+`.tmp_verify/workflow-reliability` tree is a disposable cache.
 
-The reader now hashes and parses the same held bytes. Three small alternating
-pairs measured medians 0.876958 then 0.880154 seconds: no speed benefit, despite
-raw reads falling from twelve to six. Keep it as a byte-consistency correction,
-not evidence that the 800.82-second strict export is faster. These changes are integrated; their original local measurements remain
-separate from later main acceptance and do not establish whole-suite speedup.
-
-## Development artifact lifetime
-
-Routine quick/changed execution now has a shared external tool-cache root through
-the existing platformdirs dependency, not one retention domain per worktree.
-Pytest uses one container per real invocation; mypy/Ruff/Swift retain reusable tool
-bytes while always rerunning their own input checks. Original child completion
-plus a kernel lease admits completed-cache retention: success pytest removal,
-at most two failures and one successful cache per tool, seven idle days and
-512 MiB accounted file bytes. Active,
-unknown, caller-owned and recorded/captured outputs are preserved. Capacity is
-observed before/after checks, with a 5 GiB warning rather than a predicted quota.
-This bounds ordinary completed scratch accumulation; it does not pretend that
-all historical full/audit outputs are disposable or globally byte-bounded.
-
-Actual historical counterexamples are `.tmp_verify/workflow-reliability` with
-private inputs, mechanical data, final deliveries and staged originals; 175
-custom mypy cache roots and 11 Swift module-cache roots escaped conventional
-cache-name cleanup. Existing data is not adopted or deleted by the new owner.
-Retire the ad hoc cache recipes through the real changed runner and shared
-compiler entry, without a new scheduler, cache database or PASS reuse system.
-
-Delivered through `dd050af7` and its consumer corrections ending at `7f3cb7a1`:
-new research-destination admission across the nine writer families and retained
-recorded fixture-workspace allocation before collection. Architecture documents
-the read/query compatibility boundary. Do not reopen this completed migration;
-historical evidence retention and a global capacity policy remain separate.
-
-The actual workspace has hundreds of historical worktrees and thousands of
-ignored output entries. Their names/ages do not establish safe deletion. Future
-workers should reuse their own suitable isolated trees and retire them only after
-checking merged history, uncommitted work and necessary evidence. A whole worktree
-is never the disposable pytest container. Existing user and frozen trees remain.
-
-## Following bounded decision: retire repeated local acceptance recipes
-
-The current accepted capture contains 258 raw streams totaling 2,047,284,070
-bytes, while its derived `capture-review.json` is 4,970,691,114 bytes. These are
-file-size observations, not internal timing attribution. The raw proof and review
-still belong to the original accepted execution and must not be rewritten.
-The actual three-review export sequence is assembled in an external local
-operator; production `private_corpus_preflight` itself reviews once.
-
-With the reader/resolver changes delivered, census the actual local
-producer and consumers before replacing that recipe through the existing
-verification entry point. The candidate boundary is one finalization/export
-operation with one owner of receipt/raw consistency, plus a compact diagnostic
-projection rather than another persisted copy of every raw frame. Preserve
-original raw streams, full failure evidence, input identities, actual exits and
-all fresh source/permission/artifact checks. A compact report is a report, not a
-portable certificate or a cached PASS. Old reports/operators remain readable
-historical evidence, not silently migrated execution.
-
-Removing an explicit validation changes failure timing if a receipt is written
-before the final preflight. That effect must be tested and remain fail closed;
-it is not automatically equivalent. No wall-time saving is claimed until an
-actual same-input operation comparison exists. If implementing this requires a
-second scheduler/certificate/cache framework, stop and narrow the proposal.
-The same entry should expose check start/finish and elapsed cost while preserving
-structured stdout; current quick output is buffered until the selection ends.
-This improves observability, and must not be counted as execution speedup.
-
-## Product boundary and target
-
-Users request creation and changes through an AI conversation. Existing CLI/MCP
-are the local execution interface. Users may mark a separate PDF review copy to
-show the AI what they mean. SciPlot does not build a manual graph-editing frontend.
-A PDF comment is reference material, never a scientific value or command authority.
-
-```text
-original files -> observed scientific selection -> canonical document
-                                                   |
-AI conversation -> typed local command + expected version
-                                                   |
-                     one application use case / history / project writer
-                                                   |
-                       deterministic IR -> Veusz/Qt -> QA -> delivery
-                                                   |
-                       separate PDF review copy -> reference for AI
-```
-
-Python remains the scientific/application implementation; Veusz/Qt remains the
-native renderer and editable-file adapter. Existing PyMuPDF supplies PDF reading.
-Retire the React manual editor/build assets and SciPlot-specific writable Qt
-workbenches after their actual consumers have moved or their manual feature has
-explicitly ended. Do not remove headless QApplication/native rendering with the
-widgets. There is no tracked Rust/Cargo/Tauri application to remove or preserve.
-No new browser/desktop shell, general event bus, database or cache framework is
-part of this work. Existing external AI clients can drive the same local tools.
-
-Work stays in the existing repository. Reuse proven readers, scientific versions,
-Store primitives and Veusz compilation; replace overlapping orchestration and
-retire its callers. A new facade delegating to the same old orchestration is not
-an implemented replacement. Moving every file into another repository would add
-packaging, locator, host/source identity and compatibility migration without
-eliminating that orchestration. Current evidence does not justify that cost.
-
-## Whole-project authority and dependency map
-
-| Capability family | Authority to retain | Target change / deletion criterion |
-| --- | --- | --- |
-| Data import and original tables | Full original bytes/hash, physical table/row identity and explicit selection | One observed catalog/selection supplies planning and execution; remove duplicate parsing/selection only when all family consumers use it. Do not pool or truncate raw data. |
-| Scientific preparation | Sealed operator version, units, source view, transform ledger and original samples | Separate pure scientific meaning from host IO and implementation location. Keep distinct prepared-TTS rendering and legacy shift/fitting purposes. Remove repeated same-observation calculations, not different scientific algorithms. |
-| Figure planning and rendering | Canonical Managed document; Legacy native bytes for unrepresented visual state | Adopt the existing semantic XY create path and pure IR compiler. Replace context/path-writing orchestration with explicit inputs and detached rendering. Do not wrap Studio creation as a new scientific core. |
-| Editing and decisions | One immutable command, current document/version, actual advertised capabilities and explicit scientific intent | AI and program tools use the same command/history. Remove repeated raw schema/copies and retired manual/native-selection business state; preserve fresh IO and commit admission. |
-| Project state and history | Existing ProjectCommands/FileProjectStore sole durable writer | Project generation, figure revision, source version and artifact identity remain distinct. Retire competing lifecycle/draft state writers after complete caller migration; keep bounded old-format readers. |
-| Save, export, continuation and assembly | Exact current document, source bindings, artifact/QA receipts and prepared publication | One use case owns stage/decision/publish and cold continuation. Saved artifact facts have one Core query owner. Queries do not materialize or recover effects. Keep AI-driven assembly/export; retire drag/edit workbenches. |
-| AI, CLI, MCP and compatibility | Current received bytes, bounded disclosure, factual usage and deterministic local execution | Thin interfaces call the same use cases. Replace selected-widget/UI-changeset assumptions with saved canonical facts. Reuse transport/cancellation/provider facts where still called; delete dead UI orchestration. Old files are not rewritten merely on read. |
-| Verification and distribution | Actual exit, executed assertions, science, supported platform, input/capture/access facts | Keep the existing quick/suite/durable base. Remove same-operation rescans and duplicate assembly; retire tests only with their removed product responsibility, retain its Core/scientific/safety coverage. No all-purpose PASS. |
-
-The ordinary raw/Studio creation route and semantic Managed route are both real.
-The semantic route already reaches Managed document/IR/compiler without a product
-MainWindow. Application extraction must follow that real route. Qt class names
-alone do not establish a frontend dependency. TTS prepared coordinates are supplied
-scientific facts; local shift/fitting analysis is a different supported operation.
-
-## Implementation order and complete stage boundaries
-
-### 1. Immutable commands and the canonical XY execution foundation
-
-Make all existing NormalizedCommand kinds own strict JSON snapshots, preserve
-valid direct construction, v1 journal payloads and canonical digests, and remove
-repeated in-memory hash validation. Ordinary mutable Python Path/tuple/non-string
-key payloads are not an alternate wire format: reject them explicitly rather than
-silently coercing them. Do not infer schema, scientific or host permission from a
-command's hash.
-
-Admit a raw patch once and carry the exact immutable result through public
-facade/application, Managed/Legacy preparation, NativeSuite and generated/replayed
-requests. Preserve raw compatibility adapters and new file/process admission;
-remove the replaced internal raw path. Original and business requests stay distinct.
-
-Then replace the XY orchestration with explicit document/data/capability inputs,
-detached native candidates and the existing Store stage/decision/publication
-owner. Reuse the real pure compiler, not ManagedBackend.preview/prepare_binding as an
-imaginary side-effect-free port. Preserve canonical document and old ready-project
-readers; do not create a second project database or transaction engine.
-
-First complete chain: generated real XY CSV -> Managed creation -> AI/program
-legend command -> actual needs_review -> frozen detached preview -> decide/save
-without native re-execution -> close/reopen -> current PDF/native export. Include
-same-key reply loss, late-invalid whole-command refusal, source/revision drift and
-original-source-offline bundle continuation. This does not promise complete old
-VSZ semantic coverage. Existing scientific/raw data and unedited style survive.
-
-### 2. Consolidate observations, scientific preparation and saved evidence
-
-Use one current observation per finite operation, with fresh rechecks at new IO,
-callback/process or commit boundaries. Retire repeated CAS expansion, raw-table
-reads and schema/IR calculations only after equal complete outputs and invalidation
-controls are proved. No cross-operation PASS cache or changed numerical tolerance.
-Unify saved artifact/QA facts and remove the corresponding GUI copies. Migrate all
-supported scientific/creation/continuation families, not just the first XY fixture.
-
-Delivered consumers share mechanical facts through Workflow/Studio, normalize
-governed prepared TTS once before compilation, and observe attached SavedWork
-canonical/archive members as a generation-bound batch. Intake uses one envelope
-publication across Python, CLI/MCP, Studio and Curate. Its legacy flat reader is
-read-only; current readiness, pending-review templates, source versions and
-confirmed columns retain admission. These migrated responsibilities are retained
-as regression boundaries. Any remaining family projection requires its actual
-producer/caller census before a new migration is selected.
-
-### 3. AI reference flow and removal of manual product paths
-
-Reuse an external PDF tool such as macOS Preview for notes/shapes on a review
-copy. Existing PyMuPDF can enumerate standard review annotations; native graph
-annotation APIs are a different feature. Structured text, page geometry and
-rendered review pages may inform the AI. No structured annotations does not prove
-absence of flattened or unsupported visual marks.
-
-Bind the AI's actual operation to the current Core project/document/version and
-capabilities. A filename, page coordinate or PDF metadata cannot authorize data,
-unit, source or native changes. Keep delivered PDF hashes valid by not overwriting
-canonical outputs with review marks. No real provider/data transmission occurs in
-development without its separate permission; tests use generated bytes/fixtures.
-
-After routing is covered, remove manual live-editor sessions/revisions/undo,
-React source and packaged assets/build chain, writable Qt product docks and
-save hooks, manual edit launchers, and UI-only compatibility/constraints. Keep
-headless renderer helpers, scientific confirmation, project migration, actual
-preview/decision/recovery and AI-driven panel creation. Update all callers,
-package manifests, entry points, capabilities, docs and test responsibilities
-in the same retirement batch. Do not leave active and supposedly retired writers.
-
-### 4. Verification composition, dependency cleanup and final migration
-
-Separate one fresh stage/source/runtime observation from its pure environment
-judgments; later operations and exit checks remain fresh. Compose original
-execution, CAP and strict access facts in the existing verification owner instead
-of hand-building release recipes. One bound capture review may feed distinct
-consumers in that operation; a later untrusted JSON result is not proof.
-
-Reconcile the CI diagnostic prefix with canonical comprehensive execution, retain
-order/competition counterexamples and required-check semantics. Remove dead imports,
-old orchestrators and compatibility branches only after the full supported caller
-closure is migrated. Do not keep old implementations as permanent fallback paths.
-
-## Parallel ownership and feedback
-
-The current independent worktrees own strict-operation cost and mapping-lifecycle
-cost respectively. One integration owner controls shared interfaces, registrations
-and documentation, merges those changes and reviews the complete diff. Each
-worker runs its relevant discriminating controls, not an independent full.
-
-Measure baseline/candidate under the same runtime, input/history and mode. Report
-schema/JSON/hash/read/native counts, complete result equality, removed mechanisms
-and actual elapsed time. Prior value-object measurements cover small components; they are not evidence
-that a multi-hour native suite is solved. Existing full
-runs show native workflow bodies dominate, so later optimization must measure
-those bodies rather than only moving waiting to CI.
-
-Run affected regressions and cheap shared architecture/type gates while editing.
-Freeze each complete integrated migration batch before necessary native/platform/
-private gates. Reconcile valid same-input coverage instead of executing changed,
-focused, comprehensive and full mechanically. An interrupted or unrun gate remains
-incomplete; source, environment, input and coverage identity constrain reuse.
-
-## Risks and closure evidence
-
-Principal risks: numerical/JSON identity drift; missing alternate callers;
-confusing project, document, live and PDF-reference versions; hidden side effects
-in read-looking helpers; deleting renderer dependencies with UI; incomplete old
-project/pending recovery; unsafe reuse of stale input or native execution facts.
-
-Every stage records all target producers/consumers, unique state writer, removed
-old paths, unchanged scientific results, accepted/refused behavior and real fault
-recovery. Unknown old schemas or unrepresented native state remain explicit
-refusals. Test counts and deleted lines alone are not an architecture acceptance.
-
-All original data, protected worktrees/WIP and cancelled-candidate evidence stay
-intact. No denied launchd retry, force push, deployment or paid AI call. Quota reset
-is used only if an actual supported authorized tool exists; no reset is invented.
-
-
-## Storage boundary correction (2026-11-10)
-
-Nine public writer families now share one new-destination placement owner;
-existing admitted namespaces retain derived children and old replay. Recorded
-pytest workspace allocation precedes identity capture and never participates in
-ordinary cache eviction. These changes do not classify historical mixed folders
-as disposable or move user material. Independent legacy cleanup remains manual,
-role-based review; persistent evidence still needs deliberate retention review.
-The default source-control relocation applies only to new control records for
-inputs already inside software, with bounded saved-work discovery.
+The research destination policy (`dd050af7` through `7f3cb7a1`) controls newly
+admitted locations across nine writer families and allocates recorded fixture
+workspaces before capture. Older mixed directories are not retroactively
+reclassified. Preserve protected raw data, dirty and unmerged worktrees,
+undelivered outputs, original verification records and cancelled candidate
+evidence. Remove generated artifacts only after proving ownership and that
+their reproducible content is preserved or no longer necessary.

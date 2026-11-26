@@ -10,11 +10,12 @@ from test_task_semantic_resolution import bits, raw_intent, source_coordinates, 
 
 @pytest.mark.comprehensive
 def test_native_ordinary_measured_log_conversion_append_and_cold_service_reuse(tmp_path):
+    from managed_plot_helpers import read_managed_head_and_ir
     from sciplot_core.foundation.file_hashing import file_sha256
     from sciplot_core.plot_backends.managed_audit import scientific_audit
     from sciplot_core.plot_backends.native_primitives import dataset_name
     from sciplot_core.plot_engine.service import PlotService
-    from sciplot_core.plot_engine.storage import load_head, read
+    from sciplot_core.plot_engine.storage import load_head
     from sciplot_core.plot_ir.figure_document import figure_spec
     from sciplot_core.task_semantic_creation import build_managed_request
     from sciplot_core.veusz_worker.document_edit import loaded_native_document
@@ -43,8 +44,7 @@ def test_native_ordinary_measured_log_conversion_append_and_cold_service_reuse(t
         created = service.create(wire)
         assert created["ready_to_use"], created
         plot = Path(created["plot"])
-        before = load_head(plot)
-        old_ir = read(Path(before["binding"]["ir_path"]))
+        before, old_ir = read_managed_head_and_ir(plot)
         assert "source.append" in service.describe(plot)["figure_edit_contract"]["view:main"]
         # Explicit presentation recovery retains the long appended label and
         # the original data. The first, narrower proof's failure is retained.
@@ -76,8 +76,7 @@ def test_native_ordinary_measured_log_conversion_append_and_cold_service_reuse(t
         accepted = service.decide(plot, preview["next_step"]["request"])
         assert accepted["ready_to_use"] and accepted["revision"] == 2, accepted
         assert service.patch(plot, request)["replayed"] is True
-        head = load_head(plot)
-        ir = read(Path(head["binding"]["ir_path"]))
+        head, ir = read_managed_head_and_ir(plot)
         assert all(ir["datasets"][name] == dataset for name, dataset in old_ir["datasets"].items())
         layers = figure_spec(head["document"])["views"][0]["layers"]
         assert len(layers) == 2

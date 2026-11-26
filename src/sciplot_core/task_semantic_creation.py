@@ -116,6 +116,10 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
             save_task(root, state)
             return
         plan = prepare_plan([Path(value) for value in state["request"]["sources"]], state["request"]["intent"])
+        if state["request"].get("choose_columns"):
+            from sciplot_core.task_ftir_block_choice import advertise_ftir_blocks
+
+            advertise_ftir_blocks(plan, state["source_hashes"])
         state["semantic_plan"] = plan
         state.pop("blocker", None)
         if plan.get("decisions"):
@@ -140,7 +144,10 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
         state["project"] = result["plot"]
     complete = (result.get("status") == "complete" and result.get("ready_to_use") is True
                 and isinstance(result.get("plot"), str) and bool(result.get("exports")))
-    state.update(status="complete" if complete else "blocked", phase="finished" if complete else "exporting")
+    if complete and "formats" in state["request"]:
+        state.update(status="running", phase="delivering")
+    else:
+        state.update(status="complete" if complete else "blocked", phase="finished" if complete else "exporting")
     if not complete:
         state["blocker"] = {"reason_code": (result.get("error") or {}).get("reason_code", "managed_export_not_ready"),
                             "message": (result.get("error") or {}).get("message", "The saved Managed revision is not a verified delivery."),
@@ -164,8 +171,11 @@ def _validate_choices(plan: dict[str, Any], choices: dict[str, Any]) -> None:
         field = decision["field"]
         actual = choices.get(field)
         allowed = decision["options"]
-        valid = (isinstance(actual, dict) and set(actual) == set(allowed)
-                 and all(actual[name] in options for name, options in allowed.items())) if isinstance(allowed, dict) else actual in allowed
+        if field == "blocks":
+            valid = isinstance(actual, list) and bool(actual) and all(block in allowed for block in actual)
+        else:
+            valid = (isinstance(actual, dict) and set(actual) == set(allowed)
+                     and all(actual[name] in options for name, options in allowed.items())) if isinstance(allowed, dict) else actual in allowed
         if not valid:
             error = TaskControlError("invalid_task_response", "Answer every listed scientific decision with one advertised option; no choice is inferred.")
             error.issues = [{"path": "/choices/" + field, "constraint": "advertised_option", "expected": allowed, "actual": actual}]
@@ -184,6 +194,8 @@ def resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
         run_creation(root, state)
         return
     if "revise_intent" in response:
+        if state["request"].get("choose_columns"):
+            raise TaskControlError("invalid_task_response", "Answer the exact current FTIR block question; revising intent cannot replace it.")
         if not Draft202012Validator(semantic_response_schemas()[1]).is_valid(response):
             raise TaskControlError("invalid_task_response", "Revise the complete semantic intent with its current intent_revision.")
         if response["expected_intent_revision"] != state.get("intent_revision", 1):
@@ -192,15 +204,15 @@ def resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
             raise TaskControlError("task_not_revisable", "This task already committed a plot. Continue its saved plot through an explicit scientific edit; a draft correction cannot replace committed science.")
         if "managed_request" not in state and (state.get("creation_attempts") or state.get("phase") in {"creating", "exporting", "finished"}):
             raise TaskControlError("task_not_revisable", "The prior native outcome lacks its frozen request. Recover that original outcome before replacing scientific intent.")
-        # A lost reply may have committed before the task adopted its receipt.
-        # Inspect the already frozen attempt's known Managed owner journal.
         wire = state.get("managed_request")
         if wire:
-            from sciplot_core.plot_engine.storage import digest
+            from sciplot_core.project_lifecycle.managed_creation_targets import has_committed_managed_creation
 
-            first = Path(wire["data_binding"]["data_sources"][0]["path"])
-            owner = first.parent / ".sciplot_documents" / "managed" / digest(wire["idempotency_key"])
-            if (owner / "head.json").exists():
+            try:
+                committed = has_committed_managed_creation(wire)
+            except (OSError, ValueError) as exc:
+                raise TaskControlError("task_not_revisable", "The prior creation outcome could not be verified. Retry this same task with its frozen request before changing intent.") from exc
+            if committed:
                 raise TaskControlError("task_not_revisable", "The prior attempt committed before its reply. Retry this same task to recover its saved plot; do not replace the request.")
         intent = validate_intent(response["revise_intent"])
         state.setdefault("intent_history", []).append({"intent_revision": state.get("intent_revision", 1),
@@ -241,6 +253,8 @@ def resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
             _ask_plan(root, state)
             return
     state.update(semantic_choices=accumulated, semantic_plan_confirmed=True)
+    if "blocks" in choices:
+        state["plan_confirmation"] = {"mode": "explicit_source_bound_answers", "question_id": response["expected_question_id"]}
     state.pop("question", None)
     save_task(root, state)
     run_creation(root, state)
@@ -249,6 +263,10 @@ def resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
 def current_result(state: dict[str, Any]) -> dict[str, Any]:
     summary = task_summary(state)
     if state.get("project") and state["status"] == "complete":
+        if "formats" in state["request"]:
+            from sciplot_core.task_semantic_selected_delivery import current_selected_result
+
+            return current_selected_result(state, summary, assert_sources_current=assert_sources_current)
         from sciplot_core.task_semantic_owner import describe_managed
 
         try:

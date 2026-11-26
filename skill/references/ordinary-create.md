@@ -21,7 +21,16 @@ not sent to the native route. Supported defaults include:
   (`%`) or absorbance (`a.u.`) response. Fully bound same-mode sample pairs
   in one file can use the default stack. It preserves each original grid,
   sample label and per-spectrum analysis; only displayed lines are shifted.
-  Stacks hide numeric Y ticks and retain a descending wavenumber axis.
+  Stacks hide numeric Y ticks and retain a descending wavenumber axis. For a
+  named paired FTIR CSV/TSV with explicit units, use
+  `task create SOURCE --rule ftir_spectrum --choose-columns --curve-display raw_overlay`
+  when the user wants an unshifted overlay but has not yet named its samples.
+  The daily MCP `task_start` accepts the same source-only fields. Ask which
+  samples match the returned original blocks, then resume the same task using
+  its `expected_question_id`, `confirm_plan:true`, and `choices.blocks`
+  (an array of the selected exact `source_id`/`table_id`/`block_id` records).
+  Unselected blocks are not plotted; omitting this opt-in does not change the
+  existing stack or explicit semantic-selection defaults.
 - **GPC–SEC:** one verified calibrated molar-mass/`dW/dLogM` distribution,
   with `g/mol` in the molar-mass header or the supported adjacent unit row.
   The exact registered `dW/dLogM` header establishes a dimensionless
@@ -88,6 +97,16 @@ This is a recipe default, not a universal journal rule: published
 
 2. For an advanced structured request, use `task start --request REQUEST.json`.
    Read only the missing named request/response schema from task capabilities.
+   A standalone request with `sources` and `intent` can set top-level
+   `"formats":["pdf"]` or `"formats":["pdf","tiff_300"]` here or in
+   `sciplot_task_start`. Use `out` for a new output directory. The task
+   returns only the selected, audited figure files in that directory and a
+   separate saved plot for later editing. Omitting `formats` keeps the existing
+   native snapshot. This option is not accepted by `task create` flags,
+   source-only or categorical requests, or experiment-group items. If the
+   delivery changes after completion, keep the plot and
+   [export the intended revision to a new directory](managed-delivery.md).
+
    If the original table is already understood, include `create.mapping` with
    its original file SHA, row selections, metadata evidence and XY pairs rather
    than rediscovering the same table. The typed entry does not invent mappings.

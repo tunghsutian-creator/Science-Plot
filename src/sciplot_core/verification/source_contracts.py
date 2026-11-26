@@ -4,9 +4,11 @@ TYPE_SCOPE_PARTITION_TARGET = (
     "tests/test_ordinary_plotting_owners.py::test_reviewed_strict_additions_extend_the_preserved_residual_scope_once"
 )
 
+IMPORT_GRAPH_TARGET = "tests/test_architecture_boundaries.py::test_first_party_import_graph_is_acyclic"
+
 ARCHITECTURE_CORE_TARGETS = (
     "tests/test_architecture_boundaries.py::test_ordinary_source_files_stay_within_the_size_boundary",
-    "tests/test_architecture_boundaries.py::test_first_party_import_graph_is_acyclic",
+    IMPORT_GRAPH_TARGET,
     "tests/test_iso_timestamps.py::test_first_party_contract_timestamp_implementation_has_one_owner",
     "tests/test_architecture_boundaries.py::test_process_wide_no_io_patches_end_before_test_teardown",
     TYPE_SCOPE_PARTITION_TARGET,

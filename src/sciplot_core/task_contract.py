@@ -22,7 +22,7 @@ _REQUIRED = {
 }
 
 
-def task_request_schema() -> dict[str, Any]:
+def task_request_schema(*, selected_formats: bool = True) -> dict[str, Any]:
     from sciplot_core.studio_core.annotation_schema import annotation_operation_capabilities
 
     variants = []
@@ -66,7 +66,10 @@ def task_request_schema() -> dict[str, Any]:
     from sciplot_core.task_semantic_contract import semantic_request_schema
     from sciplot_core.task_categorical_contract import categorical_request_schema
 
-    return {"oneOf": [*variants, semantic_request_schema(), categorical_request_schema()]}
+    semantic = semantic_request_schema()
+    if not selected_formats:
+        semantic["properties"].pop("formats")
+    return {"oneOf": [*variants, semantic, categorical_request_schema()]}
 
 
 def task_response_schema() -> dict[str, Any]:
@@ -151,7 +154,10 @@ def validate_task_request(value: dict[str, Any]) -> dict[str, Any]:
         validate_intent(value.get("intent"))
         if not Draft202012Validator(semantic_request_schema()).is_valid(value):
             raise TaskControlError("invalid_task_fields", "Semantic create needs sources and intent, without source/profile/template/mapping overrides.")
-        return dict(json.loads(json.dumps(value, ensure_ascii=False, allow_nan=False)))
+        normalized = dict(json.loads(json.dumps(value, ensure_ascii=False, allow_nan=False)))
+        if "formats" in normalized:
+            normalized["formats"] = sorted(normalized["formats"])
+        return normalized
     if type(value.get("version")) is not int or value["version"] != 1:
         raise TaskControlError("unsupported_task_version", "任务接口版本必须为 1。")
     if not isinstance(action, str) or action not in _FIELDS:

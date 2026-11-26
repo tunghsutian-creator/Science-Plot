@@ -17,6 +17,8 @@ from sciplot_core.policy import DELIVERY_LAUNCHER
 from sciplot_core.studio_core.delivery_target import _managed_project
 from sciplot_core.studio_core.figure_set_state import _read_studio_figure_set
 
+from .errors import EngineError
+
 
 def read_object(path: Path) -> dict[str, Any]:
     canonical_path(path)
@@ -191,7 +193,11 @@ def select_figure(
     identity = primary_id if identity is None else identity
     matches = [item for item in figures if item["figure_id"] == identity]
     if not matches:
-        raise ValueError(f"Unknown figure_id: {identity}")
+        raise EngineError(
+            "figure_selection_mismatch",
+            f"Unknown figure_id: {identity}. Inspect the project without a figure ID to list saved figures.",
+            action="inspect_project",
+        )
     selected = matches[0]
     if selected["status"] != "ready" or not selected["document_sha256"]:
         raise ValueError(f"The selected figure has no saved document: {identity}")
@@ -219,7 +225,11 @@ class LegacyFigureObservation:
                 or existing_file_sha256(self.project / "studio/figure_set.json") != self.registry_sha256
                 or any(existing_file_sha256(Path(figure[field])) != figure[field + "_sha256"]
                        for figure in figures for field in ("document", "spec"))):
-            raise ValueError("The saved project changed during inspection; query again.")
+            raise EngineError(
+                "stale_revision",
+                "The saved project changed during inspection. Inspect the project again and use its current document hashes.",
+                action="inspect_project",
+            )
 
 
 @observe_existing_store()

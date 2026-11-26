@@ -41,6 +41,10 @@ def register_project_commands(subparsers: Any) -> None:
         bundle = actions.add_parser(name, help=help_text)
         bundle.add_argument("target", type=Path, help=noun)
         bundle.add_argument("--out", type=Path, required=True, help="New path under an existing research directory.")
+        if name == "bundle-export":
+            bundle.add_argument("--single-file", action="store_true",
+                                help="Pack the whole project as a new .sciplot file. Also accepts an exact saved Managed v2 plot handle.")
+            bundle.add_argument("--expected-generation", help="Abort if the Store is no longer at this generation.")
         bundle.add_argument("--json", action="store_true")
     redraw = actions.add_parser("legacy-redraw", help="Redraw an exact saved old plot into a new directory.")
     redraw.add_argument("target", type=Path, help="Saved project directory or exact VSZ.")

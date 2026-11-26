@@ -159,7 +159,8 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
         destination = Path(arguments["output_dir"])
         if name == "sciplot_project_bundle_export":
-            return export_project_bundle(Path(arguments["project"]), destination)
+            return export_project_bundle(Path(arguments["project"]), destination, single_file=arguments.get("single_file", False),
+                                         expected_generation=arguments.get("expected_generation"))
         return import_project_bundle(Path(arguments["bundle"]), destination)
     project = Path(arguments["project"])
     figure_id = arguments.get("figure_id")

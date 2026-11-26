@@ -8,7 +8,10 @@ from sciplot_core.foundation.research_destination import require_data_destinatio
 from sciplot_core.project_store import FileProjectStore, ProjectConflict
 from sciplot_core.project_store.io import STORE
 
+from .attached_repository import AttachedProjectRepository
+from .attachment_index import read_index
 from .errors import EngineError
+from .head_observation import observe_plot_head
 from .store_composition import existing_store
 
 
@@ -35,23 +38,76 @@ def _result(operation: str, project: Path, bundle: Path, head: dict[str, Any]) -
             "independent_project": False, "host_grants_included": False}
 
 
-def export_project_bundle(project: Path, destination: Path) -> dict[str, Any]:
-    """Bundle the exact admitted generation, without opening or initializing a plot."""
-    root = canonical_path(project)
-    if not canonical_path(root / STORE / "head.json").is_file():
-        raise EngineError("project_bundle_store_required", "Choose the exact root of an already versioned Store. A VSZ, old unregistered project and paper package cannot be relocated this way.")
+def _exact_member(path: Path) -> AttachedProjectRepository | None:
+    if path.parent.name != ".sciplot_semantic":
+        return None
+    from .repository_router import ComposedProjectRepository
+
+    repository = ComposedProjectRepository()
+    with repository.invocation_scope():
+        selected = repository._discover(path)
+        return selected if selected is not None and selected.attachment.root == path else None
+
+
+def export_project_bundle(project: Path, destination: Path, *, single_file: bool = False,
+                          expected_generation: str | None = None) -> dict[str, Any]:
+    """Bundle the whole Store at its exact admitted generation, without initializing it."""
+    try:
+        target = canonical_path(project)
+    except ValueError as exc:
+        if not single_file:
+            raise
+        raise EngineError("project_bundle_store_required", "Use the exact versioned Store or saved Managed plot, not a symbolic alias.") from exc
+    member = None
+    if not canonical_path(target / STORE / "head.json").is_file():
+        member = _exact_member(target) if single_file else None
+        if member is None:
+            detail = ("Choose the exact Store root or saved Managed v2 plot handle." if single_file else
+                      "Choose the exact root of an already versioned Store. A VSZ, old unregistered project and paper package cannot be relocated this way.")
+            raise EngineError("project_bundle_store_required", detail)
+    root = member.attachment.store.root if member is not None else target
     out = _new_destination(destination, root)
-    store = existing_store(root)
+    if single_file and out.suffix != ".sciplot":
+        raise EngineError("project_file_destination_required", "Choose a new filename ending in .sciplot.")
+    store = member.attachment.store if member is not None else existing_store(root)
     for key, location in store.locations.items():
         members = store.location_members[key]
-        protected = (location,) if members is None else (location / member for member in members)
+        protected = (location,) if members is None else (location / name for name in members)
         if any(_overlaps(out, path) for path in protected):
             raise EngineError("project_bundle_path_overlap", "The bundle destination overlaps a registered project resource.")
 
     with store._locked():
         head = store.snapshot()
+        if expected_generation is not None and expected_generation != head["generation"]:
+            raise EngineError("project_bundle_generation_conflict", "The Store has a different generation. Read its current state before exporting.",
+                              action="inspect_project", current_generation=head["generation"])
         if head["projection_status"] != "current":
             raise ProjectConflict("Resolve unadmitted outside changes before bundling the saved project.")
+        if member is not None:
+            from sciplot_core.plot_ir.figure_document import is_figure
+
+            entry = member.attachment.entry
+            if read_index(store, head)["attachments"].get(entry["id"]) != entry:
+                raise EngineError("semantic_attachment_owner_conflict", "The saved plot no longer identifies its registered project attachment.")
+            selected = observe_plot_head(target, owner=member, optional=True)
+            document = selected["document"] if selected is not None else {}
+            if document.get("plot_type") != "ManagedPlot" or not is_figure(document):
+                raise EngineError("project_file_figure_unsupported", "Use an exact committed Managed v2 plot handle or exact Store root.")
+            if document["plot_id"] != entry["plot_id"]:
+                raise EngineError("semantic_attachment_owner_conflict", "The saved plot no longer identifies its registered project attachment.")
+        if single_file:
+            from .project_file import ProjectFileSaveUnconfirmed, create_project_file
+
+            try:
+                file = create_project_file(out, store, expected_generation=head["generation"])
+            except FileExistsError as exc:
+                raise EngineError("project_bundle_destination_exists", "The relocation destination already exists; nothing was replaced.") from exc
+            except ProjectFileSaveUnconfirmed as exc:
+                raise EngineError("project_file_save_unconfirmed", "The .sciplot file may have been installed. Inspect that exact file before retrying.",
+                                  action="project.open", project_file=str(out), project_id=exc.receipt.project_id,
+                                  generation=exc.receipt.generation, sha256=exc.receipt.sha256) from exc
+            return {**_result("exported", target, out, head), "bundle_format": "single_file", "whole_project": True,
+                    "project_file": str(out), "sha256": file.sha256}
         bundle = store.export_bundle(out)
     return _result("exported", root, bundle, head)
 

@@ -33,7 +33,7 @@ def group_request_schema() -> dict[str, Any]:
         "sample_style_preset": preset,
         "items": {"type": "array", "minItems": 1, "maxItems": 32, "items": object_schema({
             "id": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$"},
-            "label": text, "request": task_request_schema(), "presentation": presentation,
+            "label": text, "request": task_request_schema(selected_formats=False), "presentation": presentation,
         }, ["id", "label", "request"])},
     }, ["version", "title", "items"])
 

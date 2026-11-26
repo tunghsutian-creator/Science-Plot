@@ -592,3 +592,91 @@ def test_lost_creation_reply_cannot_replace_an_already_committed_attempt(tmp_pat
     assert rejected.value.reason_code == "task_not_revisable"
     assert (task / "task.json").read_bytes() == before and source.read_bytes() == original
     assert len(calls) == 1
+
+
+def test_opted_in_ftir_raw_overlay_asks_exact_blocks_and_resumes_same_task(tmp_path, monkeypatch):
+    from hashlib import sha256
+
+    from sciplot_core import task_control as control, task_semantic_creation as semantic
+
+    source, intent = _single_table_spectral_control(tmp_path)
+    original = source.read_bytes()
+    digest = sha256(original).hexdigest()
+    calls = []
+
+    def reached_native(state, wire):
+        calls.append((state["task_dir"], wire))
+        return {"status": "blocked", "ready_to_use": False,
+                "error": {"reason_code": "synthetic_native_boundary", "message": "Stop after science compilation."}}
+
+    monkeypatch.setattr(semantic, "execute_managed", reached_native)
+    request = {"version": 1, "action": "create", "source": str(source), "rule_id": "ftir_spectrum",
+               "choose_columns": True, "curve_display": "raw_overlay", "out": str(tmp_path / "deliver")}
+    task = tmp_path / "task"
+    result = control.start_task(request, task_dir=task)
+    assert result["status"] == "needs_input" and not calls
+    assert not (tmp_path / "deliver").exists() and not (tmp_path / ".sciplot_documents").exists()
+    question = result["question"]
+    plan = question["plan"]
+    decision, = plan["decisions"]
+    assert decision["field"] == "blocks"
+    options = decision["options"]
+    assert [b["block_id"] for b in options] == ["block:0", "block:1", "block:2"]
+    assert [b["sample"] for b in plan["selection"]["available"]] == ["Resin blue", "Resin red", "Excluded resin"]
+    assert all(b["source_sha256"] == digest for b in plan["selection"]["available"])
+    assert result["next_step"]["response_template"]["choices"] == {"blocks": []}
+    assert result["source_plan"]["selection"]["selected_block_count"] == 0
+    assert "revise_template" not in result["next_step"]
+    assert control.inspect_task(task)["question"] == question
+    assert control.start_task(request, task_dir=task)["question"] == question
+
+    answer = {"expected_question_id": question["question_id"], "confirm_plan": True,
+              "choices": {"blocks": options[:2]}}
+    state_bytes = (task / "task.json").read_bytes()
+    for rejected, reason in (
+        ({**answer, "expected_question_id": "0" * 64}, "stale_task_question"),
+        ({**answer, "choices": {}}, "invalid_task_response"),
+        ({**answer, "choices": {"blocks": [options[0], options[0]]}}, "invalid_task_response"),
+        ({**answer, "choices": {"blocks": [{**options[0], "block_id": "block:10"}]}}, "invalid_task_response"),
+        ({"expected_intent_revision": 1, "revise_intent": intent}, "invalid_task_response"),
+    ):
+        with pytest.raises(TaskControlError) as bad:
+            control.resume_task(task, rejected)
+        assert bad.value.reason_code == reason
+        assert not calls and (task / "task.json").read_bytes() == state_bytes
+
+    result = control.resume_task(task, answer)
+    assert result["blocker"]["reason_code"] == "synthetic_native_boundary"
+    (task_dir, wire), = calls
+    assert task_dir == str(task)
+    binding = wire["data_binding"]
+    assert {slot["sample"] for slot in binding["slots"].values()} == {"Resin blue", "Resin red"}
+    assert {entry["sha256"] for entry in binding["data_sources"]} == {digest}
+    selection = result["source_plan"]["selection"]
+    assert selection["selected_block_count"] == 2
+    assert [b["block_id"] for b in selection["excluded"]] == ["block:2"]
+    assert result["source_plan"]["confirmation"]["question_id"] == question["question_id"]
+    assert result["scientific_presentation"]["curve_display"] == "raw_overlay"
+    retried = control.resume_task(task, {"retry": True})
+    assert calls == [(str(task), wire), (str(task), wire)]
+    assert retried["source_plan"]["selection"] == selection
+    with pytest.raises(TaskControlError) as bad:
+        control.resume_task(task, {"expected_intent_revision": 1, "revise_intent": intent})
+    assert bad.value.reason_code == "invalid_task_response" and len(calls) == 2
+    assert source.read_bytes() == original
+
+    single = tmp_path / "single-task"
+    pending = control.start_task(request, task_dir=single)
+    one = control.resume_task(single, {**answer, "expected_question_id": pending["question"]["question_id"],
+                                       "choices": {"blocks": [options[1]]}})
+    assert one["blocker"]["reason_code"] == "synthetic_native_boundary"
+    assert one["source_plan"]["selection"]["selected_block_count"] == 1
+    assert {slot["sample"] for slot in calls[-1][1]["data_binding"]["slots"].values()} == {"Resin red"}
+    assert len(calls) == 3 and calls[-1][0] == str(single)
+
+    second = tmp_path / "changed-task"
+    pending = control.start_task(request, task_dir=second)
+    source.write_bytes(original.replace(b"700,84", b"700,85"))
+    changed = control.resume_task(second, {**answer, "expected_question_id": pending["question"]["question_id"]})
+    assert changed["status"] == "blocked" and changed["blocker"]["reason_code"] == "source_changed"
+    assert len(calls) == 3 and not (tmp_path / "deliver").exists()

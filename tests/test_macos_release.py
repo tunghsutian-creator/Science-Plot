@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import csv
 import json
+import os
 import shlex
 import shutil
 import subprocess
+import sys
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote
@@ -12,7 +15,7 @@ import pytest
 
 from distribution.macos import release, verification, welcome
 from distribution.macos.identity import bundle_snapshot, content_digest, file_hash, source_snapshot
-from distribution.macos.mcp_probe import read_connection
+from distribution.macos.mcp_probe import read_connection, verify_mcp
 
 
 def _app(root: Path) -> Path:
@@ -239,6 +242,7 @@ def test_welcome_downloads_embed_exact_contents_for_local_file_pages(tmp_path):
     parser.feed(page)
     expected = welcome.connection_files(command) | {
         "SciPlot-feedback.json": json.dumps(welcome.feedback_report({"status": "ready"}, {}, True), ensure_ascii=False, indent=2) + "\n",
+        welcome.FIRST_FIGURE_NAME: welcome.FIRST_FIGURE_CSV,
     }
     assert set(parser.files) == set(expected)
     for filename, text in expected.items():
@@ -261,3 +265,42 @@ def test_welcome_downloads_embed_exact_contents_for_local_file_pages(tmp_path):
     assert "Open_in_SciPlot.command" not in page and "Open_in_Veusz.command" not in page
     assert "sciplot_project_legacy_redraw" in page and "sciplot_project_legacy_convert" in page
     assert "sciplot_task_continue" in page and "sciplot_task_edit" in page
+    assert "本地环境已就绪" in page and "你的 AI 客户端尚未验证" in page
+    assert "sciplot_capabilities" in page and "mcp_stdio" in page
+    assert "这是合成数据" in page and "可续编项目路径" in page
+
+
+@pytest.mark.comprehensive
+def test_synthetic_first_figure_runs_through_daily_stdio(tmp_path):
+    import pymupdf
+    from PIL import Image
+
+    from sciplot_core._paths import REPO_ROOT
+
+    pytest.importorskip("mcp")
+    command = REPO_ROOT / "skill/scripts/sciplot"
+    for filename, contents in welcome.connection_files(command).items():
+        (tmp_path / filename).write_text(contents, encoding="utf-8")
+    environment = os.environ | {"SCIPLOT_PYTHON": sys.executable}
+    report = verify_mcp(command, environment, tmp_path, first_figure_directory=tmp_path / "practice")
+    first = report["first_figure"]
+    assert first["status"] == "passed" and first["model_calls"] == 0
+    assert first["tool_calls"] == 3 and first["scripted_user_choices"] == 1
+    assert Path(first["files"]["pdf"]).read_bytes().startswith(b"%PDF")
+    assert first["summary_labels"] == {"axes": ["Time (s)", "Mass (%)"], "series": ["Sample A", "Sample B"]}
+    with pymupdf.open(first["files"]["pdf"]) as figure:
+        assert len(figure) == 1
+        labels = [line.strip() for line in figure[0].get_text().splitlines()]
+    assert all(labels.count(label) == 1 for kind in ("axes", "series")
+               for label in first["summary_labels"][kind])
+    with Image.open(first["files"]["tiff_300"]) as figure:
+        assert figure.format == "TIFF" and figure.info["dpi"] == pytest.approx((300, 300))
+        assert min(figure.size) > 0
+    observed = set()
+    for path in first["plotting_data"]:
+        with Path(path).open(encoding="utf-8") as stream:
+            rows = list(csv.DictReader(stream))
+        assert [float(row["Time"]) for row in rows] == [0, 10, 20, 30, 40]
+        observed.add(tuple(float(row["Mass"]) for row in rows))
+    assert observed == {(100, 98, 95, 91, 90), (100, 97, 92, 86, 82)}
+    assert Path(first["project"]).is_dir()

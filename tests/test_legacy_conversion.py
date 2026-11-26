@@ -30,7 +30,9 @@ def _original(tmp_path):
 
 @pytest.mark.comprehensive
 def test_legacy_conversion_creates_editable_copy_with_exact_arrays_units_and_marks(tmp_path, capsys):
+    import anyio
     from PIL import Image, ImageChops
+    from sciplot_core.mcp_server.server import Adapter
     from sciplot_core.plot_engine.storage import load_head, read
     from sciplot_core.veusz_worker.operations import export_document
 
@@ -38,7 +40,26 @@ def test_legacy_conversion_creates_editable_copy_with_exact_arrays_units_and_mar
     before = _tree(archive)
     old = export_document(native, formats=["tiff_300"], output_dir=tmp_path / "old-redraw")
     destination = tmp_path / "converted"
-    assert main(["project", "legacy-convert", str(archive), "--out", str(destination), "--json"]) == 0
+    entry = tmp_path / "edit"
+    assert main(["plot", "open", str(archive), "--direct", "--json"]) == 0
+    opened_legacy = json.loads(capsys.readouterr().out)
+    assert opened_legacy["next_step"]["action"] == "redraw_legacy"
+    assert main(["task", "edit", str(archive), "--font-size", "9pt", "--task-dir", str(entry), "--json"]) == 1
+    blocked = json.loads(capsys.readouterr().out)
+    assert blocked["reason_code"] == "legacy_conversion_required"
+    assert blocked["next_step"] == opened_legacy["conversion"]
+    assert blocked["redraw"] == opened_legacy["next_step"]
+    step = blocked["next_step"]
+    assert step["target"] == str(native) and step["action"] == "legacy_convert"
+    daily = Adapter("daily")
+    reply = anyio.run(daily.call, "sciplot_task_edit",
+                      {"target": str(archive), "font_size": "9pt", "task_dir": str(entry)})
+    assert reply.is_error
+    payload = json.loads(reply.content[0].text)
+    assert payload["next_step"] == step and payload["redraw"] == blocked["redraw"]
+    assert step["mcp_tool"] in daily.tools
+    assert not entry.exists() and not destination.exists() and _tree(archive) == before
+    assert main([*step["cli_argv"][1:], str(destination), "--json"]) == 0
     converted = json.loads(capsys.readouterr().out)
     assert converted["status"] == "converted" and converted["plot_type"] == "ManagedPlot"
     assert converted["original_vsz"] == {"path": str(native), "sha256": file_sha256(native)}
@@ -79,11 +100,20 @@ def test_legacy_conversion_refuses_unmapped_widget_before_allocating_copy(tmp_pa
         stream.write("To('/page1/graph1')\nAdd('label', name='note')\n")
     before = _tree(archive)
     destination = tmp_path / "converted"
-    assert main(["project", "legacy-convert", str(archive), "--out", str(destination), "--json"]) == 1
+    assert main(["task", "edit", str(archive), "--font-size", "9pt", "--json"]) == 1
+    blocked = json.loads(capsys.readouterr().out)
+    assert blocked["reason_code"] == "legacy_conversion_required"
+    assert main([*blocked["next_step"]["cli_argv"][1:], str(destination), "--json"]) == 1
     rejected = json.loads(capsys.readouterr().out)
     assert rejected["reason_code"] == "legacy_conversion_unsupported"
     assert "without other objects" in rejected["message"]
     assert not destination.exists()
+    redraw = tmp_path / "redrawn"
+    assert blocked["redraw"]["action"] == "redraw_legacy"
+    assert main([*blocked["redraw"]["cli_argv"][1:], str(redraw), "--json"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["document_sha256"] == file_sha256(native)
+    assert result["exports"] and all(Path(item["path"]).is_file() for item in result["exports"])
     assert _tree(archive) == before
 
 

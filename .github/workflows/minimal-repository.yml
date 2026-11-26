@@ -161,8 +161,11 @@ jobs:
           python3 - <<'PYCONTRACTS'
           import subprocess
           import sys
-          from sciplot_core.verification.source_contracts import CHEAP_SOURCE_TARGETS
-          subprocess.run([sys.executable, "-m", "pytest", "-q", *CHEAP_SOURCE_TARGETS], check=True)
+          from sciplot_core.verification.source_contracts import CHEAP_SOURCE_TARGETS, IMPORT_GRAPH_TARGET
+          # This step only runs when the complete public profile is required.
+          # Its focused tier runs the same import graph check on the staged source.
+          targets = [target for target in CHEAP_SOURCE_TARGETS if target != IMPORT_GRAPH_TARGET]
+          subprocess.run([sys.executable, "-m", "pytest", "-q", *targets], check=True)
           PYCONTRACTS
       - name: Run scoped static type gate
         if: ${{ needs.feedback-plan.outputs.mode == 'full' || needs.feedback-plan.outputs.mode == 'affected' }}

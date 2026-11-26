@@ -33,8 +33,10 @@ def dispatch_project_control(args: Any) -> int:
     if action in {"bundle-export", "bundle-import"}:
         from sciplot_core.project_lifecycle.relocation import export_project_bundle, import_project_bundle
 
-        relocate = export_project_bundle if action == "bundle-export" else import_project_bundle
-        _print_json(relocate(args.target, args.out))
+        result = (export_project_bundle(args.target, args.out, single_file=args.single_file,
+                                        expected_generation=args.expected_generation)
+                  if action == "bundle-export" else import_project_bundle(args.target, args.out))
+        _print_json(result)
         return 0
     if action == "legacy-convert":
         from sciplot_core.studio_core.legacy_conversion import convert_legacy_plot

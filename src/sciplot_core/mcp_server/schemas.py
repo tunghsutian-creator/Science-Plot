@@ -18,7 +18,8 @@ ToolProfile = Literal["daily", "expert"]
 _DAILY_TOOLS = frozenset({
     "capabilities", "task_capabilities", "task_start", "task_continue",
     "task_edit", "task_inspect", "task_table_region", "task_find", "task_resume",
-    "project_open", "project_legacy_redraw", "project_legacy_convert", "project_inspect", "plot_describe", "plot_patch", "plot_intent",
+    "project_open", "project_legacy_redraw", "project_legacy_convert", "project_inspect",
+    "project_bundle_export", "project_bundle_import", "project_save_as", "plot_describe", "plot_patch", "plot_intent",
     "plot_decide", "plot_resume", "plot_export", "plot_deliver", "preview", "annotation_inspect", "export",
     "compose_capabilities", "compose", "pdf_review_create", "pdf_review_read", "read_result",
 })
@@ -29,7 +30,7 @@ _DAILY_CONTRACTS: dict[str, tuple[str, dict[str, Any], str]] = {
     "sciplot_task_start": (
         "request",
         {"type": "object", "required": ["version", "action"]},
-        'Use request {version:1, action:"create", source:ABSOLUTE_PATH} for ordinary creation. For explicit coordinates, use sources and intent. Get exact request fields with task_capabilities(section="request", name=ACTION).',
+        'Use request {version:1, action:"create", source:ABSOLUTE_PATH} for ordinary creation. For explicit coordinates, use sources and intent; optional formats selects PDF or PDF plus 300 dpi TIFF. Get exact request fields with task_capabilities(section="request", name=ACTION).',
     ),
     "sciplot_task_resume": (
         "response", {"type": "object", "minProperties": 1},
@@ -67,7 +68,7 @@ def object_schema(properties: dict[str, Any], required: list[str]) -> dict[str, 
 
 
 def tool_definitions(profile: ToolProfile = "expert") -> list[Tool]:
-    from sciplot_core.plot_document.schema import patch_schema
+    from sciplot_core.plot_document.schema import figure_handoff_schema, patch_schema
     from sciplot_core.plot_engine.contracts import (
         create_schema,
         decide_schema,
@@ -134,7 +135,7 @@ def tool_definitions(profile: ToolProfile = "expert") -> list[Tool]:
     semantic_plot = {"plot": {**semantic_path, "description": "Exact absolute plot target returned in plot_objects or project_open: a document directory or a supported bound native figure VSZ."}}
     add("plot_deliver", "Package an ordered list of exact current ManagedPlot revisions into a new native-snapshot delivery and ZIP. Reuses per-plot audited export and native Save, retains original source bytes, reports partial completion and resumes the identical request. Never replaces an existing destination or claims a portable ManagedPlot registry. Local semantic continuation and independent native editing remain distinct.",
         {"request": managed_delivery_schema()}, ["request"], idempotent=True)
-    add("project_open", "Open one existing saved figure. A known ManagedPlot or supported bound native suite object advertises summary/edit scopes and legal deltas in object_operations. A multi-figure suite requires figure_id or its exact returned VSZ. Archived plots open read-only and require conversion for new editing features. Unknown authority uses full open. Does not overwrite or promote native coverage.",
+    add("project_open", "Open one existing saved figure. A known ManagedPlot or supported bound native suite object advertises summary/edit scopes and legal deltas in object_operations. A multi-figure suite requires figure_id or its exact returned VSZ. A .sciplot project file supports read-only summary only; use figure_id if ambiguous. Archived plots open read-only and require conversion for new editing features. Unknown authority uses full open. Does not overwrite or promote native coverage.",
         {"target": semantic_path, "figure_id": string, "description": description}, ["target"], idempotent=True)
     legacy_target = {"target": semantic_path, "output_dir": semantic_path, "figure_id": string}
     add("project_legacy_redraw", "Redraw an exact archived VSZ without changing it. Use a new local output directory outside the original project; formats default to PDF. The result remains read-only.",
@@ -142,27 +143,29 @@ def tool_definitions(profile: ToolProfile = "expert") -> list[Tool]:
         ["target", "output_dir"])
     add("project_legacy_convert", "Create a separately editable Managed copy of a supported archived XY figure. Use a new local directory outside the old project; supply original axis units only when needed. Never modifies or upgrades the original.",
         {**legacy_target, "x_unit": string, "y_unit": string}, ["target", "output_dir"])
-    add("project_bundle_export", "Export a complete local Store bundle from an exact existing Store root to a new path. Keeps project identity and committed history; no host permissions are included. Not a paper package or an independent project copy.",
-        {"project": semantic_path, "output_dir": semantic_path}, ["project", "output_dir"])
-    add("project_bundle_import", "Relocate an exact saved Store bundle into a new local directory. The same project ID and generation remain authoritative. Does not grant host executor permissions or create an independent project identity.",
+    add("project_bundle_export", "Prepare a project move: bundle the whole existing Store, including all its figures and history, at a new path. The default takes the exact Store root and creates a directory. With single_file true, use a new .sciplot filename and supply the exact Store root or exact saved Managed v2 plot handle. It preserves the same project identity and excludes host permissions. Optional expected_generation rejects a changed Store.",
+        {"project": semantic_path, "output_dir": semantic_path, "single_file": {"type": "boolean"},
+         "expected_generation": {"type": "string", "minLength": 1}}, ["project", "output_dir"])
+    add("project_bundle_import", "Finish a project move: import the Store bundle into a new directory and continue there under the same project ID and history. No host permissions or old external export paths transfer. The old location is not removed.",
         {"bundle": semantic_path, "output_dir": semantic_path}, ["bundle", "output_dir"])
     add("plot_describe", "Read current object capabilities and values without rebuilding science. When advertised, use scope edit for one target/property and its exact schema. Supported native suite values come from the current selected VSZ. Omit description for full state; stale inputs and pending work remain explicit.",
         {**semantic_plot, "description": description}, ["plot"], read_only=True)
-    add("project_save_as", "Copy one exact current Managed member and its own bound source bytes into a new independent editable Store, with new project and plot IDs. Does not copy history, publish papers, convert legacy VSZ, or transfer executor grants. After a lost reply retry the identical destination and source revision.",
+    add("project_save_as", "Save one selected current Managed plot and its bound data into a separate editable project with new project and plot IDs. Use the plot ID and revision from its summary. No history or host permissions transfer. After a lost reply retry the identical destination and source revision.",
         {**semantic_plot, "plot_id": string, "revision": {"type": "integer", "minimum": 0},
          "output_dir": semantic_path}, ["plot", "plot_id", "revision", "output_dir"], idempotent=True)
     add("plot_create", "Expert Template/Binding creation through the existing semantic lifecycle; ordinary attachment plotting uses task_start sources+intent. Source-only compatibility remains. Keep idempotency_key unchanged on retry; unresolved scientific choices return a decision.",
         {"request": create_schema(), "project": {**semantic_path, "description": "Optional explicit existing project root for attached Managed Template/Binding creation; outside the scientific request. No project discovery, initialization or repair."}}, ["request"], idempotent=True, destructive=True)
     add("plot_patch", "Apply one atomic semantic change batch to exact stable object IDs and base_revision. Local engine classifies risk, checks scientific invariants and compiles/exports. Reuse the identical idempotency_key after a lost reply; never swap data bindings through a presentation patch.",
         {**semantic_plot, "request": patch_schema()}, ["plot", "request"], idempotent=True, destructive=True)
-    add("plot_intent", "After current ManagedPlot FigureSpec v2 state, plan then apply one literal axis label or annotation text edit. Select an advertised stable target ID or unique exact current label, plot ID, revision and idempotency key. Plan is read-only and returns unit/anchor context; apply uses the existing plot patch transaction. Not for LegacyPlot.",
-        {**semantic_plot, "request": intent_schema()}, ["plot", "request"], idempotent=True, destructive=True)
+    add("plot_intent", "After current ManagedPlot FigureSpec v2 state, plan then apply one literal axis label or annotation text edit. Select an advertised stable target ID or unique exact current label, plot ID, revision and idempotency key. Plan is read-only and returns unit/anchor context; apply uses the existing plot patch transaction. In a standalone .sciplot file only axis.label is supported; apply saves to that same file. Not for LegacyPlot.",
+        {"plot": {**semantic_path, "description": "Exact saved plot target, or a regular .sciplot file for an axis label edit."},
+         "request": intent_schema()}, ["plot", "request"], idempotent=True, destructive=True)
     add("plot_resume", "Explicitly continue one existing semantic transaction using its original plot ID, base revision and idempotency key after a lost reply or daemon restart. Does not create a transaction or accept a pending review. Original source/native guards and export-only recovery remain active.",
         {**semantic_plot, "request": resume_schema()}, ["plot", "request"], idempotent=True, destructive=True)
     add("plot_render", "Render the current semantic document through its native backend; reuses valid current cache and preserves the saved scientific state.",
         semantic_plot, ["plot"], idempotent=True)
-    add("plot_export", "Export the current selected object through its authority owner. A supported bound native figure exports independently of optional suite figures. A prior export failure continues without applying a patch again. Handoff requires ready evidence.",
-        semantic_plot, ["plot"], idempotent=True, destructive=True)
+    add("plot_export", "Without handoff, export or recover the current selected object through its authority owner. For an already audited current Managed v2 figure, optional handoff selects the exact plot ID, revision, fresh output_dir and formats [pdf], [pdf, tiff_300], [plotted_csv] (bound data columns with units and source identities in the receipt), or [editable_vsz] (one independent Veusz file, not a Managed project). For a standalone .sciplot file, use its exact plot ID and current revision from project_open; only [pdf] and [pdf, tiff_300] are supported, and the project file is not changed. Only the requested files are written. Nothing is overwritten; full paper bundles are a separate plot_deliver operation.",
+        {**semantic_plot, "handoff": figure_handoff_schema()}, ["plot"], idempotent=True, destructive=True)
     add("plot_rollback", "Restore an explicit historical presentation as a new revision, bound to base_revision and idempotency_key. Preserves revision history and scientific state.",
         {**semantic_plot, "request": rollback_schema()}, ["plot", "request"], idempotent=True, destructive=True)
     add("plot_decide", "Answer the specific current local decision. A review uses decision_id and base_revision; a creation question carries its existing source-bound response. Never invent scientific choices.",

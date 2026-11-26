@@ -6,6 +6,61 @@ not promote a legacy figure just to use this route. Legacy deliveries retain
 their existing task/paper routes. A Managed v1 export lacking native publication
 QA is explicitly unsupported here; absence is never treated as a pass.
 
+## Copy one current figure without its editable or source files
+
+For an already audited Managed v2 figure, take the `plot`, `plot_id` and
+`revision` from its current summary. Use a fresh output directory outside the
+project:
+
+```bash
+skill/scripts/sciplot plot export PLOT --plot-id PLOT_ID --revision REVISION --output-dir NEW_DIR --json
+```
+
+This copies only the PDF. Add `--tiff` to include the audited 300 dpi TIFF.
+In daily MCP, call `sciplot_plot_export` with `plot` and a `handoff` object
+containing `plot_id`, `revision`, `output_dir` and `formats` (either
+`["pdf"]` or `["pdf","tiff_300"]`). This never overwrites a directory or
+copies a VSZ or data file. On a stale revision, read the current summary again
+before selecting new files.
+
+For a standalone `.sciplot` file, pass its path as `PLOT` and use the exact
+`plot_id` and current `revision` from `plot open FILE.sciplot` or
+`sciplot_project_open`. PDF and PDF plus TIFF are the supported selections.
+SciPlot leaves the project file unchanged. If its disposable export cache is
+absent, SciPlot can rebuild it privately from the saved figure. A present but
+unverified publication is refused, not replaced. For a directory-backed plot,
+finish `plot export PLOT` before handoff if its publication is missing.
+
+## Export only the plotted data columns
+
+Use the same exact plot, revision and fresh directory with `--plotted-csv`
+instead of `--tiff`. In daily MCP, set the `sciplot_plot_export` handoff's
+`formats` to `["plotted_csv"]`. The directory contains one CSV per dataset
+feeding the figure's visible layers, and no figures or sidecar files.
+
+The returned receipt links each CSV and its byte hash to the saved PlotIR,
+dataset, layer, bound sample (where declared), column units, and source-table
+selection and transform identities. It preserves original row order, paired
+column values (including gaps), and independent dataset lengths. The values
+are the sealed data feeding the plotted layers, not screen geometry: presentation
+interpolation or offsets are not applied, and no analysis is rerun. Use
+`plot deliver` when you also need the exact IR and full provenance in a paper
+snapshot. First-figure task formats are unchanged.
+
+## Export only one editable Veusz file
+
+Use the same exact plot, revision and fresh directory with `--editable-vsz`
+or daily MCP handoff `formats: ["editable_vsz"]`. Only `figure.vsz` is
+delivered. SciPlot uses Veusz Native Save and verifies that the relocated
+file reopens without linked data. A figure requiring linked files is refused
+rather than shipped without its data.
+
+Open this independent snapshot in Veusz to edit or export a copy. It is not
+a SciPlot project and does not change or continue the original Managed
+figure. Use `plot deliver` instead for the full paper handoff.
+
+## Package editable snapshots for handoff
+
 Reuse each plot's current `plot`, `plot_id` and `revision`. Labels below are
 display names for the delivery index and safe file naming; they never rename a
 scientific sample, source column or original CSV. Request array order is the

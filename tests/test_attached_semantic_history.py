@@ -57,7 +57,13 @@ def test_exact_old_namespace_transfer_preserves_history_and_fences_every_old_wri
     store.snapshot(import_legacy=True)
     app = application()
     with project_runtime(store):
-        opened = app.open(old)
+        prior = store.snapshot()["generation"]
+        with pytest.raises(EngineError) as caught:
+            app.open(old, figure_id="other-figure")
+        assert caught.value.reason_code == "figure_selection_mismatch"
+        assert store.snapshot()["generation"] == prior
+        assert bytes_in(old) == before
+        opened = app.open(old, figure_id=created["plot_id"])
     root = Path(opened["plot"])
     assert root != old and opened["plot_id"] == created["plot_id"]
     assert opened["scientific_hash"] == created["scientific_hash"]
@@ -70,6 +76,11 @@ def test_exact_old_namespace_transfer_preserves_history_and_fences_every_old_wri
     assert all(b"do not import" != store.read_bytes(name) for name in store.snapshot()["files"])
     monkeypatch.setattr(FileProjectRepository, "write", lambda *_: pytest.fail("old writer reused"))
     assert app.open(old)["plot"] == str(root)
+    for target in (old, old / "head.json"):
+        with pytest.raises(EngineError) as caught:
+            app.open(target, figure_id="other-figure")
+        assert caught.value.reason_code == "figure_selection_mismatch"
+        assert app.open(target, figure_id=created["plot_id"])["plot"] == str(root)
     for operation in (lambda: FileProjectRepository().prepare_namespace(old),
                       lambda: FileProjectRepository().publish_content(old / "content/new", b"x", lambda: None)):
         with pytest.raises(EngineError) as caught:

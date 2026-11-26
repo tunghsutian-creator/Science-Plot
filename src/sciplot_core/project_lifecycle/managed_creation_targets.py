@@ -1,11 +1,12 @@
 """Resolve Managed creation's Store member and optional visible output."""
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from .errors import EngineError
 from .paths import canonical_path
 from .ports import ProjectRepository
-from .repository import digest
+from .repository import FileProjectRepository, digest
 from .targets import ManagedCreationLocation
 
 
@@ -23,9 +24,7 @@ def managed_creation_target(repository: ProjectRepository, request: dict[str, An
         raise EngineError("managed_source_required", "Managed creation requires explicit original data sources.")
     source = canonical_path(Path(sources[0]["path"]))
     identifier = "plot:" + digest([str(source.parent), request["idempotency_key"]])[:24]
-    legacy = source.parent / ".sciplot_documents" / "managed" / digest(request["idempotency_key"])
-    control = source_control_parent(source) / ".sciplot_documents"
-    root = legacy if repository.exists(legacy / "managed-creation.json") else control / "managed" / digest(request["idempotency_key"])
+    _, root = _source_creation_roots(source, request["idempotency_key"], repository.exists)
     old_attempt = repository.exists(root / "managed-creation.json")
     versioned_task = request.get("storage") == "project_store_v2"
     # Keep the historical expert output locator without adding it to the
@@ -65,6 +64,29 @@ def managed_creation_target(repository: ProjectRepository, request: dict[str, An
         require_data_destination(root)
         require_data_destination(output)
     return ManagedCreationLocation(root, output, identifier)
+
+
+def _source_creation_roots(source: Path, key: str, exists: Callable[[Path], bool]) -> tuple[Path, Path]:
+    relative = Path(".sciplot_documents") / "managed" / digest(key)
+    legacy = source.parent / relative
+    root = legacy if exists(legacy / "managed-creation.json") else source_control_parent(source) / relative
+    return legacy, root
+
+
+def has_committed_managed_creation(request: dict[str, Any]) -> bool:
+    """Check a frozen task's source-local attempt without admitting creation or recovery."""
+    from .managed_store_target import has_committed_managed_store
+
+    source = canonical_path(Path(request["data_binding"]["data_sources"][0]["path"]))
+    reader = FileProjectRepository()
+    legacy, root = _source_creation_roots(source, request["idempotency_key"], reader.exists)
+    if reader.exists(root / "managed-creation.json"):
+        return reader.has_head(root)
+    # Retain the old task's direct-head check even for journals from before the
+    # current creation record existed. A new Store wire requires its own proof.
+    if request.get("storage") != "project_store_v2" and reader.has_head(legacy):
+        return True
+    return has_committed_managed_store(root, request)
 
 
 def source_control_parent(source: Path) -> Path:

@@ -19,6 +19,77 @@ from sciplot_core.plot_engine.storage import load_head
 from sciplot_core.veusz_runtime import veusz_worker_environment
 
 
+def _verify_selected_figure_handoff(tmp_path, selected, exports):
+    import signal
+
+    import anyio
+    from mcp import Client
+    from mcp.client.stdio import StdioServerParameters
+    from PIL import Image
+    from socket_fixture_helpers import socket_directory
+
+    from sciplot_core.plot_protocol.paths import read_owner
+
+    launcher = str(REPO_ROOT / "skill/scripts/sciplot")
+    plot = Path(selected["plot"])
+    audit = {item["format"]: item["sha256"] for item in exports}
+    original_cache = file_sha256(plot / "export-cache.json")
+
+    def direct(label, directory, *, revision=selected["revision"], success=True):
+        command = [launcher, "plot", "export", str(plot), "--direct", "--json",
+                   "--output-dir", str(directory), "--plot-id", selected["plot_id"], "--revision", str(revision)]
+        process = subprocess.run(command, env=veusz_worker_environment(), cwd=REPO_ROOT,
+                                 capture_output=True, text=True, timeout=90, check=False)
+        assert process.returncode == (0 if success else 1), (label, process.stdout, process.stderr)
+        return json.loads(process.stdout)
+
+    pdf_dir = tmp_path / "just PDF"
+    pdf = direct("pdf", pdf_dir)
+    assert pdf["ready_to_use"] and pdf["revision"] == selected["revision"]
+    assert [row["format"] for row in pdf["exports"]] == ["pdf"]
+    assert len(list(pdf_dir.iterdir())) == 1
+    document = Path(pdf["exports"][0]["path"])
+    assert document.parent == pdf_dir and document.read_bytes().startswith(b"%PDF-")
+    assert file_sha256(document) == pdf["exports"][0]["sha256"] == audit["pdf"]
+
+    parent_before = set(tmp_path.iterdir())
+    occupied = direct("occupied", pdf_dir, success=False)
+    assert occupied["reason_code"] == "figure_handoff_destination_exists"
+    assert file_sha256(document) == audit["pdf"]
+    stale_dir = tmp_path / "stale"
+    stale = direct("stale", stale_dir, revision=selected["revision"] + 1, success=False)
+    assert stale["reason_code"] == "figure_handoff_revision_conflict"
+    assert set(tmp_path.iterdir()) == parent_before
+
+    both = tmp_path / "manuscript files"
+    fields = {"output_dir": str(both), "plot_id": selected["plot_id"],
+              "revision": selected["revision"], "formats": ["pdf", "tiff_300"]}
+    with socket_directory(prefix="sp-figures-", dir="/tmp") as root:
+        socket = Path(root) / "engine.sock"
+        environment = {**veusz_worker_environment(), "SCIPLOT_ENGINE_SOCKET": str(socket)}
+        parameters = StdioServerParameters(command=launcher, args=["mcp", "--profile", "daily"], cwd=REPO_ROOT, env=environment)
+
+        async def run_daily():
+            async with Client(parameters, read_timeout_seconds=90) as mcp:
+                result = await mcp.call_tool("sciplot_plot_export", {"plot": str(plot), "handoff": fields})
+                assert not result.is_error, result.content
+                return result.structured_content
+
+        try:
+            copied = anyio.run(run_daily)
+        finally:
+            if socket.exists():
+                os.kill(read_owner(socket)["pid"], signal.SIGTERM)
+    assert copied["ready_to_use"] and copied["plot_id"] == fields["plot_id"] and copied["revision"] == fields["revision"]
+    files = {row["format"]: Path(row["path"]) for row in copied["exports"]}
+    assert set(files) == {"pdf", "tiff_300"} and set(both.iterdir()) == set(files.values())
+    assert all(file_sha256(path) == audit[fmt] for fmt, path in files.items())
+    with Image.open(files["tiff_300"]) as image:
+        assert image.format == "TIFF"
+        assert image.info["dpi"] == pytest.approx((300, 300), abs=.1)
+    assert file_sha256(plot / "export-cache.json") == original_cache
+
+
 @pytest.mark.comprehensive
 def test_public_managed_delivery_relocated_native_open_edit_save_and_export(tmp_path):
     service = PlotService()
@@ -39,6 +110,8 @@ def test_public_managed_delivery_relocated_native_open_edit_save_and_export(tmp_
                 originals[path] = file_sha256(path)
             selected.append({"plot": str(plot), "plot_id": result["plot_id"],
                              "revision": result["revision"], "label": f"P{name}/native"})
+            if name == "A":
+                _verify_selected_figure_handoff(tmp_path, selected[-1], result["exports"])
         delivery = {"idempotency_key": "generated-native-delivery", "title": "Independent snapshots",
                     "mode": "native_snapshot", "out": str(tmp_path / "published snapshots"), "items": selected}
         request_file = tmp_path / "delivery-request.json"

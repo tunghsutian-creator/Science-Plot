@@ -214,7 +214,9 @@ class ProjectApplication(ManagedPlotApplication, CommandDispatch):
             return rollback_legacy(root, request, self.backend, self._patch)
 
     @usecase
-    def export(self, plot: Path) -> dict[str, Any]:
+    def export(self, plot: Path, *, handoff: dict[str, Any] | None = None) -> dict[str, Any]:
+        if handoff is not None:
+            return self.handoff_figure(plot, handoff)
         root = canonical_path(plot)
         with external_project_session(root):
             return self._export(root)
@@ -288,4 +290,5 @@ class ProjectApplication(ManagedPlotApplication, CommandDispatch):
         return local_managed_actions(
             self.create, lambda plot: self.describe(plot, description={"scope": "summary"}),
             self.deliver, lambda request, paper_dir: self.inspect_delivery(request, paper_dir=paper_dir),
+            handoff=self.handoff_figure,
         )

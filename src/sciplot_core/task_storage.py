@@ -97,6 +97,10 @@ def task_summary(state: dict[str, Any]) -> dict[str, Any]:
         "creation_admission", "automatic_repairs", "automatic_corrections", "output_selection", "intent_revision", "delivery_result", "scientific_presentation", "analysis_metrics",
     )
     summary = {key: state[key] for key in keys if key in state}
+    if "formats" in state["request"] and "result" in summary:
+        # The canonical project's private exports are not this task's deliverables.
+        summary["result"] = {key: summary["result"][key] for key in ("kind", "status", "plot", "plot_id", "revision",
+                             "scientific_hash", "presentation_hash", "commit_status") if key in summary["result"]}
     handles = (state.get("result") or {}).get("plot_objects")
     if isinstance(handles, list):
         summary["plot_objects"] = handles

@@ -52,14 +52,16 @@ INSTRUCTIONS = (
     "inspect object_operations and current advertised values, then send only legal "
     "presentation deltas. Do not resend coordinates or recreate unselected figures. "
     "If authority is unknown or LegacyPlot without advertised scoped support, use the full open; retain its native "
-    "coverage, never convert it just for compact reads. Archived plots returned as read_only require "
+    "coverage, never convert it just for compact reads. Use a .sciplot file summary for plot_intent "
+    "axis-label edits or selected PDF/TIFF handoff through plot_export. Archived native plots returned as read_only require "
     "a separate converted copy for new edits. Check status, changed "
     "inputs and pending work before editing. Use returned stable IDs and revision; "
     "keep idempotency_key unchanged on retry. Follow local decision and export "
     "receipts instead of reapplying committed work. plot_deliver packages exact current "
     "ManagedPlot revisions as independent native snapshots. For relocation of an exact "
-    "existing Store, use project_bundle_export and project_bundle_import. These preserve "
-    "the same identity and do not grant host permissions. Inspect existing saved "
+    "existing Store, use project_bundle_export and project_bundle_import for a directory bundle, or "
+    "project_bundle_export with single_file true for one directly openable .sciplot file. Both pack the whole "
+    "project with its history and do not grant host permissions. Inspect existing saved "
     "projects instead of creating them again. Compatibility native-edit tools "
     "require real figure/object IDs and the saved SHA. Read candidate PNG resources and scientific "
     "audits before accepting previews. Keep raw values, units and sample identities. "
@@ -74,12 +76,19 @@ DAILY_INSTRUCTIONS = (
     "task_start; retrieve only the needed contract section from task_capabilities. "
     "Answer only current scientific questions with task_resume and returned guard IDs. "
     "For an existing figure use project_open first if its authority is unknown. "
-    "If it returns read_only, call sciplot_project_legacy_redraw with its target and a new output directory; "
+    "A sciplot_project_file_summary identifies the saved figure in a .sciplot file. "
+    "Use that file as plot in plot_intent for an axis label edit or plot_export for a selected PDF/TIFF handoff. "
+    "If it returns an archived read_only native figure, call sciplot_project_legacy_redraw with its target and a new output directory; "
     "for an edit, use sciplot_project_legacy_convert to create a separate supported XY copy first. "
     "For an editable figure use task_edit for common changes, or plot_describe for exact "
     "capabilities. Use summary/edit scopes only when advertised. "
     "Review preview resources before accepting; follow returned recovery and export "
-    "receipts without reapplying an edit. For existing PDF diagrams use compose with "
+    "receipts without reapplying an edit. After reconnecting, reopen the same figure to read "
+    "its pending preview in this connection. plot_deliver makes paper snapshots; "
+    "project_bundle_export with single_file true saves the same whole project in one .sciplot file; "
+    "for a directory bundle use project_bundle_export then project_bundle_import. "
+    "project_save_as makes one selected Managed figure an independent editable copy. "
+    "For existing PDF diagrams use compose with "
     "export-pdf for a standalone PDF. Resources are scoped to this server connection. "
     "For specialized workflows or the full upfront schemas reconnect with --profile expert."
 )
@@ -109,6 +118,14 @@ def _preview_artifact(payload: dict[str, Any]) -> dict[str, Any] | None:
         image = preview.get("image")
         if isinstance(image, dict) and isinstance(image.get("path"), str):
             return image
+    if (payload.get("kind") == "sciplot_plot_description" and payload.get("plot_type") == "ManagedPlot"
+            and payload.get("status") == "current"):
+        recovery = payload.get("recovery")
+        if isinstance(recovery, dict) and recovery.get("phase") == "needs_review":
+            preview = recovery.get("preview")
+            if (isinstance(preview, dict) and isinstance(preview.get("path"), str)
+                    and isinstance(preview.get("sha256"), str)):
+                return preview
     # Task receipts may wrap the native edit review, but never inspect their
     # request payload for paths: only owner-generated result metadata is eligible.
     review = payload.get("review")

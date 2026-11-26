@@ -14,6 +14,15 @@ That route reads the current source selectors and legal fields in one edit conte
 
 Choose the first read from authority already established for this figure:
 
+- **Standalone `.sciplot` project file:** `plot open FILE.sciplot --scope summary`
+  or `sciplot_project_open` reads the saved figure ID, revision and hashes. Use
+  `--figure PLOT_ID` or MCP `figure_id` when more than one figure is registered.
+  The summary itself is read-only. To change an exact axis label, pass the
+  `project_file` as `plot` to `sciplot_plot_intent` with the observed plot ID
+  and revision. Plan first; apply the same axis label request. Use
+  `plot intent FILE.sciplot --request REQUEST.json --json` from the CLI.
+  For an unconfirmed save, retry the identical request and key. Other edits,
+  previews and exports are not available through this file locator.
 - **Known ManagedPlot:** call `skill/scripts/sciplot plot open TARGET --scope
   summary --json`, or `sciplot_project_open` with `{"target":"/absolute/target",
   "description":{"scope":"summary"}}`. This returns `plot`, `plot_id`,
@@ -278,6 +287,13 @@ accepting its current operation ID. Export failure resumes the same task with `t
 --retry --json` after resolving the reported cause;
 never reapply the accepted edit for that retry. An uncertain apply follows its
 recovery guidance before another mutation.
+
+After a daily MCP reconnect, reopen the same Managed figure, specifying its
+exact member when there are several. If the returned recovery is awaiting a
+decision, read the newly returned `preview_resource` before using its saved
+decision request. An earlier connection's URI does not work in this one.
+If the change is already saved and recovery offers `plot.export`, export that
+exact plot without applying the edit again.
 
 At `resolve_current_evidence`, read `evidence_gaps` and `current_project` already
 returned. Another unchanged inspect cannot restore missing source bindings.

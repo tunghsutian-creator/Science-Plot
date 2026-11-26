@@ -176,7 +176,8 @@ def test_frozen_managed_request_replay_does_not_enter_new_draft_admission(tmp_pa
 
     source = tmp_path / 'already-requested.csv'
     source.write_text('Time_s,Charge_C\n1,2\n')
-    frozen = {'idempotency_key': 'original-executed-key', 'data_binding': {'historical_request': 'retained'}}
+    frozen = {'idempotency_key': 'original-executed-key', 'data_binding': {'historical_request': 'retained'},
+              'rule_id': 'ordinary_xy', 'out': str(tmp_path / '.sciplot' / 'managed-artifacts' / 'original-output')}
     current = {'request': {'intent': {'x': {'quantity': 'time'}, 'y': {'quantity': 'charge'}}},
                'source_hashes': {str(source): hashlib.sha256(source.read_bytes()).hexdigest()},
                'semantic_plan': {'resolution_version': 1}, 'semantic_plan_confirmed': True,

@@ -1,7 +1,10 @@
 # macOS 本地分发构建
 
 此目录构建带 Python、Qt、Veusz 和 Python 运行依赖的 `SciPlot.app`。
-双击应用只打开中文连接和使用说明；科研任务继续由外部 AI 驱动现有公开接口。
+双击应用打开中文连接和使用说明；科研任务继续由外部 AI 驱动现有公开接口。
+应用将 `.sciplot` 声明为可编辑的文档类型。关联到本应用的文件走 Qt 文件打开事件。
+单图项目在原生编辑器中打开，核对后可把坐标轴显示标题写回同一个文件。
+多图项目使用 `sciplot plot editor 文件 --figure 图ID` 选择要编辑的图。
 CLI 和 MCP 使用包内 `Contents/MacOS/sciplot`；用户按欢迎页生成的连接配置操作。
 程序不安装内部模型，不写入 Codex 或其它 AI 工具的配置。
 
@@ -26,7 +29,7 @@ Qt 分发范围限定为 Veusz 的 Widgets/SVG/打印栈及其依赖，不带 QM
 短链接，适配没有 linker header padding 的扩展）；Veusz helpers
 与 PyQt 使用同一份包内 Qt。构建器拒绝任何缺失依赖、出包链接或残留的非系统绝对库路径，
 修改后的二进制使用 ad-hoc 签名。原开发环境和第三方源二进制不改写。
-Finder 入口由本机 Clang 编译为一个只转发到包内 CLI 的小型启动程序，构建需要
+Finder 入口由本机 Clang 编译为一个在同一进程中启动包内 Qt 文件入口的小型启动程序，构建需要
 Apple Command Line Tools；终端用户不需要编译器。
 这个版本提供可重复执行的构建过程与版本/源码身份清单，不宣称字节级可重现。
 
@@ -71,6 +74,7 @@ verify_root=$(mktemp -d "$HOME/SciPlot-verify.XXXXXX")
 使用流程以应用生成的欢迎页为准。历史包内 launcher 仍可做静态识别和完整性检查，
 不再作为欢迎页的操作步骤。移动应用需要更新 MCP 路径；移动交付快照不是工程迁移。
 
+离屏 Qt 文件事件和原生编辑测试不等于安装后在 Finder 双击的验收。
 验证范围必须分别记录：本机启动与依赖封闭审计、另一台没有 Python/Qt/Homebrew 的干净
 Mac、macOS 版本/架构兼容、Developer ID 签名与公证、真实小白任务测试。这里生成的包
 没有 Developer ID 签名或公证；ad-hoc 签名不能替代发行身份认证。本机成功不能替代

@@ -7,9 +7,9 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 10427,
-    "nodeids_sha256": "087c7b59fcc01e29a5350394fe13931344897df8ae9ea99b29bb7952c992ce58",
-    "test_sources_sha256": "7aa34af079b3e012849bce7cb7c130d42ba9ac6ca56cac80174513e8403a47a4",
+    "nodeid_count": 10429,
+    "nodeids_sha256": "fcb1bd71e7141eecdc26c429bae0ea13e580e7e89a730f61939338861ed8a37e",
+    "test_sources_sha256": "351df479fa67c0d38f45d10e92d60a7f09b164f0101009e652c97c6b3e5e2a6d",
     "test_source_count": 661,
     "candidate_nodeids": [
       "tests/test_plot_template_native.py::test_legacy_paired_template_reauthored_as_managed_preserves_data_and_styles",
@@ -4894,7 +4894,8 @@
       "tests/test_task_ordinary_raw_points.py::test_raw_source_option_does_not_change_fixed_statistics_or_accept_unknown_values[point_line-raw_only]",
       "tests/test_task_ordinary_raw_points.py::test_sealed_v1_numeric_grammar_replays_without_downgrading_v2",
       "tests/test_task_ordinary_raw_points.py::test_single_categorical_tick_audit_keeps_exact_axis_guards_and_rejects_other_ticks",
-      "tests/test_task_ordinary_raw_points_native.py::test_public_no_experiment_xy_creates_native_original_values_and_archives_context",
+      "tests/test_task_ordinary_raw_points_native.py::test_public_no_experiment_xy_creates_native_original_values_and_archives_context[selected]",
+      "tests/test_task_ordinary_raw_points_native.py::test_public_no_experiment_xy_creates_native_original_values_and_archives_context[snapshot]",
       "tests/test_task_ordinary_raw_points_native.py::test_public_raw_categorical_decimal_values_are_exact_in_saved_native_document",
       "tests/test_task_ordinary_raw_points_native.py::test_public_raw_categorical_points_native_has_every_duplicate_and_no_summary",
       "tests/test_task_paper_publication.py::test_canonical_rule_blocker_survives_passed_qa_and_finished_publication[pending_review]",
@@ -5851,7 +5852,9 @@
       "tests/test_plot_recovery.py::test_deferred_comparison_recovery_preserves_the_export_action",
       "tests/test_project_store.py::test_bundle_copies_reachable_history_and_installs_only_after_projection",
       "tests/test_task_comparisons_native.py::test_managed_comparison_reuses_exact_winner_on_cold_apply",
-      "tests/test_managed_delivery_native.py::test_managed_delivery_uses_store_sealed_source_after_original_disappears"
+      "tests/test_macos_release.py::test_synthetic_first_figure_runs_through_daily_stdio",
+      "tests/test_managed_delivery_native.py::test_managed_delivery_uses_store_sealed_source_after_original_disappears",
+      "tests/test_task_semantic_creation.py::test_opted_in_ftir_raw_overlay_asks_exact_blocks_and_resumes_same_task"
     ],
     "synthetic_candidates": [
       {
@@ -12595,8 +12598,12 @@
         "reason": "Literal axis/bindings dictionaries and deep copies exercise _axis_record_matches_spec. Tick, label, scale and bounds mutations are entirely in memory; no document or scientific source is loaded."
       },
       {
-        "nodeid": "tests/test_task_ordinary_raw_points_native.py::test_public_no_experiment_xy_creates_native_original_values_and_archives_context",
-        "reason": "The retained raw-points preliminary review inspected all original bodies using literal CSVs under tmp_path and generated native artifacts. The exact raw-only/template/metadata parameter consumes those generated inputs and existing scientific contracts, with no private source or golden. The later decimal/tick additions are separately described below; no sibling fixture disposition is inferred."
+        "nodeid": "tests/test_task_ordinary_raw_points_native.py::test_public_no_experiment_xy_creates_native_original_values_and_archives_context[selected]",
+        "reason": "Generated acquisition CSV in tmp_path through the native ordinary XY task; validates original binary64 values and distinct native snapshot or PDF/TIFF delivery. No private source or golden."
+      },
+      {
+        "nodeid": "tests/test_task_ordinary_raw_points_native.py::test_public_no_experiment_xy_creates_native_original_values_and_archives_context[snapshot]",
+        "reason": "Generated acquisition CSV in tmp_path through the native ordinary XY task; validates original binary64 values and distinct native snapshot or PDF/TIFF delivery. No private source or golden."
       },
       {
         "nodeid": "tests/test_task_ordinary_raw_points_native.py::test_public_raw_categorical_decimal_values_are_exact_in_saved_native_document",
@@ -28547,12 +28554,20 @@
         "reason": "Generated store, historic generations and simulated projection interruption."
       },
       {
+        "nodeid": "tests/test_macos_release.py::test_synthetic_first_figure_runs_through_daily_stdio",
+        "reason": "Official local daily MCP STDIO and native export of an inline generated CSV; no model or private corpus."
+      },
+      {
         "nodeid": "tests/test_task_comparisons_native.py::test_managed_comparison_reuses_exact_winner_on_cold_apply",
         "reason": "Real native compile and interruption using a generated local dataset."
       },
       {
         "nodeid": "tests/test_managed_delivery_native.py::test_managed_delivery_uses_store_sealed_source_after_original_disappears",
         "reason": "Real native offline delivery with a generated CSV relocated in a temporary Store, no private inputs."
+      },
+      {
+        "nodeid": "tests/test_task_semantic_creation.py::test_opted_in_ftir_raw_overlay_asks_exact_blocks_and_resumes_same_task",
+        "reason": "Generated paired FTIR table and finite source-bound question replay in a temporary task; no scientific reference fixtures."
       }
     ],
     "review_method": "2026-11-10: actual unfiltered collect-only confirmed 10236 unique nodes, 9740 focused and 496 comprehensive, zero test reports and unchanged Python inputs. Thirty-six added storage lifecycle and changed-runner controls use generated data only and are public-focused. Eighteen unchanged registered Python fixture helpers were adopted by original SHA; no raw or golden data was copied. All 165 private cases, 210 dependencies, 23 directory roles, 111 historical duties and remaining full/scientific access obligations are retained. Static disposition is not full execution or scientific acceptance. 2026-11-10 storage closure: actual zero-body unfiltered10342-node collection,81 additive generated public-focused cases, original tiers/private dependencies/duties retained. Synthetic host providers isolate unit paths; production has no test-environment placement exemption. Static review is not full/private scientific acceptance. 2026-11-10 CI workspace correction: original10342 full collection plus complete11-node policy-module collection gives10345, three additive generated focused allocator controls. The actual unchanged12-node staged native preflight must freshly confirm full scope before any body; no historical node, tier or scientific duty removed. 2026-11-10 callback migration closure: complete50-node collection for four consumer modules remains exact (49 original focused bodies PASS,one original comprehensive deselected). Five test doubles explicitly accept their real namespace parameter and check containment; no production code,scientific assertion,node,tier,dependency or duty change. Only current test-byte binding changes; earlier c29112-node receipt remains historical under its own SHA. 2026-11-10 public capture carrier consumer: the actual guarded child now receives build_check_spec prepared environment; dropping only the workspace carrier is explicitly refused in the same original node. Thirty unchanged module node IDs, no production guard,scientific assertion,scope classification or dependency change. Previous5299705 successful bodies and one failure remain historical,not a new-SHA pass. 2026-11-11 targeted correctness remediation: actual unfiltered 10370-node collection, zero executed bodies, 25 additive generated public-focused controls. Original private cases, dependencies, tiers, and responsibilities remain unchanged. Static test-byte binding only; no new full-suite or scientific acceptance claim. 2026-11-16: unfiltered collect-only confirmed 10372 nodes, zero bodies, two new generated public-focused worksheet controls. Existing tiers, private dependencies and scientific responsibilities unchanged.",

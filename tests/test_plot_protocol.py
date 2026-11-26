@@ -313,7 +313,7 @@ def test_mcp_semantic_schemas_and_dispatch_share_core(monkeypatch: pytest.Monkey
 
     from sciplot_core.mcp_server.schemas import tool_definitions
     from sciplot_core.mcp_server.services import invoke_owner
-    from sciplot_core.plot_document.schema import patch_schema
+    from sciplot_core.plot_document.schema import figure_handoff_schema, patch_schema
 
     tools = {item.name: item for item in tool_definitions()}
     assert expand(tools["sciplot_plot_patch"].input_schema)["properties"]["request"] == patch_schema()
@@ -329,6 +329,25 @@ def test_mcp_semantic_schemas_and_dispatch_share_core(monkeypatch: pytest.Monkey
     params = {"plot": "/tmp/plot", "request": {"idempotency_key": "unchanged"}}
     assert invoke_owner("sciplot_plot_patch", params) == {"status": "committed"}
     assert captured == [("plot.patch", params)]
+
+
+    tools = {item.name: item for item in tool_definitions("daily")}
+    advertised = expand(tools["sciplot_plot_export"].input_schema)
+    assert advertised["required"] == ["plot"]
+    assert advertised["properties"]["handoff"] == figure_handoff_schema()
+    from jsonschema import Draft202012Validator
+
+    handoff = {"output_dir": "/tmp/review-files", "plot_id": "sample", "revision": 1, "formats": ["pdf"]}
+    validator = Draft202012Validator(advertised)
+    export_params = {"plot": "/tmp/plot", "handoff": handoff}
+    assert validator.is_valid(export_params)
+    assert validator.is_valid({"plot": "/tmp/plot"})
+    for invalid in ({"formats": ["tiff_300"]}, {"formats": ["pdf", "pdf"]},
+                    {"formats": ["pdf", "vsz"]}, {"output_dir": "relative"},
+                    {"revision": True}, {"extra": "unadmitted"}):
+        assert not validator.is_valid({**export_params, "handoff": {**handoff, **invalid}})
+    assert invoke_owner("sciplot_plot_export", export_params) == {"status": "committed"}
+    assert captured[-1] == ("plot.export", export_params)
 
 
 def test_lifecycle_contract_rejects_unknown_and_relative_fields() -> None:

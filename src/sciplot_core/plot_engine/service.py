@@ -50,6 +50,14 @@ class PlotService(ProjectApplication):
     def open(self, target: Path, figure_id: str | None = None, *,
              description: dict[str, Any] | None = None) -> dict[str, Any]:
         description = require_selector(description)
+        target = target.expanduser()
+        if target.suffix == ".sciplot" and (target.is_symlink() or not target.is_dir()):
+            from sciplot_core.project_lifecycle.project_file_summary import project_file_summary
+
+            if description is not None and description["scope"] != "summary":
+                raise EngineError("project_file_summary_only", ".sciplot files currently support read-only open summaries.",
+                                  action="project.open", description={"scope": "summary"})
+            return project_file_summary(target, figure_id)
         target = canonical_path(target)
         native = native_dispatch("describe", target, figure_id=figure_id, description=description)
         if native is not None:
@@ -143,7 +151,14 @@ class PlotService(ProjectApplication):
             self._require_saved_continuation(plot, validate_resume(request), decision=False)
         return super().resume(plot, request)
 
-    def export(self, plot: Path) -> dict[str, Any]:
+    def export(self, plot: Path, *, handoff: dict[str, Any] | None = None) -> dict[str, Any]:
+        if handoff is not None:
+            plot = plot.expanduser()
+            if plot.suffix == ".sciplot" and (plot.is_symlink() or not plot.is_dir()):
+                from sciplot_core.project_lifecycle.project_file_handoff import project_file_handoff
+
+                return project_file_handoff(self, plot, handoff)
+            return super().export(plot, handoff=handoff)
         native = native_dispatch("export", canonical_path(plot))
         if native is not None:
             return native
@@ -151,6 +166,11 @@ class PlotService(ProjectApplication):
         return super().export(plot)
 
     def intent(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
+        plot = plot.expanduser()
+        if plot.suffix == ".sciplot" and (plot.is_symlink() or not plot.is_dir()):
+            from sciplot_core.project_lifecycle.project_file_intent import project_file_axis_intent
+
+            return project_file_axis_intent(self, plot, request)
         self.require_editable(plot)
         return super().intent(plot, request)
 

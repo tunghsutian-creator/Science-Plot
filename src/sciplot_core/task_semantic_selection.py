@@ -13,7 +13,7 @@ from sciplot_core.source_inspection.input_errors import require_source_file
 from sciplot_core.task_errors import TaskControlError
 
 
-def _reference(block: dict[str, Any]) -> dict[str, str]:
+def block_reference(block: dict[str, Any]) -> dict[str, str]:
     return {name: block[name] for name in ("source_id", "table_id", "block_id")}
 
 
@@ -106,9 +106,9 @@ def select_source_blocks(sources: list[dict[str, Any]], selection: dict[str, Any
         if wanted is not None and _key(block) not in wanted:
             reasons.append("block_not_selected")
         if reasons:
-            excluded.append({**_reference(block), "reasons": reasons})
+            excluded.append({**block_reference(block), "reasons": reasons})
         else:
-            selected.append(_reference(block))
+            selected.append(block_reference(block))
     if not selected:
         _reject("semantic_source_selection_empty", "The explicit Test and block predicates have no common original block; no fallback to all rows was performed.", available)
     selected_keys = {_key(block) for block in selected}

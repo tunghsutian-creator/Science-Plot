@@ -1,661 +1,174 @@
-# SciPlot unfinished development priorities
-
-Status: 2026-11-16. External AI is the task interface. Current behavior belongs
-in README and live capabilities; this file lists unfinished, closable work.
-Completed implementation narratives, superseded cloud blockers and historical
-run counts have been removed from this operational roadmap. Git and the
-original local evidence retain that history; historical PASS is not a new
-snapshot's acceptance.
-
-## Immediate priority: reduce duplicated core responsibilities
-
-Current main is `30de8f1c06b656e1a36032bece7478040969231f`. The mapping
-source-admission and held-byte reader changes are integrated, as are the bounded
-development-storage and research-destination corrections. Do not reopen their
-completed integration gates from the older candidate descriptions. The November
-11 scientific-source, units, aggregation, CSV, tick and group-interface fixes are
-also delivered; generated/public checks are not acceptance of arbitrary real
-research data.
-
-The [core complexity plan](docs/COMPLEXITY_REDUCTION_PLAN.md) retains measured
-costs and bounded remaining work. Keep fresh IO/permission/commit boundaries and
-scientific/native assertions; do not add a general cache, scheduler or frontend.
-The cancelled SavedWork release stays retained, not promoted as a baseline.
-
-The following investigation is the local acceptance recipe itself: the current
-2.05-GB raw capture also produces a 4.97-GB derived review, and an external export
-operator repeats review three times. Census its real producers/consumers, then
-assess one source-owned finalization/export path and compact diagnostic reports.
-Retain raw evidence and all fresh checks; do not declare a compact report to be
-an approval or silently change before-write refusal. This is a remaining investigation, not a reason to repeat the completed
-reader/resolver implementation.
-
-## Retained AI disclosure boundary
-
-Pure provider request/disclosure/cancellation and factual optional usage contracts
-remain available to existing integrations. The product uses an external AI client;
-the native dock and its image/history writer are retired. Historical records have
-a strict read-only reader. Current document capabilities and expected revisions
-belong to local edit admission; telemetry cannot authorize or veto a proposal.
-Do not send user data to a real provider, make paid calls or add fee estimates.
-Historical component evidence does not certify this new integrated snapshot.
-
-## Retained feedback and performance boundaries
-
-The delivered storage implementation gives ordinary quick/changed pytest invocations
-separate leased scratch containers, successful cleanup and two completed failed
-containers retained. Recorded, active, interrupted and caller-owned outputs stay
-protected; capacity warnings do not establish a global byte quota. Storage
-integration through `7f3cb7a1` is complete. Further work should target measured
-completion-query and cold-publication costs, not rerun that delivery. Historical full/audit archival and compact derived
-diagnostics remain distinct unfinished work; do not delete evidence by age.
-
-Keep routine feedback and final acceptance separate. The bounded CI policy selects
-a private-absent affected stage only for reviewed
-design-prose leaves or the shared exact metadata-only task-timing contract. All
-unknown, mixed, scientific, native, guard and infrastructure changes retain complete
-public gates. Missing planning evidence widens rather than skips required work.
-Affected results name unexecuted full/real-private/capture/lifecycle responsibilities
-and cannot mint a canonical origin. Same-commit main admission can reference an
-already successful exact candidate; it does not execute another VM's tests.
-Retain measured installation, type and native-helper build costs when choosing
-later feedback optimization. Preserve necessary frozen full, scientific and
-platform acceptance without requiring it after every editing step.
-Use the same current code, runtime, input scope and unrecorded mode for the local
-before/after comparison; report the scope reduction separately from execution
-cost at equal coverage. Add real historical-failure shadows and unknown/shared
-change counterexamples. Once these establish adequate local feedback and risk,
-continue the already authorized work without waiting for remote CI to begin
-development. Remote policy measurements and release gates remain their own
-explicit claims until actually observed. Historical native digest measurements
-remain in `docs/TASK_CAPABILITY_MEASUREMENTS.md`; they do not measure this batch.
-The shared-check comparison saves seconds, not hours. The limited-benefit
-test-only owner split was withdrawn together with its extra role scanner.
-Native workflow bodies still dominate complete acceptance. Profile those bodies
-before claiming a full-suite speedup; do not add another cache framework to mask
-that cost. Close only the integrated batch's required gates once before delivery.
-
-## Next bounded architecture work
-
-The approved P1 caller set has completed its bounded migration and delivery.
-Its prepared publications, finite roles and selected witnesses share the original
-generation writer. Wider original findings retain their own closure criteria.
-Review final source before selecting a further bounded scope; use the existing
-migration contract and retained failure records.
-
-That P1 scope implements detached prepared publications, one retained
-NativeSuite reader, generation-derived resource roles and one selected-figure
-witness across their existing consumers. Its closure is recorded in the migration
-contract; it does not close every historical scientific schema or domain port.
-Measured same-generation snapshot batching removes repeated complete admission
-without reusing a proof across operations. One matched profiled native case fell
-from 1709.20 to 1161.73 seconds; whole-suite or cross-platform improvement still
-requires its own actual evidence. CI reference can avoid duplicate public profiles
-only for an official identical compatible origin; current native/runtime/health
-and private/full acceptance retain separate obligations. Preserve the final frozen
-batch's actual results outside its input closure rather than rewriting them here.
-
-1. **Review wider domain projections and query effects.** Separate scientific UUID, original
-   locator, file-byte version, tree scope, host location, sealed readable content
-   and materializable/executable artifacts. Enumerate their producers and all
-   prepare/query/commit/export/cold-reopen consumers. Replace the remaining open
-   dictionary/string projection at those boundaries, migrate every target caller
-   and retire its old path. Queries must not silently attach a legacy namespace,
-   write history caches or recover effects; explicit migrate/recover/materialize
-   operations retain their own authority. Test same bytes with different UUIDs,
-   exact versions after relocation, complete directories, no physical path,
-   foreign native saves and zero-write read-only queries. Require a field-role
-   census for NativeSuite projection extensions. Current source hashes cannot
-   authenticate missing historical provenance. Continue from the shared query
-   ports and Core-owned explicit-open admission; do not recreate initialization
-   in a UI or add another state owner. Complete the remaining projection roles
-   across all callers, including distinct identities that share a path or hash.
-2. **Measure and remove same-operation repeated work.** Use one representative
-   complete task and SavedWork read with fixed source, environment, input and
-   history size. Measure file reads/bytes, hashes, JSON parsing, native starts,
-   waits and end-to-end time. In particular, trace per-member reads that may
-   revalidate the entire generation/history chain, including slow operations
-   that start no native process. If measurement confirms the
-   amplification, reuse one existing owner-bound read proof for that finite
-   batch, recheck generation at exit and invalidate on mutation. Migrate all
-   target loops, retain fresh refusal controls and avoid holding the storage
-   lock across rendering. No cross-operation PASS cache; report matched before/
-   after evidence rather than extrapolating a microbenchmark to full CI.
-   The bounded implementation covers attached metadata/journal planning and
-   frozen publication, Veusz source-fingerprint queries, plain registered locator
-   pairs and ordinary recorded-artifact existence batches. Effectful source/view
-   resolution, physical capture and native execution stay outside new metadata
-   scopes. Same-request canonical FD facts remove a second traversal without
-   caching FD authority. Close their combined native/CI latency and refusal
-   controls on the final candidate. The next isolated consolidation carries one
-   mechanical source observation through both preparation routes, compiles a
-   governed TTS specification from one normalization, and batches one attached
-   SavedWork evidence read. Their component measurements remain bounded to those
-   operations; finite counters and pure checks do not establish whole-project or
-   end-to-end performance closure. Finish their combined native, compatibility
-   and release evidence before calling that batch accepted. Intake session
-   publication now uses one existing envelope writer across Python, CLI/MCP,
-   Studio and Curate. Historical flat files remain read-only inputs; the legacy
-   Python return value remains a metadata projection. Combined current-candidate
-   acceptance is still pending. Ordinary table parsing already reuses its scoped
-   reader and must not be described as a proven second parse.
-3. **Close the remaining independent contracts.** Move lifecycle use cases off
-   direct legacy-engine dependencies through concrete domain ports and adapters,
-   retiring each replaced call path. State the supported numerical runtime for
-   retained scientific operators without claiming a hermetic interpreter or
-   dynamic-library environment. Separately define AI outbound field/image
-   disclosure and retain actual provider usage; host grants do not control
-   disclosure, and payload bytes do not measure tokens or fees. Keep these finite
-   responsibilities separate from new product features.
-
-The late failures expose two migration hazards: a consumer can lose a field's
-version/role before the final write boundary, and a read-looking helper can hide
-materialization or stale currentness. The closure matrix must trace the actual
-positive and refusal paths, including returned receipts and original child waits,
-not just interface names. Keep cheap whole-project import/owner/type contracts in
-the integrated preflight, then run the complete frozen release once. Preserve all
-historical failures and assertions; test counts alone prove neither architecture
-closure nor complete private-corpus coverage.
-
-That preflight must exercise acknowledged candidate inputs beside the retained
-native baseline, resolver-approved aliases beside different equal-byte files,
-and the real public child-startup mode. A settled-binding or default-mode control
-does not cover those transitions. Retain comprehensive tiers and include the
-relevant real chain in the bounded short gate rather than adding another policy
-registry or treating a deferred focused selection as release evidence.
-
-## Scientific authority convergence
-
-Keep one writer for original source facts, confirmed bindings and transforms,
-current figure intent, and their rendering projections. Explicit table scope
-must survive every consumer; labels, filenames and display-unit typography
-cannot supply scientific identity. Separate full measurement domains from finite
-display runs, including missing-time rows in staged acquisition.
-
-Verify the integrated scientific-authority snapshot across the full supported
-operation families. Retain the shared physical view IDs, complete time domains,
-whole-file reconfirmation and typed derived-input equality already used by
-creation, continuation and source refresh. New consumers must use those owners;
-labels and display aliases cannot supply science. Preserve old hash/executor
-replay and require explicit confirmation for ambiguous old state.
-
-Complete the remaining integrated native/full and original-data evidence beyond
-the bounded current-view, source-refresh, categorical-group and explicit-XY
-controls. Keep visible-member auto endpoints, fixed comparison windows, exact
-manual ticks and the single domain/geometry writers. Pure controls and native
-array audit do not certify every visual family or complete private acceptance.
-
-Compound ambiguous C display and unknown graph lineage remain explicit unsupported
-boundaries. Actual font-face capture and cross-runtime typography need separate
-proof even when represented VSZ/spec presentation fields agree. Unify
-daemon/runtime identity facts and preserve original startup diagnostics; an
-engine-unready result alone does not establish an OS or Qt root cause.
-
-Exit: independent source facts survive create, revision, reopen and export;
-alias-only changes cannot alter science; equivalent final membership and intent
-produce equivalent science; no unsupported migration, stale source or unknown
-execution can mutate state. Full, native/visual acceptance and complete private
-capture remain separate obligations. Merge to main and a normal push follow
-current acceptance and remote-state review. Default upgrades and release or
-deployment remain separate actions.
-
-## Native backend and further cleanup
-
-VSZ/Veusz remains the active plotting backend. Ordinary users create, edit and
-export through AI requests and local CLI/MCP commands without manipulating VSZ.
-LegacyPlot retains saved VSZ visual authority; ManagedPlot owns its semantic
-document and still compiles VSZ for native rendering. Replacing that backend
-would require a separately approved rendering, editing, scientific-QA, recovery
-and existing-project migration contract. No replacement is planned by this cleanup.
-
-Further retirement needs evidence about runtime imports, dynamic registration,
-public compatibility promises, packaging and persisted references. Preserve live
-archive/rollback behavior, old projects and scientific choices, executable worker
-entrypoints, safety refusals and historical rendering evidence. Product Qt,
-React/browser and manual assembly workbenches are retired; headless Qt/Veusz
-remains the native adapter. New and historical file responsibilities are distinct.
-
-## Private scientific acceptance and complete access capture
-
-Close the current composed-process milestone using a fresh frozen source: preserve
-constructor binding and one cleanup holder per process object, then verify actual
-native exits and capture. Review each original epoch with ordered event, token,
-phase and socket lists that retain duplicates, missing members and all closure
-predicates. Reuse source-owner identities only within that review's bound source
-snapshot, and check the complete source map again at exit. Current namespace facts
-and native evidence still require their original validators. Pure controls and
-source review are not full/capture acceptance; retain historical failed and
-incomplete runs in local evidence. Final metadata must bind the actual unfiltered
-collection, preserving private scope and static inventory incompleteness until
-fresh runtime evidence is independently closed.
-
-Preserve the historical failed acceptance records for producer identity,
-external cwd, socket lifetime and unbound metadata reads. Their diagnoses and
-repairs are recorded in Git and local evidence; they are not new acceptance
-results or a reason to repeat completed diagnostics. Live registration retains
-the successful current source frame, held generation, kernel peer and management
-responsibility without replaying accumulated primary history before observation.
-Queued historical admission and final chain/source/registration/exit checks
-remain complete. Preparation metadata reads retain their exact source owners;
-unknown reads do not inherit a path exemption. Short/long-prefix, parent-exit
-and composed native evidence must agree with the eventual complete current run.
-
-The current compatibility milestone also requires cold replay of original sealed
-DataMapping executions and strict new version-3 creation. Generated legacy-record
-controls prove their declared reader boundary, not native recreation or every
-historical environment. Freeze the integrated parser, metadata and exact node
-set before the remaining public CI, native/full and access-export gates; do not
-promote a prior snapshot's full acceptance to the repaired snapshot.
-
-The checked-in private dependency inventory remains preliminary. Available
-inputs, successful original-data test bodies and complete child-inclusive
-access capture are separate claims. Neither public CI nor a prior full PASS
-can certify the current collection's complete private input closure.
-
-The current open-facts repair preserves producer mode/flags and FD context through
-the shared access projection. Its final short composition must include the real
-nodes that produced the previously unmapped parent opens, with strict scoped
-export before the next complete run. Generated roles and successful software
-bodies cannot promote old records that lack those facts. Retain both positive
-declared-file checks and actual undeclared sibling/listing refusal controls.
-The subsequent exact directory-metadata dependency role must retain those
-refusals and all original content declarations. Static per-node role review and
-pure mapping of retained events do not close the new candidate's strict scoped
-or full capture/export gates.
-
-Finish an independent inventory review against the exact collected node and
-parameter set, then bind actual authorized raw/golden membership and bytes,
-implementation/tests, original process streams and the audited root's genuine
-external wait/exit. Missing startup/finish, lost observations, unrecorded waits,
-unsupported native ports or ambient Git inputs remain BLOCKED. Bounded Mac
-native-inspector evidence closes only its declared diagnostic boundary.
-Keep the access boundary finite: reuse the existing observer, source-owned
-Popen lifecycle and engine socket, one OS exclusion per actual launch, and one
-primary native exit sensor. Do not grow a general broker or policy registry to
-absorb unknown ports. Complete the original unfiltered frozen full run and resolve
-its actual failures. Static and generated native component successes cannot close
-that gate. Preserve one environment identity across intent sealing and actual
-launch, bind the current source across child working directories, declare each
-generated socket endpoint, and retain fixture cleanup when observation fails.
-Close held-child exit ledgers with original nonblocking kernel waits before
-the observer finish; never infer an exit from cached status or ECHILD defaults.
-A blocked native action stays blocked until the exact
-required approval is obtained; retain the original execution or non-execution evidence.
-Historical interrupted/failed epochs and the original scientific files stay intact.
-Only validated fresh closure evidence may derive completeness; keep the preliminary
-inventory flag false rather than editing it to manufacture a current access pass.
-
-Exit: a reviewer can trace every declared private responsibility and original
-child process to complete current evidence without substituting synthetic
-values, a subset, schema validity or a self-asserted capture flag. Keep private
-data and access streams local; public scopes retain their own exact-node guards.
-
-## Native fidelity, fonts and semantic expansion
-
-The current opt-in font preflight reports saved requests and qualified Qt
-screen-font matches. It does not identify every face/glyph/file actually used by
-native painting. Record those identities only where the runtime can prove them;
-leave unresolved cases unknown. Validate other runtime/font environments and a
-second Mac separately from local native success. Preserve sealed legacy
-algorithms, original goldens and explicit old precision contracts.
-
-Remaining visual coverage includes mechanical individual points/legends, a
-historically delivered dual-Y golden, other legacy families, multi-panel quality
-and hidden channels before exposing them. Native reflow must keep refusing
-unsupported geometry. Source-root relocation, cross-Mac font/resource consistency
-and independent physical print/journal acceptance need their own records.
-
-Resolve the explicit-corner legend conflict exposed by real continuous XY
-acceptance. Current native QA records text/data collisions as soft findings;
-hard geometry success is not an overlap-free publication certificate. Preserve
-the requested corner, font and axes until the caller chooses an existing layout
-adjustment or explicitly revises that constraint. Do not silently move a legend,
-expand scientific domains or downgrade a visible failure. Finish native saved
-continuation and exact mutation detection for the narrow legend-order and native
-line-pattern projections through their existing presentation authorities.
-
-Broader grammar or authority work remains a proposal: symlog and other scale
-transforms; facets/repeat; spanning/sparse grids; multiple figure legends and
-colorbars; image/area marks; additional named scientific templates and pinned
-resources; continuous collision geometry; known Managed external-delta adoption;
-and explicit Legacy/Managed authority conversion. Non-deterministic executor
-adoption, uncertain external-execution reconciliation and background file
-observation also need separate durable contracts. Do not silently promote a
-partial import or restyle old native documents.
-
-The current bound-suite adapter covers existing native legends and relative
-notes through per-figure transactions and exact export. Added widgets, arbitrary
-native setters, scientific changes and automatic adoption remain outside that
-coverage. Expand only with exact native-state preservation and selected-object
-recovery evidence. Keep the caller's semantic/legend order independent from the
-backend's painting policy.
-
-The bounded text-intent route and read-only dependency explanation already
-exist. A theme intent remains a proposal. Before extending them, compare exact
-targets, stale revisions, native preview/recovery and unchanged science against
-actual execution. Dependency explanations do not guarantee future cache reuse
-or introduce a second scheduler. General no-op export reuse and broad automatic
-recovery are not claimed complete.
-
-Exit: each approved new capability has a real native round-trip, source/units
-and style preservation, scientific execution/decision contract and failure
-recovery. Cross-host visual/resource checks remain distinct from local tests.
-
-## Independent beginner and installation acceptance
-
-Recruit 3–5 people who did not develop SciPlot. Have them install/connect,
-create a figure from their own data, answer a real ambiguity, request an
-annotation, export and resume the next day. Record completion, time, maintainer
-interventions and mistaken project choices. Programmatic/agent evidence is
-not this human usability evidence.
-
-Validate a clean Mac separately from relocation on the development machine.
-The current distribution tools and [beta guide](docs/PUBLIC_BETA.md) retain
-relocated-app/ZIP identity, MCP and failure evidence. Finish Developer ID signing,
-stapled notarization and Gatekeeper acceptance before public distribution;
-ad-hoc local success does not close those gates. Other macOS versions, CPU
-architectures, platforms and AI clients require their own installation acceptance.
-Existing launchers with recorded runtime paths need explicit relocation/re-export
-handling; a portable VSZ snapshot does not establish a portable Managed project.
-
-Exit: independent users complete the supported lifecycle on a clean supported
-configuration, with distribution identity and documented recovery verified.
-
-## Independent original-data acceptance for table choices
-
-The local real-case repair now covers three-row sample/unit metadata, explicit
-source-unit statements, independent sample blocks in ordinary numeric XY tasks,
-and descending display scales without reordering or shifting raw values.
-Saved native continuation distinguishes original and effective source seals and
-validates the complete applied-save chain while retaining partial Legacy shadow
-coverage. Single-task native sets retain their registry and category label bounds.
-Keep testing these paths with untouched sources and independent clients.
-
-Scientific presentation requirements must match the selected executor: Impact
-boxes use median/IQR, whereas bars and compatible multi-condition workbook
-point-lines use mean/sample SD. Explicit `raw_only` now connects the existing
-box/box-strip original-point path without computing summaries. Explicit wide/bar
-valid-n disclosure and selected performance Metrics with per-Metric missing-unit
-statements now have generated, native and source-audit controls. Complete their
-independent original-data acceptance on the final frozen integration. Broader
-categorical tables now have an explicit original-file binding for given-value
-point-lines and long-form mean/sample-SD bars. Complete their original-cell,
-missing-policy, cold-continuation and final visual acceptance as well. Arbitrary
-table reshaping and derived scientific metrics are not implied.
-
-Later categorical aliases and styles now use a separate presentation overlay,
-the native transaction, complete source audits and an export preflight. Generated
-controls cover retained raw identities/statistics, exact conflict replies,
-unmodified delivery on refusal and same-task cold-export recovery. Complete
-independent review and original/fresh-case acceptance on the final integration.
-The original grouped-bar legend collision now has an unchanged-data repair using
-the existing bounded reserve and exact-current native component geometry. Its
-native/PDF controls retain the original false-ready counterexample and verify
-zero text/bar/SD overlap after repair. Finish independent visual review and the
-final integrated acceptance. The zero-SD bar-outline audit contract and summary
-scale preflight are repaired. Matching Qt 6.11.2 has been restored in ignored
-local storage; the zero-SD generated create/cold-export checks pass with the
-original scientific and native assertions. Final integrated full and original
-data acceptance remain pending. Given-value log axes remain supported;
-zero-baseline summary bars reject log requests before plotting.
-
-Ordinary numeric XY creation, same-plot Managed source append and represented
-Managed/Legacy curve display-name and hide/show edits now have generated and
-native controls. Complete independent original-case and fresh-source acceptance
-on the integrated snapshot, including cold continuation and layout failures.
-Include explicit ordinary linear/log axes, compatible same-axis quantity members
-with independent grids, and same-file append of a previously unused original
-response pair and an independently identified Test in the same original file.
-Verify complete physical row domains, missing masks and binary64 values from
-original cells through IR and saved native datasets; empty serialized storage
-rows are not measurements. Complete the raw replicate subset-to-expanded-group
-workflow with the same project/figure identity, old domains, styles and recovery.
-Existing incorrect Managed source selections still need a separately reviewed
-explicit repair contract; a new correct figure does not repair an old revision.
-Retain source-coordinate and forged-disclosure regression evidence.
-Keep correct mathematical clarification separate from drawing completion. These
-controls do not establish fresh private input/access completeness; the default
-upgrade remains held while the mandatory audited gate is BLOCKED. Legacy source
-append and general scientific rollback still require their own supported contracts.
-
-Continue independent instrument-frequency acceptance across original formats,
-condition metadata and explicit coordinate selections. Generated regressions now
-distinguish viscosity magnitude from components, retain temperature-labelled
-Results and bind formal source/unit/transform evidence. A correct local magnitude
-figure does not establish a viscosity TTS model or validate caller-prepared shifts;
-keep those scientific decisions and existing frozen plans separate.
-
-The explicit semantic task adapter now reuses Managed creation for multiple
-attachments, independent coordinate intent, formal reset-time stage assembly,
-unit conversion and presentation interpolation. Broader experiment/coordinate
-combinations still require their own exact source and native acceptance; this
-bounded adapter does not replace the retained family workflows. Native snapshot
-delivery and the original local Managed registry remain distinct authorities.
-
-Exact literal Test/qualified-block selection retains original SHA, physical rows
-and explicit exclusions before formal transforms. Broader instrument formats,
-source revisions and missing/ambiguous scientific metadata still need independent
-original-data acceptance; do not substitute inferred sample names or rewrite raw
-tables to make a selection pass.
-
-Worksheet/region selection, multirow/merged metadata, shared-X/multiple-XY and
-per-pair/cross-sheet mappings already use the source-bound task/DataMapping
-route. Native persistence audits the new binary64 contract exactly; older specs
-retain their original precision contract. Existing natural-workbook and user
-FTIR acceptance records remain in [metadata](docs/SCIENTIFIC_METADATA_ACCEPTANCE.md),
-[table ranges](docs/TABLE_RANGE_ACCEPTANCE.md) and
-[source updates](docs/TABLE_SOURCE_UPDATE_ACCEPTANCE.md).
-
-Extend untouched real-case coverage for alternate secondary-temperature roles,
-incompatible unused worksheets, changed-value cross-sheet revisions,
-externally documented units and scientific statements. Generated selector and
-table-choice regressions do not replace that independent source evidence. Current automated
-changed-value coverage is not that independent source evidence. Never infer a
-quantity or unit merely to make a source pass: the rule-selection answer must
-not encode arbitrary scientific facts. Extend reusable profiles only when
-current headers, units and mappings can be validated.
-
-Paired-curve and numeric mapping coercion now retain correctly rounded binary64
-values for accepted decimal text, with generated precision and missing-data
-controls. Independent real-source round trips must still verify this input
-boundary and the existing native persistence separately. This bounded contract
-does not establish exact decimal arithmetic or cover every statistical parser.
-
-Exit: each advertised new choice has an untouched independent source completing
-selection, correction, native creation and exact-current export through task/MCP.
-
-## Reviewed annotation rebinding: independent source-revision acceptance
-
-Automated native controls cover fresh mapping, compatible fixed annotations,
-observed-peak rebinding, moved/missing/multiple candidates and export-only recovery.
-An original/revision XRD pair with unchanged selected values has independent
-acceptance. Independent revisions with moved, missing or multiple changed peaks
-remain needed; edited synthetic copies and development fixtures do not count.
-
-Validate original metadata, measurements, sample identity and final VSZ/spec/CSV
-together. The implemented version-2 interrupted installation recovery requires a
-completely byte-proven baseline and preserves displaced candidates. Unknown or
-tampered parts and legacy mixed installations still block. Independent real
-interrupted-update evidence remains separate from fault-injection tests.
-
-Exit: untouched real revisions cover each peak outcome and confirmed mapping,
-with reviewed previews, correct exports and recorded interruption recovery.
-
-## Measured usability and AI-efficiency improvements
-
-Use matched real tasks to measure model rounds, tool calls, returned bytes,
-latency, failures and user questions. Existing compact/scoped discovery, typed
-creation/editing, grouped recovery and sealed paper delivery are current behavior;
-their local call/time/byte records belong in
-[task measurements](docs/TASK_CAPABILITY_MEASUREMENTS.md), not a repeated backlog.
-Retain visual review, raw arrays/hashes, current QA and genuine scientific choices.
-
-Gather unassisted fresh-client traces and actual per-request input/output/cache
-tokens and billed fees where a client exposes them. Without counters they remain
-UNKNOWN. Fewer CLI calls, encoded MCP bytes and predetermined local corrections
-do not establish model-token savings, matched end-to-end speedup or population
-usability. Native startup/export and external AI time need separate measurement.
-
-MCP discovery filtering/deferred loading or an opt-in scoped server profile is
-still a measurement question. Implement one only if supported client traces
-justify it, retaining full schemas and validation. No new profile is implied by
-response scoping. Further local native optimization needs matched workloads and
-unchanged scientific/visual quality.
-
-Exit: publish reproducible before/after evidence with the same task scope and
-quality checks, separating local command time from actual client/user experience.
-
-## Integration and publication acceptance
-
-Use the change-impact workflow in [development](skill/references/development.md):
-small relevant checks while iterating, the integrated changed-owner gate, scoped
-lint/types and a native smoke when the final change crosses those owners. Unknown
-owners, stale exact-node manifests and unsupported evidence remain fail closed.
-Full pytest and ready-rule acceptance remain release/merge gates; a frozen full
-already contains both tiers. Do not substitute public subsets for authorized
-private/full release acceptance or repeat full for every small cleanup.
-
-The compatibility fixes, persistent a.u./XRD display default, historical DataMapping
-cold replay and first local speed slice shipped on main 42569c1 with complete
-local and exact-commit CI acceptance. Subsequent work uses independent snapshots;
-main and exact-commit CI gates remain unchanged.
-The later complete-profile CI parallel experiment remains isolated: its local
-contract checks passed, but remote runner communication failed and no complete
-parallel wall-time benefit was established. It does not block independent module
-development from stable main; its workflow is not carried into that work. Use actual
-monotonic stage costs to choose a small dependency-selection, deduplication or
-operation-local preparation change; bind reuse to exact version, environment
-and input identities. Long stages must expose actual progress or an explicit
-UNKNOWN, and required environment capabilities must fail before expensive work.
-Preserve the original canonical test order, coverage, assertions and complete
-post-execution checks. Accept this phase only with comparable before/after
-end-to-end time, individual stage costs and evidence that coverage did not shrink.
-Different test selections or historical wall clocks cannot establish speedup.
-Do not add another audit framework.
-
-The first progress implementation uses the existing finish/supervisor/status
-path, synchronous checkpoints and monotonic ages. It preserves original waits,
-completion and immutable receipts; complete release/capture acceptance is still
-required. A measured Qt text-projection memo prototype was rejected: one pair's
-2.28% elapsed difference with different inherited environment hashes did not
-establish a stable benefit. Root-overlap analysis also did not justify pruning
-missing candidates or alias layout. Keep these prototypes out of the delivery.
-Use the existing unrecorded changed-owner entry for daily feedback and request
-recorded identities when reuse or capture is needed. Measure these evidence modes
-as separate contracts, and retain every assertion and complete release scope.
-The explicit `verify --quick` daily entry uses that same owner plan and rejects
-accidental record/reuse/audit options. It reports command costs and deferred gates
-without claiming merge readiness. A real small typed-intent edit ran all 32 selected
-bodies and four checks in 11.00 seconds; the equivalent old unrecorded path took
-10.09 seconds. This usability change adds no algorithmic speed claim. Exact-node
-manifest updates still select the broad verification owner; evaluate a smaller
-declarative-metadata owner only with a proven complete dependency contract, rather
-than silently dropping those checks in this slice.
-
-The next finite preparation slice keeps successful raw native inspector text in
-one operation-local runtime memo. Fresh content/source/tool/environment/OS and
-permission checks remain mandatory; loader/alias/missing membership and canonical
-before/after captures remain uncached. Observation disables reuse, including a
-final activation check after a hit. The original native observation boundary,
-suite/full path and evidence reuse authority stay unchanged. Generated portable
-component controls retain the real unsupported-platform rejection, while actual
-Mac CLT/native workflows still require the real host and complete access evidence.
-A same-environment local record pair retained the same 1260 bodies and four gates:
-159.81 to 148.87 seconds, with the difference chiefly in preparation. It is one
-pair with different Git index fingerprints, not a stable full-suite speedup.
-Long native comprehensive behavior remains a separate cost to reduce; progress
-reporting and the different quick/record evidence contracts do not solve it.
-The next required final full also emits standard pytest slow-report durations;
-existing timestamp gaps alone cannot attribute call/fixture cost. Reconcile the
-changed-owner plan against that exact completed full, preserving standalone
-lint/types/whitespace, native capture and readiness gates instead of repeating
-the changed pytest subset. Do not add another full just to obtain a profile.
-
-Resume complete real ordinary plotting, TTS and panel-assembly tasks and the
-plotting/AI-communication/edit module-boundary review from stable main. The first
-bounded implementation centralized provider proposal admission in its capability
-owner. The current AI-only target retires the GUI selection/status/draft/history
-orchestration; pure provider request/cancellation/usage and read-only old history
-remain. Validate document capabilities, revision/expected values, whole-command
-refusal, detached preview/decision and save/reopen/export on the Core path.
-Use changed-owner fast checks for development, then the unchanged complete
-merge/release requirements on the frozen batch. Remote CI for an isolated
-experiment does not hold all subsequent development hostage.
-The width/color series-selector slice shipped on main7731882 after its own local
-6673-body full, complete capture/access closure and exact-commit CI. The main push
-has separate CI; the local/source results do not assert its terminal status.
-
-The next parallel batch replaces three demonstrated adapter ownership defects:
-response/connection/cancellation cleanup in the existing AI transport; shared
-style/common-edit entry admission and literal checkpoint replay before new target
-discovery; and one explicit render-option projection for domain defaults and
-series provenance. These changes retain existing scientific and native behavior,
-but do not establish PlotService as a suitable long-term application kernel.
-The project-level review found divided transaction ownership, unsafe desktop
-batch failures, stale panel locks and globally coupled execution identities.
-Replace superseded code rather than adding another journal, command bus or
-scientific schema. Each worker uses affected regressions; the integrated frozen
-batch receives one complete acceptance. No worker's subset certifies the batch.
-Keep mechanical scientific labels, native GUI changesets and semantic revisions
-in their existing identity domains. Broader template/TTS interaction and real
-ordinary plotting still need bounded workflow evidence; this batch adds no new
-scientific template, native/semantic identity bridge or paid AI measurement.
-
-The delivered semantic/desktop/panel core batch follows
-[the lifecycle contract](docs/DESIGN_PROJECT_LIFECYCLE.md).
-Its finite scope covers all semantic figure-aggregate lifecycle callers, all desktop
-Assistant setting batches and all panel-layout saves. ProjectApplication replaces
-the semantic orchestration; ProjectRepository alone writes its existing revision,
-head and journal store. Old entry points delegate and contain no second writer.
-Desktop failure compensation must verify the complete pre-command draft or
-quarantine it before save/export. Panel saves use a kernel-held directory lease,
-descriptor-bound staging and publication, and an explicit fence against old
-writers. Actual process-death and native failure controls accompany the migration.
-Its main597fee38 delivery has complete local acceptance and terminal successful
-candidate/main CI. This does not supply acceptance for subsequent code.
-
-The subsequent [project-core contract](docs/DESIGN_PROJECT_CORE_MIGRATION.md)
-defines the complete caller/recovery closure and its combined acceptance. It
-replaces global builtin admission with retained
-per-operator versions, separates host execution grants, and converges NativeSuite,
-GUI/browser/publication and attached semantic storage on the project command and
-generation owner. Private rendering is disposable computation, not an extra
-authority or an external-effect retry exemption. Complete cold-source input
-views, actual pending relocation and caller/writer retirement require explicit
-evidence; targeted checks alone cannot authorize main delivery. Its exact frozen
-source, complete local run/capture/access records and candidate/main CI establish
-delivery status independently of this ownership description.
-
-Verification contexts retain their own authorities: old scientific witnesses use
-the original manifest, current enforcement uses fresh source identity, and Store
-cost measurements count Store calls without discarding guard observations.
-Protocol feedback keeps the real public guard. Named Darwin 27.2 and 27.3 native
-baselines preserve the original scientific authority and require complete actual
-producer evidence plus exact environment, structure and image comparisons. New
-local captures remain outside distribution. These contracts do not replace the
-final version's local full/capture/access gates and supported-platform CI.
-
-The current prepared-publication closure must retain every staged-view,
-decision, source and recovery check while retiring unused intermediate protocol
-round trips. A coherent latest-generation merge and final expected-head check
-must preserve independent nested updates and their complete command history.
-The generated transaction demonstrates fewer metadata/view reads, with unchanged
-complete-head validation count; this alone does not prove the whole native
-waiting cost resolved. Keep the original 180-second case and all release coverage.
-Use its historical-replay stage observations to distinguish necessary validation
-from remaining repeated work before claiming further latency gains. Neither a
-runner-region difference nor a passing subset establishes that cause or release
-readiness.
-
-Package dependency cleanup, measured runtime/verification costs, finer global
-test-owner closure, outbound minimization and the remaining open scientific
-schemas stay later work. This is not a claim that every architecture finding is
-resolved. Each migration must retire its old authority rather than keep a
-permanent parallel store. Veusz is
-the long-term native rendering adapter; no evidence justifies reimplementing its
-scientific rendering and existing-file capabilities in this core batch.
-
-Keep one normal local entry and recoverable Git checkpoints. Preserve physical
-projects, raw inputs, existing figures, independent backups and unmerged work.
-Remote exact-commit CI, main merge, release publication/deployment and local
-acceptance are separate actions/results; perform only the authorized ones.
+# SciPlot 全项目开发路线图与任务拆解
+
+**拍板：做成科研图的日常工作台。** 从真实实验数据出图，把科学选择说清楚；用户隔天打开同一张图，人工或 AI 都能编辑，最后只拿他想要的成果。优先闭合这条实际工作流，再删重复实现与验证。**单文件只是交付线的一个任务组，不是项目总主线，也不是其他功能的前置条件。**
+
+## 终点与五条并行主责
+
+| 主责 | 用户最后能做什么 | 保留的工程权属 |
+|---|---|---|
+| A 科研制图 | 原数据到图；明确就出图，需要用户决策才问；能核对样品、单位、原始点、转换、图稿。 | 原始来源/确认 → 科学规则 → Managed 文档/PlotIR → Veusz/Qt → 科学及发布 QA。普通输入逐族合一；专业套图有独立价值的继续支持。 |
+| B 持久编辑 | 找回同图、审核再提交、恢复中断；可以人工或让 AI 改同一项目，互相可见且不覆盖。旧图能打开重画，想用新功能显式转换。 | 回执负责下一步，Store 负责版本，导出证据负责交付。CLI、MCP、真正编辑窗口调用同一个 typed 用例，不建第二张状态表。 |
+| C 文件与交付 | 交稿、搬项目、另存、导出各有准确动作；单文件通过后像 OPJU 一样双击一个普通 .sciplot 文件进入真实编辑窗口，AI 指向它。 | 论文快照不是项目、位置不是身份、另存不是移动。单文件复用 Store 闭包与私有工作区，其他项目入口暂继续使用。 |
+| D 工程减负 | 小改有短反馈，冻结版才统一长验收；新能力改一个明确的 owner，而非三个界面各实现一遍。 | 证实重复再删，迁完真实调用才关旧路。不能为了速度去掉独立科学、真实环境或数据边界。 |
+| E 实际发布 | 新人按指南安装、出图、隔日续编和交稿，不需要维护者接手；失败能区分没保存与没交付。 | 同版本源码、独立真实科学、Mac 发包和真人分开取证。正式公开另有开发者签名、公证及 Gatekeeper。 |
+
+**不变原则。** 原始数值、单位、样品、科学数据身份、图修订和发布产物有各自事实来源。观察本身不写入、不偷恢复。项目历史唯一由 ProjectCommands/FileProjectStore 维护；Veusz 保存不是项目提交。可以改产品默认动作，但不能复制一个新 Store、渲染器或 AI 输入层。大决策应减少重复职责，小 PR 使其中每个决定都能验证。
+
+## 当前起点
+
+这是开发任务和完成条件的唯一队列。[README](README.md) 描述已交付的产品；
+[架构](docs/ARCHITECTURE.md) 记录代码归属，[复杂度证据](docs/COMPLEXITY_REDUCTION_PLAN.md)
+保留设计边界和实测历史。External AI is the task interface；CLI、MCP 和真实编辑器都使用同一应用层。
+
+- 本地已合入 01（两条真实验收用例）、08（续编待审及欢迎页）、23（开发短测）。
+  01 的输入与数值证据在本地，科学选择和出图已分别验证，真实外部客户端仍待。
+- 20a 只证明了可信合成样本的普通文件可搬移并冷打开；用户保存、Finder 双击和
+  人工/AI 同档编辑尚未实现。原有迁移包和另存入口继续使用。
+- 接下来处理 02 的源绑定问题、09 的精确图身份和当批短验收。旧发布的
+  GitHub 证据不计入这批，合并、签名发包与独立验收均单独取证。
+
+## 节点、开工与 PR 规则
+
+| 阶段 | 收口条件 | 先后和并行 |
+|---|---|---|
+| M0 收拢已做成果 | 当前版本和验证是谁的一清二楚，接回真实会话恢复，用户指南用真实动作。 | **先并行 08（合并已证恢复/修首页）、01（选真实科研用例）、23（短反馈基线）**。20 单文件 PoC 可另开隔离树，不抢本批核心 owner。 |
+| M1 日常闭环 | 原始数据、明确科学选择、实际审核、隔天开同图、一次失败恢复、取所要的成果；至少一条现实研究轨迹。 | A 02–05、B 09–12、C 16–18、D 24–26；E 28 可前置。单文件可以独立收口，不阻塞 M1。 |
+| M2 减重并冻结候选 | 一个普通家族一条核心实现，删除的调用和证据明确；编写短验证并证明未丢关键反例；形成审查就绪批。 | 只做测出来的重复。20–22 如果验证成熟，作为被选入发布的功能；未熟则继续用已证入口。 |
+| M3 真正发布 | 同一确切候选有 Linux 完整检查、真实科学、实际可安装 Mac 包、真实客户端/独立用户；公开标志对应真签名、公证及 Gatekeeper。 | 冻结后取一次官方证据，不并行重复一个职责。不把「单文件没做完」当其他能力发不了的理由。 |
+
+**工作切法**：一张卡一份 PR 意图，一个负责 owner、一个用户或开发者可见结果。隔离相互冲突的文件；共享 receipt、保存或编辑入口先合并上游再开下游。短反馈在本地完成，不把每个小提交推到会触发 full 的 integration ref。复核差异、实测与实际删除，再决定合入。涉及科学、写入和原始数据的约定先写正反例再改；不为跨过行数、无环或分类门去改门。source-only 白名单不是所有文档，别凭文件扩展判断远端开销。
+
+## 工作卡（33 张）
+
+### A · 科研制图（01–07）
+
+| 卡 / 前置 | Owner、输入→输出及增删范围 | 短验收 / 失败语义 |
+|---|---|---|
+| **01 P0 定两条现实研究轨迹**（无） | 科研 owner；优先复用已做合规验证的双样品 FTIR，第二条从有实用需求的流变/力学专用族中选，写入已有科学验收用例。公开负例用合成数据，不共享实验原件。 | 每条给原列、物理单位、样品、X、缺失、预期结果；至少一次真实歧义。无私有授权先用合成，明确真实未验。 |
+| **02 P0 只问当前科学决策**（01） | task_semantic_creation.py、来源与 table selection：已选源和列→当前问题/选项；绑定一次原始字节和问题 ID，去与当前任务无关的提示。 | 合成首图的实际 Mass/Weight 任务只问一次，双源映射不串；未答不提交，源或 question 变动拒绝原回答；不能猜单位。 |
+| **03 P0 输出能核对首图**（02） | 复用现有合成首图、QA 与真实 STDIO；首图提供原样品、轴单位、当前图和续编入口，删不必要的再次 inspect 提示。 | 既有双组原始数值断言外，核样品标签、秒/百分比；真 PDF/TIFF 及实际 300dpi。源含义不成立没有假图。 |
+| **04 P1 普通 XY 只一条创建本体**（02/03） | task_control.py:95–186 和 task_semantic_creation.py：旧 source-only 公开形状可留作薄译，普通 CSV/表格走同一来源、Managed/IR、恢复；删除被取代的内部 raw/Studio 调度。不把专用套图一锅端。 | 两入口同数据、重复 X、缺失值、单位、log 域、结果与恢复一致；已有旧请求仍恢复；不凭 fallback 偷换算法。 |
+| **05 P1 原始数据追加/更新**（02/03） | source_append / task_source_execution：同图明确追加一组或版本化更新其来源，复用已有科学审阅；样品实体与显示名分开。 | 原曲线值不动、新曲线保留独立网格和单位；未审/取消/旧版本不写；重复的数据映射不能偷偷变新增。 |
+| **06 P1 只迁一个真正在用的科研族**（01/04） | 由 01 的现用族挑一条，现有 reader、规则 owner、ProjectCommands 合共享源码；独立科学能力仍留。不同时迁两族。 | 同输入、同 runtime 审真实图/数据保真；保持已支持的内部检验。只保确有价值的改法，不见收益就停。 |
+| **07 P1 样品体系的组图/比较**（03/05） | 已有组图/managed_comparison/paper：两张实际图→排序、候选和交付；复用已完成的候选资产，不再重算相同版本。 | 审核的是交出去的版；指定次图不改另一图，需比较的候选不改 head；取消或 stale 不声称完成。 |
+
+### B · 续编、人工/AI 编辑与旧图（08–15）
+
+| 卡 / 前置 | Owner、输入→输出及增删范围 | 短验收 / 失败语义 |
+|---|---|---|
+| **08 P0 合入已证待审重连**（已本地验证） | 已合入待审恢复；Welcome 使用实际经过审核的显示名例。沿现有下一步/预览，不添加强制审核新参数框架。 | 同一候选跨会话可读、明确确认前 0、后 1；原数据不变、文件存在。只跑有冲突或有新变化的短测。 |
+| **09 P0 打开的一直是同一张图**（08） | task_saved_work.py、target_adapter.py：返回 exact 图+当前修订，使用有限搜索和显式选择；删由旧任务投影代替当前图的残余调用。 | 真实两图选第二；改名、别名、重名/多候选不误写或偷偷创建；已有 cold saved-work 原生测试。 |
+| **10 P0 已存未出图就只补导出**（08/09） | project_lifecycle/receipts.py、recovery、export owner：复用原操作键；把「已存」「导出失败」「可交付」分开。 | 注入第一次导出失败/丢回复；真实重试只有一个科学修订，补 PDF 后实际版本一致；过期候选不被重新采用。 |
+| **11 P1 人工真实窗口接同一事务**（08/09） | 复用已随包的 Qt/Veusz；先给当前 Managed 图一个能写的动作（如改轴标题），走现有 typed patch/必要审核；不用重写编辑器，**不等单文件**。 | 真做一个人工编辑，AI 读到同修订；AI 再改时窗口刷新，旧窗口后写不覆盖。只有截图/只读预览不算完成。 |
+| **12 P1 未知原生变更不给项目提交**（10/11） | managed_external.py、managed_description.py 当前只检查、不自动采纳。若一项实际属性有完整科学/原生等价，按现有 typed 事务接入；否则只保暂存、另存 VSZ 或显式丢弃。 | 支持项真实可写；混入未表示原生对象或科学变化就不改项目。关窗说明未保存，不把 native Save 偷当项目保存。 |
+| **13 P1 归档最小兼容**（09/1c80db8e） | legacy_saved_plot.py / legacy_conversion.py：现有归档只读、原样重画、受支持 XY 显式转换；保留已经密封的历史恢复和真实 NativeSuite，按实际 authority 而非 LegacyPlot 字样。 | 像素等价、原树字节不变；不支持的重画仍可做且不会产生新成品项目；历史已提交请求只补以前例程的效果。 |
+| **14 P1 错误直接告诉人怎么继续**（09/10/12） | 按现有 owner 错误投影；MCP、task、Welcome只覆盖找不到源、权限、过期、已存待导出、原生不支持；删被替代的英文子串猜测，不采集遥测。 | 五类真反例能说清状态与下一步；可显式导出摘要不含原始值、绝对路径、样品、凭据；不自动外发。 |
+| **15 P2 退役一条有证据的旧写分支**（13） | Legacy owner 逐个追 CLI/MCP、task、backend、已保存恢复的消费者；无人使用且已有替代才删这一条；旧史和保留承诺不删。 | 给历史正例、无写反例、替代调用者；没有完整证据暂不删，不能用模糊的“都过时”。 |
+
+### C · 文件与交付，单文件仅占 20–22（16–22）
+
+| 卡 / 前置 | Owner、输入→输出及增删范围 | 短验收 / 失败语义 |
+|---|---|---|
+| **16 P0 只产生用户点名的输出**（03/10） | output_contract.py、既有 per-plot export：公开只写所选格式，必要 QA 和中间件留现有私有区。先在现有支持项目上给好结果，不等单文件。 | PDF 只写 PDF；PDF+TIFF 只两种，真实 300 dpi；目标已存在不自动覆盖；失败不使已存项目倒退。 |
+| **17 P0 交稿、搬迁、另存分明**（2be96e2c/16） | 沿既有 plot_deliver、project bundle export/import、project_save_as，以通用词表及回执说明三个动作。不要再写搬迁代码。 | 快照能交稿不是项目；移动保原 ID/代际/历史及权限边界；另存新 ID、不改原档。沿用已过定向原生场景。 |
+| **18 P1 专项产物显式导出**（16/17） | 保留原有绘图 CSV、独立 VSZ、论文包及明确诊断入口；从确切修订出发，删默认“顺手多写”。 | 真文件可开、原始样本及单位可追，错版本/路径拒绝；没有创建默认散件。 |
+| **19 P1 现有目录的离线续编**（17） | portable.py、relocation.py 的流式闭包与离线恢复不重写；把「原路径已不可达」的报错和用户动作收口，不继承旧外部导出或 host grants。 | 清除原数据/以前项目路径，移动后继续原项目、同 ID/历史并写新目的地。原外部交付位置不变。 |
+| **20 P1 普通单文件闭包 PoC**（与 01/08/23 可并行） | project_lifecycle 中薄 file adapter。选普通 <项目>.sciplot / ZIP64 版本化容器，封现有 Store 可达的来源、项目历史、命令和必要原生证据；私有工作区可重建。不是看似单件的 Finder package，也不重写 SQLite/Store。 | 单图关闭后只拎这一文件，清旧源和缓存后同 ID、原数值、两代历史；坏清单/重复/截断拒绝。保存同目录临时校验刷盘再原子换、基线变则拒绝；中断最多旧/新之一，不得生成半项目或重复应用。先由 root 复核文件边界。 |
+| **21 P1 单文件真实窗口+AI**（20/11/12） | 现有 macOS entrypoints/launcher 目前固定 Welcome 且无文档关联；做类型和实际 FileOpen 入口，用 bundled Veusz 窗口。公开 handle 是文件+图 ID+修订，人/AI 复用同 typed 事务。保存只发布经接受的修订，不让原生 Save 覆盖 Store。若项目文件没替换成功，用户可见版本仍是上一版，明确提示「未保存」并给再次保存或恢复的动作。 | 真双击、手动一改、AI 同档再改；离线移到新目录仍可续编。过期窗口、替换失败、未知编辑得明确提示和处理，不覆盖有效文件。外侧只出现 .sciplot 及所选产物，未完成实际使用或独立安装，不报通过。 |
+| **22 P2 单文件扩展及默认切换**（21） | 多图、超大资料的读写和兼容扩展按真实样本逐个切；先测峰值空间/耗时，不为猜测加缓存/数据库。21 通过才在新项目默认引导，并保留明确旧入口。 | 两图不得默认写第一张；格式新旧有清楚动作，保存仍同一权属。若没过，照常交付其他线。 |
+
+### D · 技术债与验证（23–27）
+
+| 卡 / 前置 | Owner、输入→输出及增删范围 | 短验收 / 失败语义 |
+|---|---|---|
+| **23 P0 作者一个短测入口**（无） | verification/changed.py、reviewed_feedback.py 与开发指南；现有 verify --changed，比较文档、普通叶、共享科学边界三例。未知补映射或记全量未走，不假造覆盖。 | 普通修改加所属测试能选对，移动/删除与未知可说明；执行段和未覆盖可见；不在所有工作树机械长测。 |
+| **24 P1 删一项有实证的重复验证**（23） | 保持现有共享 staging 和两个隔离 pytest 程序；找临时 wheel/实际制作的包或重复源码断言的一处，等价才删第二次。 | 已知坏 wheel/路径真实拒绝、覆盖不降；实测量诚实，少了步骤不是一定省几个小时。不重开同 SHA 证明。 |
+| **25 P1 大证据只保存必要表示**（23） | 读 docs/COMPLEXITY_REDUCTION_PLAN.md 中 4.97 GB 派生实例及实际外部操作链，不能假定 production 有三次复审。确认消费者后归并操作者的重复视图；保原始捕获、访问事实和原错误。 | 同失败值和反证不丢；按同输入比较实际次数、大小或时间；不另建通用认证框架或删除历史证据。 |
+| **26 P1 删除真正替代了的旧 owner**（04/09/16 任一结束） | 一次只收普通创建、旧结果投影、或实证的重复 renderer 调用之一；真实调用迁完才删旧路、废文档和等价测试。 | 老/新实际入口与错输入回归；分别列删掉的代码和留下的合同，保持无环和行数门。从现在架构删真正重复，不添 façade 冒充。 |
+| **27 P1 合批及开发残留清理**（23/24） | root 维护 exact SHA、工件和证据，在末端审真实合并树、必要才长测；明确一条集成分支。只清授权可重建物，不动用户脏工作树、实验数据与有效证据。 | 短门、大门、Mac/科学的结果分开；正常 fast-forward 后核实远端。删除前核实对象和身份，大小和年龄不作证据。 |
+
+### E · 真科研、真用户、真发行（28–33）
+
+| 卡 / 前置 | Owner、输入→输出及增删范围 | 验收 / 失败语义 |
+|---|---|---|
+| **28 P0 准备真实客户端试用**（01/08） | 保留现有官方 MCP SDK 的合成例，用 docs/INDEPENDENT_ACCEPTANCE.md 给实际用户轨迹。只用获准的隔离客户端配置，不改用户现用设置、不上传私有实验、不调用未授权付费模型。 | 协议、配置在真客户端、开发机移址、干净机分开记；没有真实客户端就明确没做，不能替代。 |
+| **29 P1 开发环境完成现实纵向**（M1） | 用确切构建和同一真实客户端，真实作图、询问、待审、隔日回来、一次故障恢复、选定格式交付。选择已证入口，不以单文件为前提。 | 记录第一次尝试、真实失败与维护者介入；原始值不改、文件可开、重开仍同图。使重复发生的卡点排未来优先。 |
+| **30 P1 真实科学和稿件验证**（01/29） | 独立科学 owner：指定获准真实源、实际版本、转换及现有私有 access/evidence（需要时）；公开汇报不含实验原件。 | 实测原值/行/单位/样品、两族独立关键指标以及实际 300dpi/矢量；合成例不能充代，包测试也不能代。 |
+| **31 P1 干净机与独立研究者**（29） | 另一台不带 Python/Qt/Homebrew 的 Mac，正式候选安装入口和真客户端，3–5 独立非开发用户首试，至少一个真实歧义 T3。现有正式规程不重写。 | 记录无帮助尝试、错误与后续帮助。开发机新账号不充洁净。需联系新人/用新渠道时依授权；条件缺则只是受控候选。 |
+| **32 P1 冻结并发行**（27/30/31） | exact SHA 官方 Linux complete 一次，真实 Mac 包及科研各自检查；现有 verification.py/release.py 做 Developer ID、公证、Gatekeeper 与 ZIP SHA256。正常晋级并核实主干。 | 缺相应证据就只声明测试范围。单文件若未过 21，保持旧可用入口发布其余项。不得另触发同 SHA 重复证明。 |
+| **33 P2 真使用驱动后续**（29/31） | 对实际记录的卡点分别建任务。只在真实用例需要时选 PDF 批注、样式复用、另一个科学族或平台。可参考竞品真实流程和可用许可代码，不为了相似而复制。 | 大需求同样变可执行一张卡、一条测试、一次真实结果。没有用户、数据和受益，不铺功能。 |
+
+## 容易做成大 PR 的卡，按小交付再切开
+
+- **11a 编辑入口**：打开现有图和原生窗口，核对选中图及基线，打开本身不改磁盘。**11b 同版本保存**：只接一项已支持的展示编辑并让 AI 读新版本；旧窗口不能覆盖 AI 新版本。完成 11b 才叫可编辑，不把 11a 说成已交付。
+- **14a 打开失败**：先收口缺源/权限，CLI 与 MCP 给同一可执行动作，不创建假项目。**14b 续编失败**：接现有过期/未导出回执，验证不会重复提交。**14c 用户显式导出的诊断摘要**：从上述真实结果抽取状态，检查不含样品、原始值、绝对路径和凭据。不要为了摘要先造通用日志系统。
+- **20a 文件闭包**：限定一个已支持的 Managed 图，封装/导入沿现有 portable owner。**20b 安全保存**：先验证版本、临时空间和实际读回，再跨进程测试写中断与过期拒绝，成功才替换。**20c 离线移址**：关应用，移走原路径、清工作区，单独拿文件开，核对原数据、两版历史并再导出；测一次代表性项目的实际保存成本。不要用通用目录打包器当文档导入。
+- **21a Finder 打开**：真实安装入口接受文件、空启动仍到 Welcome；未知格式给出错误，不执行文件内命令。**21b 双向同档**：先人改→AI 核对，再 AI 改→人重开；未知原生修改不写入。**21c 可见文件**：仅选 PDF 时目录只有项目文件和 PDF；CSV/VSZ 是主动导出。项目文件可能含原数据，分享图片和分享项目始终是两件事。
+- **32a 源码晋级**：核定一个候选 SHA 和一次完整官方验收，记录结果再晋级。**32b macOS 分发**：完成同源包验证、开发者签名、公证和 Gatekeeper，保留校验值。真实用户及科研证据不由上述两项代替。
+
+## 统一验收和不做
+
+- **正常反馈**：每张卡只跑对口已有/新增节点、Ruff 与必要类型，一个真实正例一个真实反例。真实科研或原生原件的改动必须选真实路径，不能用全 mock 冒充。集成时用 exact SHA 复核组合、收集与证据绑定。冻结候选只完整跑一次该跑的官方检查；原两次运行归原版本，不能证明新代码。
+- **独立出口**：正式签名/公证、外部真实 AI 客户端、另一台干净 Mac、真实独立用户与科研证据仍按原门；区分暂存、已保存、已交付和已发布。目录清理、外部使用和科学数据都有明确各自授权；不利用用户同意压过实际验收。
+- **唯一活路线**：本文件拥有任务和完成条件；独立验收与复杂度记录保留规程和证据，不再列平行任务队列。
+- **明确不做**：自带 AI 后端、通用新编辑器/渲染器、OPJU 格式复刻、旧格式完全兼容、云同步多主、SQLite 重写、无用户的跨平台移植、推测性状态机/缓存/CI 调度器。也不靠修几个表面小问题冒充产品闭环。
+
+下一轮验收先展示一次从真实源到隔日继续、正确交图的工作，再考虑增加功能。
+
+## 独立验收细则
+
+### Independent beginner and installation acceptance
+
+See cards 29–31. Follow the [existing procedure](docs/INDEPENDENT_ACCEPTANCE.md)
+with an exact supported Mac build, a genuinely clean Apple-silicon Mac and
+3–5 non-developers in an actual external client. Verify their own data, a real
+ambiguity, review, export and next-day recovery. Inspect original values, units,
+sample/physical row identities, and the same figure ID. Record first attempts,
+interventions, friction, and positive/negative outcomes; keep unknown usage unknown.
+Local relocation, synthetic fixtures and SDK discovery are not this human usability evidence.
+
+Complete independent original-source coverage for advertised table choices,
+including untouched workbook/FTIR metadata, selected pair/worksheet/region,
+changed-value cross-sheet revisions, explicit units, original Test/block
+selection, missing values, binary64 round trips, source append (including an unused pair or independent Test in the same file),
+categorical and replicate statistics, and frequency/viscosity metadata. Retain
+raw-only point behavior, valid-n and missing-policy disclosure, compatible
+true grids, and complete original row/missing domains through native export.
+A rule-selection answer must not encode arbitrary scientific facts; extend
+reusable profiles only when current headers, units and mappings can be validated.
+Generated tests or shift/fitting assumptions do not substitute for original-source
+evidence.
+Use the existing [metadata](docs/SCIENTIFIC_METADATA_ACCEPTANCE.md),
+[table range](docs/TABLE_RANGE_ACCEPTANCE.md) and
+[source update](docs/TABLE_SOURCE_UPDATE_ACCEPTANCE.md) protocols and preserve
+known visual gaps: e.g. independent legend collision, mechanical individual
+points, previously delivered dual-Y and multipanel checks, and cross-host font
+evidence are not inferred from native or geometry success. Do not silently move
+a fixed legend or claim unavailable font-face evidence.
+
+For **Reviewed annotation rebinding**, independently test untouched source
+revisions with moved, missing and multiple observed peaks. Check exact
+metadata/values/samples, preview/approval, native/spec/CSV export and actual
+interrupted-update recovery. A generated edit or fault injection cannot
+replace a real revision, and an unchanged XRD pair does not cover these cases.
+
+### Freeze and qualify one candidate for release
+
+See card 32. Bind exact Linux whole public CI, native Mac build/relocation
+and independent real-science results to the same candidate. Keep separately
+required local private full and complete access capture: exact collected
+nodes/parameters, authorized original raw/golden inputs and bytes, child
+startup/exits and socket/access epoch evidence, original waits, declared and
+undeclared file/metadata controls. Keep private inputs and streams local.
+Incomplete observation, capture or runtime authority remains blocked; do not
+promote the preliminary inventory from static review or a passing subset.
+Retain cold replay for original sealed DataMapping executions and strict
+version-3 preparation; old-reader unit controls do not certify native recreation.
+
+Use the [existing beta/release process](docs/PUBLIC_BETA.md). Public delivery
+requires Developer ID signing, stapled notarization, Gatekeeper and exact ZIP
+identity/checksum as well as the independent Mac/client outcomes. Do not claim
+other platforms/font configurations or physical print/journal acceptance.
+Keep the same proven artifact, check actual branch rules before a normal
+fast-forward, and separate already-pushed source from default upgrades or
+publication. No backup or cleanup of private inputs/evidence is implied.

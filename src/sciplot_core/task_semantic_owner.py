@@ -5,9 +5,10 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from functools import wraps
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NamedTuple, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, Any, NamedTuple, ParamSpec, Protocol, TypeVar
 
 if TYPE_CHECKING:
+    from sciplot_core.project_lifecycle.figure_handoff import FigureInstall
     from sciplot_core.project_lifecycle.managed_application import ManagedPlotApplication
 
 _ManagedRequest = Callable[[dict[str, Any]], dict[str, Any]]
@@ -17,11 +18,18 @@ _P = ParamSpec("_P")
 _R = TypeVar("_R")
 
 
+class _ManagedHandoff(Protocol):
+    def __call__(self, plot: Path, request: dict[str, Any], *,
+                 before_install: "Callable[[FigureInstall], None] | None" = None,
+                 installed: "FigureInstall | None" = None) -> dict[str, Any]: ...
+
+
 class _Actions(NamedTuple):
     create: _ManagedRequest
     describe: _ManagedDescribe
     deliver: _ManagedRequest
     inspect_delivery: _ManagedInspectDelivery | None
+    handoff: _ManagedHandoff | None
 
 
 @dataclass
@@ -42,9 +50,10 @@ _INVOCATION: ContextVar[_Invocation | None] = ContextVar("managed_task_invocatio
 
 @contextmanager
 def local_managed_actions(create: _ManagedRequest, describe: _ManagedDescribe, deliver: _ManagedRequest,
-                          inspect_delivery: _ManagedInspectDelivery | None = None) -> Iterator[None]:
+                          inspect_delivery: _ManagedInspectDelivery | None = None, *,
+                          handoff: _ManagedHandoff | None = None) -> Iterator[None]:
     """Accept an owner already opened by the host; it retains its own lifetime."""
-    token = _ACTIONS.set(_Actions(create, describe, deliver, inspect_delivery))
+    token = _ACTIONS.set(_Actions(create, describe, deliver, inspect_delivery, handoff))
     try:
         yield
     finally:
@@ -116,6 +125,18 @@ def deliver_managed(request: dict[str, Any]) -> dict[str, Any]:
         return actions.deliver(request)
     with _managed_scope() as scope:
         return scope.service().deliver(request)
+
+
+def handoff_managed(plot: Path, request: dict[str, Any], *,
+                    before_install: "Callable[[FigureInstall], None] | None" = None,
+                    installed: "FigureInstall | None" = None) -> dict[str, Any]:
+    actions = _ACTIONS.get()
+    if actions is not None:
+        if actions.handoff is None:
+            raise RuntimeError("The injected Managed owner does not support selected figure handoff.")
+        return actions.handoff(plot, request, before_install=before_install, installed=installed)
+    with _managed_scope() as scope:
+        return scope.service().handoff_figure(plot, request, before_install=before_install, installed=installed)
 
 
 def inspect_managed_delivery(request: dict[str, Any], *, paper_dir: Path | None = None) -> dict[str, Any]:

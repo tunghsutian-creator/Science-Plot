@@ -4,7 +4,6 @@ from pathlib import Path
 import subprocess
 
 import pytest
-from managed_plot_helpers import read_managed_head_and_ir
 
 from sciplot_core._paths import REPO_ROOT
 from sciplot_core.foundation.file_hashing import file_sha256
@@ -81,10 +80,15 @@ def test_public_raw_categorical_points_native_has_every_duplicate_and_no_summary
 
 
 @pytest.mark.comprehensive
-def test_public_no_experiment_xy_creates_native_original_values_and_archives_context(tmp_path):
+@pytest.mark.parametrize("formats", [None, ["tiff_300", "pdf"]], ids=["snapshot", "selected"])
+def test_public_no_experiment_xy_creates_native_original_values_and_archives_context(tmp_path, formats):
     import math
+    from managed_plot_helpers import read_managed_head_and_ir
+    from PIL import Image
     from sciplot_core.plot_backends.managed_audit import scientific_audit
     from sciplot_core.plot_backends.native_primitives import dataset_name
+    from sciplot_core.project_lifecycle.attachment_index import read_index
+    from sciplot_core.project_store.repository import FileProjectStore
     from sciplot_core.veusz_worker.document_edit import loaded_native_document
 
     source = tmp_path / "acquisition.csv"
@@ -92,21 +96,30 @@ def test_public_no_experiment_xy_creates_native_original_values_and_archives_con
     original = file_sha256(source)
     intent = {"x": {"quantity": "temperature"}, "y": {"quantity": "heat_flow"},
               "source_context": "Original cooling acquisition; no baseline correction, normalization or integration."}
-    request = tmp_path / "request.json"
+    request, out, task = (tmp_path / name for name in ("request.json", "delivery", "task"))
     request.write_text(json.dumps({"version": 1, "action": "create", "sources": [str(source)], "intent": intent,
-                                   "summary_statistic": "raw_only", "curve_display": "raw_overlay"}))
-    created = _cli("task", "start", "--request", request, "--task-dir", tmp_path / "task")
+                                   "out": str(out), **({"formats": formats} if formats else {})}))
+    created = _cli("task", "start", "--request", request, "--task-dir", task)
     assert created["status"] == "complete", created
     assert created["scientific_presentation"]["rule_id"] == "ordinary_xy"
     assert created["scientific_presentation"]["summary_calculation"] == "none"
-    state = json.loads((Path(created["task_dir"]) / "task.json").read_text())
+    receipt = (task / "task.json").read_bytes()
+    state = json.loads(receipt)
     wire = state["managed_request"]
     assert wire["rule_id"] == "ordinary_xy"
+    assert wire["storage"] == "project_store_v2" and "out" not in wire
     assert wire["data_binding"]["provenance"]["semantic_task"]["intent"] == intent
     assert {node["kind"] for node in wire["data_binding"]["transforms"]} <= {"select", "row_slice", "rename"}
-    head, ir = read_managed_head_and_ir(Path(created["project"]))
+    project = Path(created["project"])
+    store = project.parent.parent
+    assert project.parent.name == ".sciplot_semantic" and store.is_relative_to(source.parent.resolve())
+    entry, = read_index(FileProjectStore(store))["attachments"].values()
+    assert entry["plot_id"] == created["result"]["plot_id"] and "publication_output" not in entry
+    assert not list(tmp_path.rglob("managed-artifacts")) and "managed-artifacts" not in json.dumps(created)
+    head, ir = read_managed_head_and_ir(project)
     layer = ir["views"][0]["layers"][0]
     assert all(scale["transform"] == "linear" for scale in ir["scales"])
+    assert [scale["unit"] for scale in ir["scales"]] == ["C", "W/g"]
     with loaded_native_document(Path(head["binding"]["document"])) as loaded:
         assert scientific_audit(ir, loaded)["status"] == "passed"
         assert loaded.data[dataset_name(layer["dataset_id"], "x")].data.tolist() == [66., 61., 61., 53.]
@@ -114,4 +127,96 @@ def test_public_no_experiment_xy_creates_native_original_values_and_archives_con
         assert actual_y[:2] == [-.023, .008] and math.isnan(actual_y[2]) and actual_y[3] == -.016
     assert created["next_step"]["action"] == "review_exports_and_deliver"
     assert all(Path(image).is_file() for image in created["next_step"]["images"])
+    if formats:
+        files, = created["next_step"]["files"]
+        assert set(files) == {"pdf", "tiff_300"} and "exports" not in created["result"]
+        assert set(out.resolve().iterdir()) == {Path(path) for path in files.values()}
+        assert Path(files["pdf"]).read_bytes().startswith(b"%PDF")
+        with Image.open(files["tiff_300"]) as image:
+            assert image.format == "TIFF" and image.info["dpi"] == pytest.approx((300, 300))
+    else:
+        assert Path(state["delivery_request"]["out"]) == out.resolve()
+        assert state["delivery_request"]["mode"] == "native_snapshot" and (out / "index.json").is_file()
+    issued = {path.relative_to(out): (path.stat().st_ino, file_sha256(path)) for path in out.rglob("*") if path.is_file()}
+    # Independent CLI process reads the same task, native revision and sealed delivery.
+    cold = _cli("task", "resume", task, "--retry")
+    assert cold["ready_to_use"] and cold["project"] == created["project"]
+    assert cold["current_project"] == created["current_project"] and cold["next_step"] == created["next_step"]
+    assert (task / "task.json").read_bytes() == receipt
+    assert {path.relative_to(out): (path.stat().st_ino, file_sha256(path)) for path in out.rglob("*") if path.is_file()} == issued
     assert file_sha256(source) == original
+
+
+@pytest.mark.comprehensive
+@pytest.mark.parametrize("committed", [True, False], ids=["lost-committed-reply", "real-precommit"])
+def test_ordinary_draft_revision_observes_the_frozen_store_attempt(tmp_path, monkeypatch, committed):
+    from sciplot_core.project_lifecycle import managed_creation
+    from sciplot_core.project_lifecycle.attachment_index import read_index
+    from sciplot_core.project_lifecycle.managed_application import managed_task_application
+    from sciplot_core.project_lifecycle.managed_store_target import MANAGED_STORE_CLAIM
+    from sciplot_core.project_lifecycle.repository import digest
+    from sciplot_core.project_store.repository import FileProjectStore
+    from sciplot_core.task_control import resume_task, start_task
+    from sciplot_core.task_errors import TaskControlError
+    from sciplot_core.task_semantic_owner import local_managed_actions
+    from sciplot_core.task_storage import load_task
+
+    source, task, out = (tmp_path.resolve() / name for name in ("original.csv", "task", "delivery"))
+    source.write_text("Time,Mass\ns,%\n0,100\n10,98\n20,95\n30,91\n")
+    original = source.read_bytes()
+    intent = {"x": {"quantity": "time"}, "y": {"quantity": "mass"}}
+    request = {"version": 1, "action": "create", "sources": [str(source)], "intent": intent, "out": str(out)}
+    service = managed_task_application()
+    created = {}
+
+    def drop_reply(wire):
+        created.update(service.create(wire))
+        assert created["commit_status"] == "committed"
+        raise OSError("lost reply after real Managed commit")
+
+    def fail_before_commit(*args, **kwargs):
+        raise OSError("interrupted after claim and journal, before Managed commit")
+
+    try:
+        with monkeypatch.context() as patch:
+            if not committed:
+                patch.setattr(managed_creation, "bind_managed_member", fail_before_commit)
+            with local_managed_actions(drop_reply if committed else service.create, service.describe, service.deliver):
+                interrupted = start_task(request, task_dir=task)
+    finally:
+        service.close()
+    assert interrupted["status"] == "blocked" and "project" not in interrupted and not out.exists()
+    frozen = load_task(task)
+    wire = frozen["managed_request"]
+    assert wire["storage"] == "project_store_v2"
+    control = source.parent / ".sciplot_documents" / "managed"
+    store = FileProjectStore(control / digest(wire["idempotency_key"]))
+    assert json.loads((store.root / MANAGED_STORE_CLAIM).read_bytes())["request_sha256"] == digest(wire)
+    entry, = read_index(store)["attachments"].values()
+    member = entry["namespace"] + "/head.json"
+    assert (member in store.snapshot()["files"]) is committed
+    assert not (store.root / "head.json").exists()
+    revised = {"expected_intent_revision": 1, "revise_intent": {**intent, "y": {**intent["y"], "minimum": 90}}}
+    if committed:
+        receipt = (task / "task.json").read_bytes()
+        generation = store.snapshot()["generation"]
+        original_roots = set(control.iterdir())
+        with pytest.raises(TaskControlError) as rejected:
+            resume_task(task, revised)
+        assert rejected.value.reason_code == "task_not_revisable"
+        assert (task / "task.json").read_bytes() == receipt
+        assert set(control.iterdir()) == original_roots and store.snapshot()["generation"] == generation
+        recovered = _cli("task", "resume", task, "--retry")
+        assert recovered["ready_to_use"] and recovered["project"] == created["plot"]
+        assert recovered["result"]["revision"] == created["revision"] == 0
+        assert recovered["result"]["plot_id"] == created["plot_id"]
+        assert load_task(task)["creation_attempts"] == frozen["creation_attempts"]
+        assert set(control.iterdir()) == original_roots
+    else:
+        corrected = resume_task(task, revised)
+        assert corrected["ready_to_use"] and corrected["intent_revision"] == 2
+        assert corrected["result"]["revision"] == 0
+        first, second = load_task(task)["creation_attempts"]
+        assert first == frozen["creation_attempts"][0] and first["idempotency_key"] != second["idempotency_key"]
+        assert member not in store.snapshot()["files"]
+    assert (out / "index.json").is_file() and source.read_bytes() == original

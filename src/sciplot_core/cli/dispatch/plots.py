@@ -21,22 +21,33 @@ def _request(path: Path) -> dict[str, Any]:
     return value
 
 
-def dispatch_plot(args: Any) -> int | None:
+def dispatch_plot(args: Any, argv: list[str] | None = None) -> int | None:
     if args.command != "plot":
         return None
     action = args.plot_action
+    if action == "editor":
+        import sys
+        from sciplot_core.studio_core.runtime import maybe_reexec_with_qt_runtime
+
+        maybe_reexec_with_qt_runtime(sys.argv[1:] if argv is None else argv)
+        from sciplot_core.plot_editor import run_editor
+
+        return run_editor(args.plot, socket_path=args.socket, timeout=args.timeout, figure_id=args.figure)
     if action == "serve":
         from sciplot_core.plot_protocol.server import serve
 
         serve(args.socket, idle_timeout=args.idle_timeout, request_timeout=args.request_timeout)
         return 0
+    selected_export = action == "export" and (args.tiff or args.plotted_csv or args.editable_vsz
+        or any(value is not None for value in (args.output_dir, args.plot_id, args.revision)))
     params: dict[str, Any] = {}
     if action == "open":
-        params["target"] = str(args.target.expanduser().resolve())
+        params["target"] = str(args.target.expanduser().absolute())
         if args.figure_id is not None:
             params["figure_id"] = args.figure_id
     elif action not in {"create", "deliver"}:
-        params["plot"] = str(args.plot.expanduser().resolve())
+        plot = args.plot.expanduser()
+        params["plot"] = str(plot.absolute() if action == "intent" or selected_export else plot.resolve())
     if action in {"open", "describe"} and any(value is not None for value in (args.scope, args.target_id, args.property)):
         params["description"] = {key: value for key, value in
             (("scope", args.scope), ("target", args.target_id), ("property", args.property)) if value is not None}
@@ -54,6 +65,15 @@ def dispatch_plot(args: Any) -> int | None:
                 for source in binding["data_sources"]:
                     if isinstance(source, dict) and isinstance(source.get("path"), str) and source["path"].strip():
                         source["path"] = str(Path(source["path"]).expanduser().resolve())
+    if selected_export:
+        destination = str(args.output_dir.expanduser().absolute()) if args.output_dir is not None else None
+        if args.plotted_csv:
+            formats = ["plotted_csv"]
+        elif args.editable_vsz:
+            formats = ["editable_vsz"]
+        else:
+            formats = ["pdf", "tiff_300"] if args.tiff else ["pdf"]
+        params["handoff"] = {"output_dir": destination, "plot_id": args.plot_id, "revision": args.revision, "formats": formats}
     method = "project.open" if action == "open" else f"plot.{action}"
     result = call(method, params, socket_path=args.socket, direct=args.direct, timeout=args.timeout)
     _print_json(result)

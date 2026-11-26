@@ -16,7 +16,8 @@ from sciplot_core.verification.owners import (
     ChangedOwner,
 )
 from sciplot_core.verification.source_contracts import CHEAP_SOURCE_TARGETS
-from sciplot_core.verification.reviewed_feedback import ScopeValidator, reviewed_feedback
+from sciplot_core.verification.public_stage_selection import target_modules
+from sciplot_core.verification.reviewed_feedback import ScopeValidator, quick_public_nodes, reviewed_feedback
 from sciplot_core.verification.scope_feedback import scope_delta_is_reviewed
 
 
@@ -85,6 +86,7 @@ def build_changed_verification_plan(
     comparison: Mapping[str, Any] | None = None,
     feedback_base: str = "",
     scope_validator: ScopeValidator = scope_delta_is_reviewed,
+    quick: bool = False,
 ) -> dict[str, Any]:
     """Map one changed snapshot to explicit focused checks and later gates."""
 
@@ -109,9 +111,8 @@ def build_changed_verification_plan(
     matched_owners.sort(key=CHANGED_OWNERS.index)
     public_feedback = reviewed_feedback(paths, repo_root, unowned_paths, base=feedback_base,
                                        scope_validator=scope_validator)
-    # The same reviewed source/test slice is available to the editing loop.
-    # Existing broader owner assertions and separate native/release obligations
-    # are not removed when the quick run filters for focused bodies.
+    public_nodes = (quick_public_nodes(public_feedback["targets"])
+                    if quick and public_feedback["targets"] else None)
     pytest_targets.update(public_feedback["targets"])
 
     python_paths = [
@@ -123,6 +124,7 @@ def build_changed_verification_plan(
         mypy_required=any(owner.mypy_required for owner in matched_owners),
         has_changes=bool(matched_owners),
         diff_base=str(comparison["resolved_base"]) if comparison else "HEAD",
+        public_nodes=public_nodes,
     )
     return {
         "kind": "sciplot_changed_verification",
@@ -145,6 +147,9 @@ def build_changed_verification_plan(
         "unowned_paths": sorted(unowned_paths),
         "public_feedback": public_feedback,
         "checks": checks,
+        **({"quick_scope": {"profile": "public-focused",
+                            "deferred": ["remaining_owner_checks", "public_comprehensive", "private_science"]}}
+           if public_nodes is not None else {}),
         "required_later": {
             "handoff": _unique_gates(owner.handoff_gates for owner in matched_owners),
             "final_milestone": _unique_gates(
@@ -162,6 +167,7 @@ def run_changed_verification(
     command_runner: CommandRunner | None = None,
     base: str | None = None,
     plan_only: bool = False,
+    quick: bool = False,
     record: Path | None = None,
     reuse: Path | None = None,
 ) -> dict[str, Any]:
@@ -170,7 +176,7 @@ def run_changed_verification(
     root = (repo_root or _default_repo_root()).expanduser().resolve()
     runner = command_runner or _run_command
     try:
-        if (record is not None and reuse is not None) or (plan_only and (record is not None or reuse is not None)):
+        if (record is not None and reuse is not None) or ((plan_only or quick) and (record is not None or reuse is not None)):
             raise ValueError("Plan-only, record and reuse are mutually exclusive verification modes.")
         if changed_paths is not None:
             if base is not None:
@@ -178,6 +184,7 @@ def run_changed_verification(
             selected_paths, comparison = list(changed_paths), None
         else:
             selected_paths, comparison = _collect_scope(root, base, runner)
+        payload = build_changed_verification_plan(selected_paths, repo_root=root, comparison=comparison, quick=quick)
     except (OSError, RuntimeError, ValueError) as exc:
         payload = build_changed_verification_plan([], repo_root=root)
         payload.update(
@@ -186,7 +193,6 @@ def run_changed_verification(
             plan_only=plan_only, checks_executed=0,
         )
         return payload
-    payload = build_changed_verification_plan(selected_paths, repo_root=root, comparison=comparison)
     payload.update(plan_only=plan_only, checks_executed=0, execution_target="current_worktree")
     if payload["unowned_paths"] or payload["status"] == "NO_TESTS" or plan_only:
         return payload
@@ -265,6 +271,7 @@ def _planned_checks(
     mypy_required: bool,
     has_changes: bool,
     diff_base: str = "HEAD",
+    public_nodes: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     checks: list[dict[str, Any]] = []
     if python_paths:
@@ -285,27 +292,11 @@ def _planned_checks(
         checks.append({
             "check_id": "mypy_owned_scope", "command": [sys.executable, "-m", "mypy"], "status": "planned",
         })
-    owner_targets = _deduplicated_targets(pytest_targets)
-    if has_changes:
-        # Exact leaves already belong to the mandatory preceding shared check.
-        # Keep module/class selectors intact: their other nodes are not implied.
-        owner_targets = [target for target in owner_targets if target not in CHEAP_SOURCE_TARGETS]
-    if owner_targets:
-        checks.append(
-            {
-                "check_id": "pytest_changed_owners",
-                "command": [
-                    sys.executable,
-                    "-m",
-                    "pytest",
-                    "-q",
-                    "-m",
-                    "focused",
-                    *owner_targets,
-                ],
-                "status": "planned",
-            }
-        )
+    owner_args = _owner_pytest_args(pytest_targets, has_changes, public_nodes)
+    if owner_args:
+        checks.append({"check_id": "pytest_changed_owners",
+                       "command": [sys.executable, "-m", "pytest", "-q", *owner_args],
+                       "status": "planned"})
     if has_changes:
         checks.append(
             {
@@ -315,6 +306,20 @@ def _planned_checks(
             }
         )
     return checks
+
+
+def _owner_pytest_args(targets: list[str], has_changes: bool, public_nodes: list[str] | None) -> list[str]:
+    if public_nodes is not None:
+        if not public_nodes:
+            return []
+        return ["-p", "sciplot_core.verification.public_stage_selection", "--input-scope=public-focused",
+                *(f"--sciplot-public-target={node}" for node in public_nodes),
+                *sorted(target_modules(public_nodes))]
+    owner_targets = _deduplicated_targets(targets)
+    if has_changes:
+        # A module/class selector is not implied by an exact shared leaf.
+        owner_targets = [target for target in owner_targets if target not in CHEAP_SOURCE_TARGETS]
+    return ["-m", "focused", *owner_targets] if owner_targets else []
 
 
 def _deduplicated_targets(targets: list[str]) -> list[str]:

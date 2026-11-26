@@ -23,10 +23,15 @@ PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4
 def test_tool_discovery_uses_closed_shared_operation_schema():
     tools = {item.name: item for item in tool_definitions()}
     assert len(tools) == 53
-    assert set(tools["sciplot_project_bundle_export"].input_schema["required"]) == {"project", "output_dir"}
-    assert set(tools["sciplot_project_bundle_import"].input_schema["required"]) == {"bundle", "output_dir"}
-    assert "sciplot_project_bundle_import" not in {tool.name for tool in tool_definitions("daily")}
     daily = {item.name: item for item in tool_definitions("daily")}
+    for operation, required in {
+        "bundle_export": {"project", "output_dir"},
+        "bundle_import": {"bundle", "output_dir"},
+        "save_as": {"plot", "plot_id", "revision", "output_dir"},
+    }.items():
+        name = f"sciplot_project_{operation}"
+        assert daily[name] == tools[name]
+        assert set(daily[name].input_schema["required"]) == required
     for name in ("sciplot_project_legacy_redraw", "sciplot_project_legacy_convert"):
         assert set(daily[name].input_schema["required"]) == {"target", "output_dir"}
         assert daily[name].annotations.read_only_hint is False
@@ -109,9 +114,15 @@ def test_compact_result_keeps_editable_values_and_unknown_readiness(monkeypatch)
 
 
 def test_preview_is_available_on_demand_as_immutable_image(tmp_path, monkeypatch):
+    from hashlib import sha256
+
     path = tmp_path / "candidate.png"
     path.write_bytes(PNG)
-    monkeypatch.setattr(server, "invoke_owner", lambda *_: {"status": "ok", "preview": {"path": str(path)}})
+    preview = {"path": str(path), "sha256": sha256(PNG).hexdigest()}
+    reopened = {"kind": "sciplot_plot_description", "plot_type": "ManagedPlot", "status": "current",
+                "recovery": {"phase": "needs_review", "preview": preview}}
+    monkeypatch.setattr(server, "invoke_owner", lambda name, _: reopened if name == "sciplot_project_open"
+                        else {"status": "ok", "preview": preview})
 
     async def scenario():
         adapter = server.Adapter()
@@ -124,6 +135,20 @@ def test_preview_is_available_on_demand_as_immutable_image(tmp_path, monkeypatch
         assert read.content[1].mime_type == "image/png"
         unknown = await adapter.call("sciplot_read_result", {"uri": "sciplot://result/" + "0" * 64})
         assert unknown.is_error and unknown.structured_content["error"]["code"] == "unknown_resource"
+
+        arguments = {"target": "/exact-project", "figure_id": "second", "description": {"scope": "summary"}}
+        daily = server.Adapter("daily")
+        assert (await daily.call("sciplot_read_result", {"uri": uri})).is_error
+        tampered = await daily.call("sciplot_project_open", arguments)
+        assert "preview_resource" not in tampered.structured_content
+        assert tampered.structured_content["resource_warnings"]
+        path.write_bytes(PNG)
+        current = await daily.call("sciplot_project_open", arguments)
+        read = await daily.call("sciplot_read_result", {"uri": current.structured_content["preview_resource"]})
+        assert base64.b64decode(read.content[1].data) == PNG
+        reopened["status"] = "stale"
+        stale = await server.Adapter("daily").call("sciplot_project_open", arguments)
+        assert "preview_resource" not in stale.structured_content
 
     anyio.run(scenario)
 
