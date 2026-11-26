@@ -252,6 +252,18 @@ def find_saved_work(source: Path, *, search_roots: list[Path] | None = None,
                           "message": "Choose an exact target when results are ambiguous or incomplete. Source hashes filter candidates; continuation rechecks its current authority."}}
 
 
+def _require_same_search_source(found: dict[str, Any]) -> None:
+    # The selected document may not bind a copied/renamed search source.
+    try:
+        source_sha = _tree_hash(Path(found["source"]))
+    except (OSError, ValueError) as exc:
+        raise TaskControlError("source_changed_during_continuation",
+                               "The search source changed or became unreadable during continuation; find saved work again.") from exc
+    if source_sha != found["source_sha256"]:
+        raise TaskControlError("source_changed_during_continuation",
+                               "The search source changed during continuation; find saved work again.")
+
+
 def continue_saved_work(source: Path, *, search_roots: list[Path] | None = None,
                         tasks_root: Path | None = None, target: Path | None = None,
                         figure_id: str | None = None) -> dict[str, Any]:
@@ -271,14 +283,18 @@ def continue_saved_work(source: Path, *, search_roots: list[Path] | None = None,
     if not matches:
         return {**base, "status": "blocked", "reason_code": "selected_target_not_discovered", "search": found}
     match = matches[0]
-    if figure_id is not None and match["kind"] == "managed_plot":
+    source_review_available = False
+    if match["kind"] == "managed_plot":
         document = match["document"]
         try:
             require_matching_figure(figure_id, plot_id=document["plot_id"], saved_figure_id=document["figure_id"])
         except EngineError as exc:
             return {**base, "status": "blocked", "reason_code": exc.reason_code,
                     "message": str(exc), "selected": match}
-    if not match["continuation_available"]:
+        source_review_available = (match["state"] == "document_conflict" and document["pending"] is None
+                                   and match["source_relation"] == "recorded_path" and found["source_sha256"] is not None
+                                   and document["changed_inputs"] == [found["source"]] and Path(found["source"]).is_file())
+    if not match["continuation_available"] and not source_review_available:
         next_step = match.get("next_step", {"action": "resolve_saved_authority"})
         if match["state"] == "source_revision_required" and found["source_sha256"]:
             request = {"version": 1, "action": "update_source", "project": match["target"], "source": found["source"]}
@@ -288,8 +304,18 @@ def continue_saved_work(source: Path, *, search_roots: list[Path] | None = None,
     try:
         if match["kind"] == "managed_plot":
             current = document_evidence(selected)
-            if not current["current"] or current != match["document"]:
+            if current != match["document"]:
                 raise ValueError("The selected semantic document has a conflict or pending transaction.")
+            if source_review_available:
+                _require_same_search_source(found)
+                identity = current["figure_id"] or current["plot_id"]
+                return {**base, "status": "blocked", "reason_code": match["state"], "selected": match,
+                        "next_step": {"action": "plot.open", "arguments": {
+                            "target": str(selected), "figure_id": identity, "description": {"scope": "summary"}},
+                            "cli_argv": ["sciplot", "plot", "open", str(selected), "--figure", identity,
+                                         "--scope", "summary", "--json"],
+                            "plot_id": current["plot_id"], "revision": current["revision"],
+                            "message": "The original source file changed. Open this saved figure to find the source revision review."}}
             from sciplot_core.task_semantic_owner import inspect_managed_publication
 
             try:
@@ -334,16 +360,7 @@ def continue_saved_work(source: Path, *, search_roots: list[Path] | None = None,
             next_step = {"action": "fill_operations_then_start", "arguments": {"request": request},
                          "style_arguments": {"target": str(selected), "figure_id": identity},
                          "message": "Fill operations with the requested batch and use task.start, or use task.style with these current target arguments. The saved VSZ remains the visual authority."}
-        # The search source may be a copied/renamed file outside the selected
-        # authority's input closure. Check it after the final owner read, too.
-        try:
-            source_sha = _tree_hash(Path(found["source"]))
-        except (OSError, ValueError) as exc:
-            raise TaskControlError("source_changed_during_continuation",
-                                   "The search source changed or became unreadable during continuation; find saved work again.") from exc
-        if source_sha != found["source_sha256"]:
-            raise TaskControlError("source_changed_during_continuation",
-                                   "The search source changed during continuation; find saved work again.")
+        _require_same_search_source(found)
         return {**base, "status": "current", "selected": match, "current": current, "next_step": next_step}
     except (OSError, ValueError, RuntimeError, KeyError, TypeError) as exc:
         code = getattr(exc, "reason_code", "saved_authority_changed")

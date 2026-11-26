@@ -331,6 +331,7 @@ def test_renamed_or_copied_source_is_candidate_evidence_without_rebinding(manage
     source.unlink()
     stale = work.continue_saved_work(renamed, search_roots=[root])
     assert stale["status"] == "blocked" and stale["reason_code"] == "document_conflict"
+    assert stale["next_step"]["action"] == "resolve_saved_authority"
     assert inventory(tmp_path) == {path: value for path, value in before.items() if path != str(source)}
 
 
@@ -375,12 +376,51 @@ def test_same_name_different_bytes_never_match(managed, tmp_path):
     assert work.find_saved_work(other, search_roots=[root])["match_count"] == 0
 
 
-def test_exact_path_changed_bytes_reports_conflict_not_a_fresh_authority(managed):
-    root, source, _ = managed
-    source.write_text("different content")
-    continued = work.continue_saved_work(source, search_roots=[root])
-    assert continued["status"] == "blocked"
-    assert str(source) in continued["selected"]["document"]["changed_inputs"]
+def test_exact_path_changed_bytes_points_to_the_same_figure_for_review(tmp_path):
+    root, document, binding = _canonical(tmp_path)
+    binding["figure_id"] = "saved-figure"
+    commit(root, document, binding, "managed_creation")
+    source = Path(document["scientific"]["data_sources"][0]["path"])
+    source.write_bytes(source.read_bytes().replace(b"0,2", b"0,9"))
+    before = inventory(tmp_path)
+    continued = work.continue_saved_work(source, search_roots=[root], target=root, figure_id="managed-external")
+    assert continued["status"] == "blocked" and continued["reason_code"] == "document_conflict"
+    assert continued["selected"]["document"]["changed_inputs"] == [str(source)]
+    step = continued["next_step"]
+    assert step["action"] == "plot.open" and step["plot_id"] == "managed-external" and step["revision"] == 0
+    assert step["arguments"] == {"target": str(root), "figure_id": "saved-figure",
+                                  "description": {"scope": "summary"}}
+    assert step["cli_argv"] == ["sciplot", "plot", "open", str(root), "--figure", "saved-figure",
+                                "--scope", "summary", "--json"]
+    assert inventory(tmp_path) == before
+
+
+@pytest.mark.parametrize("second_conflict", ["missing_source", "another_source", "unselected_source", "native", "pending"])
+def test_source_review_requires_only_the_selected_source_to_have_changed(managed, second_conflict):
+    from sciplot_core.plot_engine.storage import transaction_path
+
+    root, source, binding = managed
+    if second_conflict == "missing_source":
+        source.unlink()
+    else:
+        source.write_bytes(source.read_bytes().replace(b"0,2", b"0,9"))
+    if second_conflict == "another_source":
+        second = source.with_name("B.csv")
+        second.write_bytes(second.read_bytes().replace(b"0,1", b"0,8"))
+    if second_conflict == "native":
+        native = Path(binding["document"])
+        native.parent.mkdir(parents=True)
+        native.write_bytes(b"external native save")
+    if second_conflict == "pending":
+        journal = transaction_path(root, "unfinished")
+        journal.parent.mkdir(parents=True)
+        journal.write_text(json.dumps({"id": "pending-edit", "phase": "applying",
+                                       "request": {"idempotency_key": "unfinished"}}))
+        (root / "active.json").write_text(json.dumps({"key": "unfinished"}))
+    selected = source.with_name("B.csv") if second_conflict == "unselected_source" else source
+    result = work.continue_saved_work(selected, search_roots=[root], target=root)
+    assert result["status"] == "blocked" and result["reason_code"] == "document_conflict"
+    assert result["next_step"]["action"] == "resolve_saved_authority"
 
 
 def test_copied_managed_root_cannot_operate_original_absolute_binding(managed, tmp_path):

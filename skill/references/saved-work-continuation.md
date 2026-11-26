@@ -57,6 +57,10 @@ For a ManagedPlot it checks the sealed head, canonical model, complete recorded
 input closure and pending transaction, then returns `plot.open` arguments for
 the existing document editor. Missing disposable native artifacts retain
 semantic authority and are rebuilt by the existing export owner.
+If only the selected original source file has changed bytes at its recorded path,
+continuation returns `plot.open --scope summary` for the same saved figure. Its
+summary points to the existing `source.sha256` review. Inspect and authorize the
+change there before editing or exporting.
 
 An exported delivery is separately identified as a snapshot unless the existing
 launcher owner proves its canonical project binding. Modified visible copies or
@@ -66,7 +70,7 @@ cannot silently overwrite the original handoff.
 
 Missing/stale scientific files, external native saves, copied ManagedPlot roots
 with original absolute bindings, malformed paths, symlinks, incomplete receipts
-and uncertain tasks fail closed. Source-revision guidance uses the existing
+and uncertain tasks fail closed. Studio source-revision guidance uses the existing
 `update_source` request. That owner may require restoration of missing raw or
 prepared evidence before it can create a valid review. Discovery never rewrites
 old task/project paths, imports an unbound snapshot, replays a historical apply,

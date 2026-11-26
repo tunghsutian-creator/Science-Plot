@@ -232,8 +232,13 @@ def test_layer_consumes_existing_normalization_executor_output(tmp_path):
 
 
 @pytest.mark.comprehensive
-def test_figure_service_patch_and_source_refresh_keep_scientific_authority(tmp_path):
+def test_figure_service_patch_and_source_refresh_keep_scientific_authority(tmp_path, capsys):
     """Synthetic v2 data: edit display, then explicitly accept changed source bytes."""
+    import json
+
+    from sciplot_core.cli import main
+    from sciplot_core.task_saved_work import continue_saved_work
+
     request = request_for_figure(tmp_path)
     request['template_definition']['figure_spec']['annotations'] = [{
         'id': 'annotation:sample', 'space': 'view', 'view_id': 'view:A',
@@ -285,15 +290,32 @@ def test_figure_service_patch_and_source_refresh_keep_scientific_authority(tmp_p
 
         source.write_text(source.read_text().replace('5,5\n', '5,7\n'))
         revised_bytes = source.read_bytes()
-        assert service.describe(root)['status'] == 'stale'
+        saved_files = {path: (path.read_bytes(), path.stat().st_mtime_ns)
+                       for path in root.rglob('*') if path.is_file()}
+        continued = continue_saved_work(source, search_roots=[root], target=root, figure_id=edited['plot_id'])
+        step = continued['next_step']
+        assert continued['status'] == 'blocked' and step['action'] == 'plot.open'
+        assert main([*step['cli_argv'][1:], '--direct']) == 0
+        summary = json.loads(capsys.readouterr().out)
+        assert summary['status'] == 'stale' and summary['plot_id'] == edited['plot_id'] and summary['revision'] == 1
+        hint = summary['next_step']
+        assert hint['action'] == 'plot.describe'
+        source_edit = service.describe(root, description=hint['description'])
+        source_step = source_edit['next_step']
+        assert source_step['action'] == 'plot.patch' and source_step['plot_id'] == edited['plot_id']
+        assert source_step['base_revision'] == 1 and source_step['intent_class'] == 'scientific'
+        assert source_step['target'] == 'source:raw:A' and source_step['property'] == 'source.sha256'
+        assert {path: (path.read_bytes(), path.stat().st_mtime_ns)
+                for path in root.rglob('*') if path.is_file()} == saved_files
+        assert source.read_bytes() == revised_bytes
         with pytest.raises(EngineError) as stale:
             service.patch(root, change(edited, 'stale-axis-label', 'axis.label',
                                        'Revised frequency', 'axis:xb'))
         assert stale.value.reason_code == 'document_inputs_changed'
         assert load_head(root)['document']['revision'] == 1
 
-        refreshed = service.patch(root, change(edited, 'source-revision', 'source.sha256',
-                                               file_sha256(source), 'source:raw:A', 'scientific'))
+        refreshed = service.patch(root, change(edited, 'source-revision', source_step['property'],
+                                               file_sha256(source), source_step['target'], source_step['intent_class']))
         assert refreshed['ready_to_use'] and refreshed['revision'] == 2, refreshed
         assert refreshed['scientific_hash'] != edited['scientific_hash']
         assert refreshed['presentation_hash'] == edited['presentation_hash']
@@ -308,6 +330,7 @@ def test_figure_service_patch_and_source_refresh_keep_scientific_authority(tmp_p
         assert final['document']['scientific']['data_sources'][0]['sha256'] == file_sha256(source)
         assert read(Path(refreshed['evidence']))['export']['scientific_audit']['status'] == 'passed'
         assert current_ir['views'] == edited_ir['views']
+        assert refreshed['plot_id'] == edited['plot_id'] and read(Path(edited_head['binding']['ir_path'])) == edited_ir
         assert source.read_bytes() == revised_bytes
         assert service.describe(root)['status'] == 'current'
     finally:
