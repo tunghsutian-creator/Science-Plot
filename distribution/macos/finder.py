@@ -91,9 +91,7 @@ def main() -> int:
 
             window = PlotEditor(path, socket_path=None, timeout=600)
         except EngineError as error:
-            if error.reason_code == "project_file_figure_ambiguous":
-                detail = "项目包含多张图。请用 sciplot plot editor 文件 --figure 图ID 打开指定图。"
-            elif error.reason_code == "project_file_figure_unsupported":
+            if error.reason_code == "project_file_figure_unsupported":
                 detail = "这个项目的图格式暂不支持在这里查看。"
             else:
                 detail = "无法读取这个项目。请检查文件是否存在，以及是否为有效的 .sciplot 项目。"

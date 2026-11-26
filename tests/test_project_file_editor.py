@@ -414,3 +414,94 @@ def test_standalone_editor_and_cli_save_major_ticks_in_the_same_relocated_archiv
         [(source_id, versions)] = session.store.snapshot()["sources"].items()
         assert session.store.resolve_source(source_id, next(iter(versions))).read_bytes() == source
     assert all(not path.exists() for path in views)
+
+
+@pytest.mark.comprehensive
+def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_path):
+    from PyQt6 import QtCore, QtTest, QtWidgets
+    from test_figure_document import request_for_figure
+
+    from sciplot_core.plot_editor import PlotEditor
+    from sciplot_core.project_lifecycle.project_file_summary import project_file_summary
+
+    root = tmp_path.resolve()
+    original = root / "original"
+    project = original / "project"
+    project.mkdir(parents=True)
+    store = FileProjectStore(project)
+    store.snapshot(import_legacy=True)
+    plots = {}
+    with closing(PlotService()) as service:
+        for figure in ("A", "B"):
+            folder = original / figure
+            folder.mkdir()
+            request = request_for_figure(folder)
+            request["idempotency_key"] = figure
+            request["template_definition"]["figure_spec"]["views"][0]["axes"][0]["label"] = f"Frequency {figure} (Hz)"
+            saved = service.create(request, project=project)
+            assert saved["ready_to_use"]
+            plots[figure] = saved["plot_id"]
+    archive = original / "Original.sciplot"
+    initial = create_project_file(archive, store, expected_generation=store.snapshot()["generation"])
+    delivery = root / "Delivery"
+    delivery.mkdir()
+    moved = archive.rename(delivery / "Moved.sciplot")
+    shutil.rmtree(original)
+    before_a = project_file_summary(moved, plots["A"])
+
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+    def click(widget):
+        QtTest.QTest.mouseClick(widget, QtCore.Qt.MouseButton.LeftButton)
+
+    windows = []
+    try:
+        # Finder dispatches this exact constructor without a figure argument.
+        window = PlotEditor(moved, socket_path=None, timeout=75)
+        windows.append(window)
+        window.show()
+        assert window.figures.isVisible() and window.figures.currentData() is None
+        assert not window.axes.isEnabled() and not window.review.isEnabled()
+        assert not window.summary and window.viewer is None
+        assert {window.figures.itemData(i) for i in range(window.figures.count())} == set(plots.values())
+        assert file_sha256(moved) == initial.sha256
+
+        window.figures.setCurrentIndex(window.figures.findData(plots["B"]))
+        assert window.summary["plot_id"] == plots["B"] and window.summary["revision"] == 0
+        assert window.viewer.__class__.__module__ == "veusz.windows.plotwindow"
+        window.axes.setCurrentIndex(window.axes.findData("axis:xb"))
+        assert window.label.text() == "Frequency B (Hz)"
+        window.label.setText("Edited B (Hz)")
+        prompts = []
+
+        def confirm():
+            dialog = app.activeModalWidget()
+            prompts.append(file_sha256(moved))
+            buttons = dialog.findChild(QtWidgets.QDialogButtonBox)
+            click(buttons.button(buttons.StandardButton.Save))
+
+        QtCore.QTimer.singleShot(0, confirm)
+        click(window.review)
+        assert prompts == [initial.sha256]
+        assert window.summary["plot_id"] == plots["B"] and window.summary["revision"] == 1
+        assert window.summary["edit_targets"]["axis:xb"]["label"] == "Edited B (Hz)"
+        after_b = file_sha256(moved)
+        assert after_b != initial.sha256
+        assert project_file_summary(moved, plots["A"]) == before_a
+
+        window.figures.setCurrentIndex(window.figures.findData(plots["A"]))
+        assert window.summary["plot_id"] == plots["A"] and window.summary["revision"] == 0
+        window.axes.setCurrentIndex(window.axes.findData("axis:xb"))
+        assert window.label.text() == "Frequency A (Hz)"
+
+        # The editor entry used by --figure bypasses the chooser entirely.
+        direct = PlotEditor(moved, socket_path=None, timeout=75, figure_id=plots["B"])
+        windows.append(direct)
+        direct.show()
+        assert direct.figures.isHidden() and direct.summary["plot_id"] == plots["B"]
+        assert direct.summary["revision"] == 1 and direct.viewer is not None
+        assert file_sha256(moved) == after_b and list(delivery.iterdir()) == [moved]
+    finally:
+        for window in windows:
+            window.close()
+        QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.Type.DeferredDelete)

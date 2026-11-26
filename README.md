@@ -149,8 +149,9 @@ On a Qt desktop, `sciplot plot editor PLOT` opens the exact Managed FigureSpec v
 check the before/after values and save through the same plot transaction used by
 CLI and MCP. For major ticks, enter comma-separated numbers or clear the field
 to restore automatic ticks on current-view figures. The editor saves standalone
-projects back to the same `.sciplot` file. These edits leave the scale, units and
-data intact.
+projects back to the same `.sciplot` file. When opening a multi-figure project,
+choose the figure in the editor or pass `--figure PLOT_ID` to open it directly.
+Axis edits leave the scale, units and data intact.
 If another client saved first, read the latest revision and choose the change
 again; the editor will not overwrite it. A missing current verified native
 artifact must be rebuilt through the existing project command before editing.

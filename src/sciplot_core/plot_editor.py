@@ -28,6 +28,7 @@ class PlotEditor(QtWidgets.QMainWindow):
         self.plot = plot
         self.archive = plot.suffix == ".sciplot" and (plot.is_symlink() or not plot.is_dir())
         self.figure_id = figure_id
+        self.archive_project_id: str | None = None
         self.archive_request: tuple[RevisionToken, dict[str, Any]] | None = None
         self.socket_path = socket_path
         self.timeout = timeout
@@ -42,6 +43,12 @@ class PlotEditor(QtWidgets.QMainWindow):
         self.status.setTextFormat(QtCore.Qt.TextFormat.PlainText)
         self.status.setWordWrap(True)
         self.body_layout.addWidget(self.status)
+        self.figures = QtWidgets.QComboBox()
+        self.figures.setAccessibleName("项目图")
+        self.figures.setPlaceholderText("选择要打开的图")
+        self.figures.hide()
+        self.figures.currentIndexChanged.connect(self._select_archive_plot)
+        self.body_layout.addWidget(self.figures)
         form = QtWidgets.QHBoxLayout()
         self.axes = QtWidgets.QComboBox()
         self.axes.setAccessibleName("坐标轴")
@@ -151,16 +158,53 @@ class PlotEditor(QtWidgets.QMainWindow):
         if self.archive_request is not None:
             self._show_archive_unconfirmed()
 
-    def _load_archive(self) -> None:
+    def _select_archive_plot(self) -> None:
+        plot_id = self.figures.currentData()
+        if plot_id is None or plot_id == self.figure_id or self.archive_request is not None:
+            return
+        try:
+            self._load_archive(plot_id)
+        except (OSError, ValueError, RuntimeError, KeyError) as exc:
+            self._disable_editing()
+            with QtCore.QSignalBlocker(self.figures):
+                self.figures.setCurrentIndex(self.figures.findData(self.figure_id))
+            self.status.setText(f"无法打开所选图：{exc}")
+
+    def _check_archive_identity(self, project_id: str) -> None:
+        if self.archive_project_id is not None and project_id != self.archive_project_id:
+            raise ValueError("这个路径上的项目已被替换。请关闭窗口，再打开要编辑的项目。")
+
+    def _load_archive(self, selection: str | None = None) -> None:
         from sciplot_core.archive_plot_view import archive_plot_view
 
+        target = self.figure_id if selection is None else selection
         with ExitStack() as staged:
-            summary, native, seal = staged.enter_context(
-                archive_plot_view(self.plot, self.summary.get("plot_id", self.figure_id)))
-            if self.summary and summary["project_id"] != self.summary["project_id"]:
-                raise ValueError("这个路径上的项目已被替换。请关闭窗口，再打开要编辑的项目。")
+            try:
+                summary, native, seal = staged.enter_context(archive_plot_view(self.plot, target))
+            except EngineError as exc:
+                if target is not None or exc.reason_code != "project_file_figure_ambiguous":
+                    raise
+                project_id = exc.repair["project_id"]
+                self._check_archive_identity(project_id)
+                self.archive_project_id = project_id
+                self._show_figure_choices(exc.repair["figures"])
+                return
+            self._check_archive_identity(summary["project_id"])
             self._view(native, seal, lifetime=staged)
+        self.archive_project_id = summary["project_id"]
+        self.figure_id = summary["plot_id"]
+        self.figures.setEnabled(self.archive_request is None)
         self._show_summary(summary)
+
+    def _show_figure_choices(self, choices: list[dict[str, str]]) -> None:
+        self._disable_editing()
+        with QtCore.QSignalBlocker(self.figures):
+            self.figures.clear()
+            for saved in choices:
+                self.figures.addItem(f"{saved['figure_id']}  ({saved['plot_id']})", saved["plot_id"])
+            self.figures.setCurrentIndex(-1)
+        self.figures.show()
+        self.status.setText("请选择要查看和编辑的图。")
 
     def _view(self, path: Path, expected_sha: str, *, lifetime: ExitStack | None = None) -> None:
         if file_sha256(path) != expected_sha:
@@ -316,6 +360,7 @@ class PlotEditor(QtWidgets.QMainWindow):
 
     def _show_archive_unconfirmed(self) -> None:
         assert self.archive_request is not None
+        self.figures.setEnabled(False)
         self._disable_editing()
         self.retry.show()
         self.status.setText("上一笔保存未确认。请确认原操作，不要重新提交。"

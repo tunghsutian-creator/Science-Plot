@@ -36,8 +36,9 @@ def project_file_figure(path: Path, figure_id: str | None, *, exact_plot_id: boo
         matches = [entry for entry in entries if figure_id in (None, entry["plot_id"])
                    or (not exact_plot_id and figure_id == entry["figure_id"])]
         if len(matches) > 1:
+            choices = [{key: entry[key] for key in ("figure_id", "plot_id")} for entry in matches]
             raise EngineError("project_file_figure_ambiguous", "Choose one exact saved plot or figure ID.",
-                              action="select_figure")
+                              action="select_figure", project_id=session.project_id, figures=choices)
         if not matches:
             raise EngineError("project_file_figure_not_found", "This .sciplot file has no saved figure matching the selection.",
                               action="select_figure")
