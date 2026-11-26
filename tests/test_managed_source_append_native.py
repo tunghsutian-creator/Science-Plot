@@ -45,6 +45,73 @@ def _cli(tmp_path, action, plot=None, request=None, *, success=True, arguments=(
 
 
 @pytest.mark.comprehensive
+def test_public_source_replacement_reviews_same_curve_without_overwriting_either_original(tmp_path):
+    source = tmp_path / 'acquisition-A-v1.csv'
+    unaffected = tmp_path / 'acquisition-B.csv'
+    revised = tmp_path / 'acquisition-A-v2.csv'
+    wrong_unit = tmp_path / 'acquisition-A-wrong-unit.csv'
+    source.write_text('Time,Mass\ns,%\nA,A\n0,100\n10,98\n20,95\n')
+    unaffected.write_text('Time,Mass\ns,%\nB,B\n1,99\n8,97\n15,96\n23,94\n')
+    revised.write_text('Time,Mass\ns,%\nA,A\n0,100\n9,97\n20,95\n')
+    wrong_unit.write_text(revised.read_text().replace('s,%', 's,mg'))
+    originals = {path: path.read_bytes() for path in (source, unaffected, revised, wrong_unit)}
+    request = tmp_path / 'create.json'
+    request.write_text(json.dumps({'version': 1, 'action': 'create', 'sources': [str(source), str(unaffected)],
+        'intent': {'x': {'quantity': 'time', 'unit': 's'}, 'y': {'quantity': 'mass', 'unit': '%'},
+                   'labels': ['Cooling A', 'Cooling B']}, 'formats': ['pdf']}))
+    created = subprocess.run([str(REPO_ROOT / 'skill/scripts/sciplot'), 'task', 'start', '--request', str(request),
+        '--task-dir', str(tmp_path / 'task'), '--json'], cwd=REPO_ROOT, capture_output=True, text=True, timeout=180, check=False)
+    assert created.returncode == 0, created.stdout + created.stderr
+    plot = Path(json.loads(created.stdout)['project'])
+    before, before_ir = read_managed_head_and_ir(plot)
+    original, untouched = before['document']['scientific']['data_sources']
+    assert original['path'] == str(source) and untouched['path'] == str(unaffected)
+    target = 'source:' + original['source_id']
+    contract = _cli(tmp_path, 'describe', plot,
+                    arguments=('--scope', 'edit', '--target-id', target, '--property', 'source.sha256'))
+    descriptor = contract['figure_edit_contract'][target]['source.sha256']
+    assert any('replacement_path' in shape.get('required', []) for shape in descriptor['value_schema']['oneOf'])
+
+    def replace(path, key, revision=0):
+        value = deepcopy(contract['current_value'])
+        assert value['unit_context_bindings']
+        value.update(replacement_path=str(path), sha256=file_sha256(path))
+        for member in value['unit_context_bindings']:
+            member.update(source_path=str(path), source_sha256=value['sha256'])
+        return {'plot_id': before['document']['plot_id'], 'base_revision': revision, 'idempotency_key': key,
+                'intent_class': 'scientific',
+                'changes': [{'op': 'set', 'target': [target], 'property': 'source.sha256', 'value': value}]}
+
+    incompatible = _cli(tmp_path, 'patch', plot, replace(wrong_unit, 'wrong-unit'), success=False)
+    assert incompatible['reason_code'] == 'managed_unit_lineage_unsupported'
+    assert load_head(plot)['document'] == before['document'] and not transaction_path(plot, 'wrong-unit').exists()
+    pending = _cli(tmp_path, 'patch', plot, replace(revised, 'rejected'))
+    assert pending['status'] == 'needs_review' and pending['plot_id'] == before['document']['plot_id']
+    assert all(Path(pending[name]['path']).is_file() for name in ('before_preview', 'preview'))
+    assert load_head(plot)['document'] == before['document']
+    rejected = _cli(tmp_path, 'decide', plot, {**pending['next_step']['request'], 'accept': False})
+    assert rejected['status'] == 'rejected' and load_head(plot)['document'] == before['document']
+
+    pending = _cli(tmp_path, 'patch', plot, replace(revised, 'accepted'))
+    accepted = _cli(tmp_path, 'decide', plot, pending['next_step']['request'])
+    assert accepted['ready_to_use'] and accepted['revision'] == 1 and accepted['plot_id'] == before['document']['plot_id']
+    head, ir = read_managed_head_and_ir(plot)
+    assert head['document']['scientific']['data_sources'] == [
+        {**original, 'path': str(revised), 'sha256': file_sha256(revised)}, untouched]
+    assert ir['datasets'][untouched['source_id']] == before_ir['datasets'][untouched['source_id']]
+    replacement = ir['datasets'][original['source_id']]['columns']
+    assert replacement['column:0']['values'] == [0, 9, 20] and replacement['column:0']['unit'] == 's'
+    assert replacement['column:1']['values'] == [100, 97, 95] and replacement['column:1']['unit'] == '%'
+    original_layers = figure_spec(before['document'])['views'][0]['layers']
+    assert figure_spec(head['document'])['views'][0]['layers'] == original_layers
+    assert {path: path.read_bytes() for path in originals} == originals
+    cold = _cli(tmp_path, 'open', plot, arguments=('--scope', 'summary'))
+    assert cold['status'] == 'current' and (cold['plot_id'], cold['revision']) == (accepted['plot_id'], 1)
+    stale = _cli(tmp_path, 'patch', plot, replace(revised, 'stale'), success=False)
+    assert stale['reason_code'] == 'document_revision_conflict' and load_head(plot)['document'] == head['document']
+
+
+@pytest.mark.comprehensive
 def test_cold_cli_append_review_tamper_reject_accept_repeat_and_export(tmp_path):
     created = _cli(tmp_path, 'create', request=request_for_figure(tmp_path))
     assert created['ready_to_use'], created

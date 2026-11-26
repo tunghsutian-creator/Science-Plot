@@ -187,6 +187,17 @@ the selected original table and checks those facts before reserving a transactio
 Use the existing scientific patch, preview/decision and identical-key recovery;
 this operation retains historical requests and does not replace original data.
 
+For an ordinary XY source saved as a separate version file, use the
+`replacement_path` option only when advertised by its `source.sha256` schema.
+Use the complete value with the new absolute path and SHA-256. Reconfirm the
+saved sheet, row range, columns, sample and units against the new original.
+Update each submitted context to the new `source_path` and `source_sha256`,
+and bind any new metadata declarations to that SHA. The existing curve ID and
+other sources stay in the same figure. Compare the before and candidate images,
+then use the returned `plot.decide` request. The current revision changes only
+on acceptance; neither input file is overwritten. To add another acquisition
+as a new curve instead, use [source append](source-append.md).
+
 The same typed patch properties are `series.display_label` and `series.visible`.
 Managed FigureSpec v2 targets a layer ID; admitted editable Legacy native curves
 target a series ID under their advertised `legacy_shadow` coverage. Discover the exact

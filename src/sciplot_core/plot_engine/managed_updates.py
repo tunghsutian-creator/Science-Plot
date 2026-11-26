@@ -82,7 +82,8 @@ def prepare_update(document: dict[str, Any], request: PatchRequest | dict[str, A
     result = seal_document(result)
     if not diff and any(result[field] != document[field] for field in ("scientific_hash", "presentation_hash")):
         raise EngineError("managed_update_unreported_change", "A no-op update cannot alter a canonical domain hash.")
-    return result, diff, "scientific" if science else "presentation", science
+    replacement = any(item["property"] == "source.sha256" and "replacement_path" in item["after"] for item in diff)
+    return result, diff, "review" if replacement else "scientific" if science else "presentation", science
 
 
 def _scientific(document: dict[str, Any], target: str, prop: str, value: Any) -> Any:

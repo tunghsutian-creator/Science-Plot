@@ -92,7 +92,30 @@ def source_descriptor(document: dict[str, Any], target: str, *, root: Path | Non
     complete = closed({"sha256": DIGEST, "bindings": closed({identifier: closed({
         "metadata_confirmations": metadata_confirmations_schema()}) for identifier in current["bindings"]}),
         "unit_context_bindings": contexts})
-    return {"value_schema": {"oneOf": [{**DIGEST, "description": "A current-SHA no-op or a single source without existing confirmations/context; otherwise submit the complete group."}, complete]}, "risk": "scientific"}
+    alternatives = [{**DIGEST, "description": "A current-SHA no-op or a single source without existing confirmations/context; otherwise submit the complete group."}, complete]
+    if _supports_replacement(document, current):
+        alternatives.append(closed({**complete["properties"], "replacement_path": {
+            "type": "string", "pattern": "^/", "description": "A separate original file for the same table and coordinates. The new version requires review."}}))
+    return {"value_schema": {"oneOf": alternatives}, "risk": "scientific"}
+
+
+def _supports_replacement(document: dict[str, Any], current: dict[str, Any]) -> bool:
+    return (len(current["bindings"]) == 1
+            and document["scientific"]["provenance"]["managed"].get("rule_id") == "ordinary_xy")
+
+
+def source_revision_files(document: dict[str, Any], target: str, value: Any) -> tuple[str, list[dict[str, Any]]]:
+    """Declare the exact original files needed by a validated source update."""
+    path, sources = source_group(document, target)
+    version = value if isinstance(value, str) else value["sha256"]
+    literal = value.get("replacement_path") if isinstance(value, dict) else None
+    if literal is not None:
+        if physical_path(literal) in source_groups(document):
+            _reject(target, "Choose a separate version file that is not already bound to this figure.")
+        if version == sources[0]["sha256"]:
+            _reject(target, "The separate version must have different original bytes; use the current source for a no-op.")
+    return path, [{**source, "sha256": version, **({"path": literal} if literal is not None else {})}
+                  for source in sources]
 
 
 def _reject(target: str, message: str) -> NoReturn:
@@ -141,6 +164,7 @@ def prepare_source_revision(document: dict[str, Any], target: str, value: Any, *
     path, sources = source_group(document, target)
     before = source_value(document, target, root=root)
     validate_wire(value, source_descriptor(document, target, root=root)["value_schema"], code="managed_source_hash_invalid")
+    replacement = value.get("replacement_path") if isinstance(value, dict) else None
     if isinstance(value, str):
         if value == before["sha256"]:
             return before, deepcopy(before)
@@ -149,12 +173,19 @@ def prepare_source_revision(document: dict[str, Any], target: str, value: Any, *
         after = {**deepcopy(before), "sha256": value}
     else:
         after = deepcopy(value)
+    if replacement is not None:
+        _path, (revised,) = source_revision_files(document, target, value)
+        # The path changes, but not the selected sheet, row bounds or coordinates.
+        revised_path = physical_path(revised["path"])
+    else:
+        revised_path = path
     sha = after["sha256"]
     if before["unit_context_bindings"]:
         from sciplot_core.foundation.json_hashing import canonical_json_sha256
 
         old_selectors = sorted(canonical_json_sha256(_selector(item)) for item in before["unit_context_bindings"])
-        new_selectors = sorted(canonical_json_sha256(_selector(item)) for item in after["unit_context_bindings"])
+        new_selectors = sorted(canonical_json_sha256({**_selector(item), "source_path": path})
+                               for item in after["unit_context_bindings"])
         if old_selectors != new_selectors:
             _reject(target, "Reconfirm every existing source-bound block, coordinate and derivation input; source refresh cannot delete or remap its scientific facts.")
     for entry in after["bindings"].values():
@@ -163,9 +194,8 @@ def prepare_source_revision(document: dict[str, Any], target: str, value: Any, *
     binding = _binding(document, root)
     semantic = binding.get("semantic_task", {})
     for item in after["unit_context_bindings"]:
-        if (item["source_sha256"] != sha or physical_path(item["source_path"]) != path
-                or not any(physical_path(item["source_path"]) == physical_path(source["path"])
-                           and _region_matches(source, item, semantic) for source in sources)):
+        if (item["source_sha256"] != sha or physical_path(item["source_path"]) != revised_path
+                or not any(_region_matches(source, item, semantic) for source in sources)):
             _reject(target, "Every submitted unit context must name this new SHA and an existing exact source region.")
         for coordinate in item["coordinates"].values():
             if "derivation" in coordinate:
@@ -176,8 +206,12 @@ def prepare_source_revision(document: dict[str, Any], target: str, value: Any, *
     comparable_before, comparable_after = _comparable(before), _comparable(after)
     if comparable_after == comparable_before:
         return comparable_before, comparable_after
+    if replacement is not None:
+        comparable_before["replacement_path"] = sources[0]["path"]
     for source in sources:
         source["sha256"] = sha
+        if replacement is not None:
+            source["path"] = replacement
         metadata = after["bindings"][source["source_id"]]["metadata_confirmations"]
         if metadata != source.get("metadata_confirmations", []):
             source["metadata_confirmations"] = deepcopy(metadata)

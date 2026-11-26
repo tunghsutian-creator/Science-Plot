@@ -25,7 +25,7 @@ def declarations(repository: Any, request: dict[str, Any]) -> tuple[dict[str, An
             validate_wire(change["value"], append_schema(), code="managed_append_invalid_value")
             sources = [dict(change["value"]["source"])]
         elif change["property"] == "source.sha256":
-            from sciplot_core.plot_engine.managed_source_revision import source_descriptor, source_group
+            from sciplot_core.plot_engine.managed_source_revision import source_descriptor, source_revision_files
 
             if len(change["target"]) != 1:
                 continue  # The existing domain validator rejects this before reading.
@@ -33,9 +33,7 @@ def declarations(repository: Any, request: dict[str, Any]) -> tuple[dict[str, An
             value = change["value"]
             validate_wire(value, source_descriptor(document, target, root=repository.attachment.root)["value_schema"],
                           code="managed_source_hash_invalid")
-            _path, selected = source_group(document, target)
-            version = value if isinstance(value, str) else value["sha256"]
-            sources = [{**source, "sha256": version} for source in selected]
+            _path, sources = source_revision_files(document, target, value)
         else:
             continue
         for source in sources:

@@ -246,15 +246,18 @@ class ManagedBackend:
         review: dict[str, Any] = {"scientific_audit": preview["scientific_audit"], "preview": preview.get("preview", preview),
                   "_managed_binding": candidate,
                   **{key: preview[key] for key in ("native_state_hash", "compiler_identity") if key in preview}}
-        if any(item["property"] == "source.append" for item in diff):
-            # The before-image belongs to the original canonical artifact,
-            # whereas the transaction guard also observes the admitted append.
+        append = any(item["property"] == "source.append" for item in diff)
+        replacement = any(item["property"] == "source.sha256" and "replacement_path" in item["after"] for item in diff)
+        if append or replacement:
+            # The before-image belongs to the original canonical artifact;
+            # the transaction guard observes the admitted candidate sources.
             before_ir, before_native = self._ensure(scientific_binding(binding, document), verify_existing=False)
             before = self.compiler.render_ir(before_ir, before_native, output / "before.png")
             review["before_preview"] = before.get("preview", before)
-            review["source_append"] = {"before_layer_ids": [layer["id"] for view in before_ir["views"] for layer in view["layers"]],
-                "candidate_layer_ids": [layer["id"] for view in ir["views"] for layer in view["layers"]],
-                "before_scientific_audit": before["scientific_audit"]}
+            if append:
+                review["source_append"] = {"before_layer_ids": [layer["id"] for view in before_ir["views"] for layer in view["layers"]],
+                    "candidate_layer_ids": [layer["id"] for view in ir["views"] for layer in view["layers"]],
+                    "before_scientific_audit": before["scientific_audit"]}
         return review
 
     def preview_comparison(self, binding: dict[str, Any], document: dict[str, Any],
