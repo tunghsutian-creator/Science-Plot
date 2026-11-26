@@ -25,6 +25,8 @@ def _load_head(plot: Path) -> dict:
 def test_verified_curve_project_creates_managed_and_recovers_existing_delivery(tmp_path, capsys, monkeypatch):
     import pymupdf
 
+    from sciplot_core.studio_core import project_creation
+
     raw = tmp_path / "UVvis.csv"
     original = b"Wavelength,Absorbance\nnm,a.u.\nA,A\n400,2\n460,5\n500,1\n"
     raw.write_bytes(original)
@@ -62,7 +64,18 @@ def test_verified_curve_project_creates_managed_and_recovers_existing_delivery(t
         assert [item["unit"] for item in ir["scales"]] == ["nm", "a.u."]
         monkeypatch.setattr(ManagedVeuszCompiler, "compile_ir", no_native)
         monkeypatch.setattr(ManagedVeuszCompiler, "export_ir", no_native)
-        with local_managed_actions(service.create, service.describe, deliver):
+        monkeypatch.setattr(project_creation, "resolve_expected_plan", no_native)
+        with local_managed_actions(no_native, service.describe, deliver):
+            # The full plan and source still belong to the original creation.
+            plan.write_text(json.dumps({**planned, "unexpected": True}), encoding="utf-8")
+            assert main(cmd) != 0
+            assert "different source-bound Managed creation" in capsys.readouterr().out
+            plan.write_text(json.dumps(planned), encoding="utf-8")
+            raw.write_bytes(original.replace(b"460,5", b"460,6"))
+            assert main(cmd) != 0
+            assert "Source changed since the expected plan" in capsys.readouterr().out
+            raw.write_bytes(original)
+            assert not out.exists()
             assert main(cmd) == 0
             result = json.loads(capsys.readouterr().out)
             assert result["project_dir"] == str(plot) and result["analysis_metrics"][0]["value"] == 460

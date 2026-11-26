@@ -69,12 +69,19 @@ def create_project(
             and not isinstance(expected_plan["rule_id"], str)) or not isinstance(
                 expected_plan.get("template"), str):
         raise ValueError("The expected plan has invalid rule/template identities.")
+    layout = resolve_user_output_layout(source, requested_delivery_root=output_dir)
+    direct = publish and on_prepared is None and _creation_owner == "project"
+    if direct:
+        from .managed_curve_creation import resume_curve_project
+
+        recovered = resume_curve_project(source, expected_plan, layout)
+        if recovered is not None:
+            return recovered
     observed = resolve_expected_plan(
         source, expected_plan, rule_id=expected_plan.get("rule_id"),
         template=expected_plan.get("template"), observed=_observed_plan,
     )
     verified = dict(observed.payload)
-    layout = resolve_user_output_layout(source, requested_delivery_root=output_dir)
     if publish and verified["rule_id"] == "rheology_frequency_sweep":
         from .managed_frequency_creation import create_frequency_project
 
@@ -82,7 +89,7 @@ def create_project(
                                            owner=_creation_owner, scientific_source=observed.scientific_source)
         if managed is not None:
             return managed
-    if publish and on_prepared is None and _creation_owner == "project":
+    if direct:
         from .managed_curve_creation import create_curve_project
 
         managed = create_curve_project(source, verified, layout, scientific_source=observed.scientific_source,

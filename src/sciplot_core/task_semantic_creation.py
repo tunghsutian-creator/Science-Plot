@@ -93,7 +93,9 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
         state.update(status="blocked", phase="planning", blocker=blocker)
         save_task(root, state)
         return
-    if "delivery_request" in state:
+    # A crash can fall between the saved Managed result and the first
+    # delivery checkpoint. Continue publication without calling creation again.
+    if "delivery_request" in state or (state.get("project") and (state.get("result") or {}).get("status") == "complete"):
         from sciplot_core.task_semantic_delivery import finish_delivery
 
         finish_delivery(root, state)
@@ -149,10 +151,7 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
         state["project"] = result["plot"]
     complete = (result.get("status") == "complete" and result.get("ready_to_use") is True
                 and isinstance(result.get("plot"), str) and bool(result.get("exports")))
-    if complete and "formats" in state["request"]:
-        state.update(status="running", phase="delivering")
-    else:
-        state.update(status="complete" if complete else "blocked", phase="finished" if complete else "exporting")
+    state.update(status="running" if complete else "blocked", phase="delivering" if complete else "exporting")
     if not complete:
         state["blocker"] = {"reason_code": (result.get("error") or {}).get("reason_code", "managed_export_not_ready"),
                             "message": (result.get("error") or {}).get("message", "The saved Managed revision is not a verified delivery."),
@@ -191,6 +190,13 @@ def resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
     from jsonschema import Draft202012Validator
     from sciplot_core.task_semantic_contract import semantic_response_schemas, validate_intent
 
+    if response == {"retry": True}:
+        if ("semantic_plan" in state and not state.get("semantic_plan_confirmed")
+                and "managed_request" not in state):
+            assert_sources_current(state)
+            raise TaskControlError("invalid_task_response", "The current source plan requires confirmation and scientific choices; retry does not confirm it.")
+        run_creation(root, state)
+        return
     assert_sources_current(state)
     if "out" in response:
         from sciplot_core.task_output_choice import accept_output_response
@@ -229,19 +235,6 @@ def resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
             state.pop(key, None)
         run_creation(root, state)
         return
-    if response == {"retry": True}:
-        if state.get("delivery_request") or (state.get("project") and (state.get("result") or {}).get("status") == "complete"):
-            from sciplot_core.task_semantic_delivery import finish_delivery
-
-            finish_delivery(root, state)
-            return
-        if state.get("semantic_plan_confirmed"):
-            run_creation(root, state)
-            return
-        if "semantic_plan" not in state:
-            run_creation(root, state)
-            return
-        raise TaskControlError("invalid_task_response", "The current source plan requires confirmation and scientific choices; retry does not confirm it.")
     if not Draft202012Validator(semantic_response_schemas()[0]).is_valid(response):
         raise TaskControlError("invalid_task_response", "Confirm the current semantic plan, or revise the complete intent in this task.")
     if response["expected_question_id"] != (state.get("question") or {}).get("question_id"):
