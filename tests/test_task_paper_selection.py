@@ -50,6 +50,9 @@ def test_default_order_and_explicit_item_order_capture_versions_once(group, tmp_
     selection.start_group_paper(root, out=tmp_path / "out2", paper_dir=tmp_path / "paper2", item_ids=["B", "A"])
     assert [Path(item["project"]).name for item in saved[-1][0]["items"]] == ["project-B", "project-A"]
     assert [item["label"] for item in saved[-1][0]["items"]] == ["P0_5_0_5_linear", "P0_3_0_7_log"]
+    with pytest.raises(TaskControlError, match="distinct existing group item IDs"):
+        selection.start_group_paper(root, out=tmp_path / "out3", paper_dir=tmp_path / "paper3", item_ids=[])
+    assert len(saved) == 2
 
 
 @pytest.mark.parametrize("change", ["not_finished", "pending_child", "duplicate", "unknown"])

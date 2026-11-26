@@ -59,8 +59,11 @@ def start_group_paper(group: Path, *, paper_dir: Path, out: Path, title: str | N
     snapshot = stable_file_snapshot(group / "group.json", label="paper current group selection")
     state = load_group(group)
     indexed = {item["id"]: item for item in state["items"]}
-    order = list(dict.fromkeys(ref[0] for ref in figure_refs)) if figure_refs is not None else (item_ids or list(indexed))
-    requested = None if figure_refs is None else {tuple(ref) for ref in figure_refs}
+    order = list(indexed) if item_ids is None else item_ids
+    requested = None
+    if figure_refs is not None:
+        order = list(dict.fromkeys(ref[0] for ref in figure_refs))
+        requested = {tuple(ref) for ref in figure_refs}
     if any(identifier not in indexed for identifier in order):
         raise TaskControlError("paper_group_items_invalid", "Select only current group item IDs.")
     registered: list[dict[str, Any]] = []
