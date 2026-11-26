@@ -38,6 +38,8 @@ def dispatch_plot(args: Any, argv: list[str] | None = None) -> int | None:
 
         serve(args.socket, idle_timeout=args.idle_timeout, request_timeout=args.request_timeout)
         return 0
+    selected_export = action == "export" and (args.tiff or args.plotted_csv or args.editable_vsz
+        or any(value is not None for value in (args.output_dir, args.plot_id, args.revision)))
     params: dict[str, Any] = {}
     if action == "open":
         params["target"] = str(args.target.expanduser().absolute())
@@ -45,7 +47,7 @@ def dispatch_plot(args: Any, argv: list[str] | None = None) -> int | None:
             params["figure_id"] = args.figure_id
     elif action not in {"create", "deliver"}:
         plot = args.plot.expanduser()
-        params["plot"] = str(plot.absolute() if action == "intent" else plot.resolve())
+        params["plot"] = str(plot.absolute() if action == "intent" or selected_export else plot.resolve())
     if action in {"open", "describe"} and any(value is not None for value in (args.scope, args.target_id, args.property)):
         params["description"] = {key: value for key, value in
             (("scope", args.scope), ("target", args.target_id), ("property", args.property)) if value is not None}
@@ -63,8 +65,7 @@ def dispatch_plot(args: Any, argv: list[str] | None = None) -> int | None:
                 for source in binding["data_sources"]:
                     if isinstance(source, dict) and isinstance(source.get("path"), str) and source["path"].strip():
                         source["path"] = str(Path(source["path"]).expanduser().resolve())
-    if action == "export" and (args.tiff or args.plotted_csv or args.editable_vsz
-                               or any(value is not None for value in (args.output_dir, args.plot_id, args.revision))):
+    if selected_export:
         destination = str(args.output_dir.expanduser().absolute()) if args.output_dir is not None else None
         if args.plotted_csv:
             formats = ["plotted_csv"]

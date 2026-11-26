@@ -125,16 +125,19 @@ def invoke(service: Service, method: str, params: dict[str, Any]) -> dict[str, A
     return _invoke_validated(service, method, params)
 
 
+def _project_target(target: Path, *, legacy_directories: bool = False) -> Path:
+    if target.suffix == ".sciplot" and not (legacy_directories and target.is_dir()):
+        return target
+    resolved = target.resolve()
+    # Preserve legacy location handling, but don't turn a differently named
+    # alias into admission to the regular project-file reader.
+    return target if resolved.suffix == ".sciplot" and not resolved.is_dir() else resolved
+
+
 def _invoke_validated(service: Service, method: str, params: dict[str, Any]) -> dict[str, Any]:
     """Dispatch an admitted call synchronously within the owning RPC boundary."""
     if method == "project.open":
-        target = Path(params["target"]).expanduser()
-        if target.suffix != ".sciplot":
-            resolved = target.resolve()
-            # Preserve legacy location handling, but don't turn a differently
-            # named alias into admission to the regular project-file reader.
-            if resolved.suffix != ".sciplot" or resolved.is_dir():
-                target = resolved
+        target = _project_target(Path(params["target"]).expanduser())
         if "description" in params:
             return service.open(target, figure_id=params.get("figure_id"), description=params["description"])
         return service.open(target, figure_id=params.get("figure_id"))
@@ -147,6 +150,8 @@ def _invoke_validated(service: Service, method: str, params: dict[str, Any]) -> 
     if method == "plot.intent":
         # The project-file owner must observe the final path entry, not its symlink target.
         return service.intent(plot, params["request"])
+    if method == "plot.export" and "handoff" in params:
+        return service.export(_project_target(plot, legacy_directories=True), handoff=params["handoff"])
     plot = plot.resolve()
     if method == "plot.describe":
         if "description" in params:
@@ -155,7 +160,7 @@ def _invoke_validated(service: Service, method: str, params: dict[str, Any]) -> 
     if method == "plot.render":
         return service.render(plot)
     if method == "plot.export":
-        return service.export(plot, handoff=params["handoff"]) if "handoff" in params else service.export(plot)
+        return service.export(plot)
     if method == "plot.patch":
         return service.patch(plot, params["request"])
     if method == "plot.resume":

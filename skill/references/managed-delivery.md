@@ -19,10 +19,17 @@ skill/scripts/sciplot plot export PLOT --plot-id PLOT_ID --revision REVISION --o
 This copies only the PDF. Add `--tiff` to include the audited 300 dpi TIFF.
 In daily MCP, call `sciplot_plot_export` with `plot` and a `handoff` object
 containing `plot_id`, `revision`, `output_dir` and `formats` (either
-`["pdf"]` or `["pdf","tiff_300"]`). This never overwrites a directory,
-rebuilds a publication, or copies a VSZ or data file. If the publication is
-missing, finish the existing `plot export PLOT` operation first. On a stale
-revision, read the current summary again before selecting new files.
+`["pdf"]` or `["pdf","tiff_300"]`). This never overwrites a directory or
+copies a VSZ or data file. On a stale revision, read the current summary again
+before selecting new files.
+
+For a standalone `.sciplot` file, pass its path as `PLOT` and use the exact
+`plot_id` and current `revision` from `plot open FILE.sciplot` or
+`sciplot_project_open`. PDF and PDF plus TIFF are the supported selections.
+SciPlot leaves the project file unchanged. If its disposable export cache is
+absent, SciPlot can rebuild it privately from the saved figure. A present but
+unverified publication is refused, not replaced. For a directory-backed plot,
+finish `plot export PLOT` before handoff if its publication is missing.
 
 ## Export only the plotted data columns
 

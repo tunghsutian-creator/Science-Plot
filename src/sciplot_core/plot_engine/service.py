@@ -153,6 +153,11 @@ class PlotService(ProjectApplication):
 
     def export(self, plot: Path, *, handoff: dict[str, Any] | None = None) -> dict[str, Any]:
         if handoff is not None:
+            plot = plot.expanduser()
+            if plot.suffix == ".sciplot" and (plot.is_symlink() or not plot.is_dir()):
+                from sciplot_core.project_lifecycle.project_file_handoff import project_file_handoff
+
+                return project_file_handoff(self, plot, handoff)
             return super().export(plot, handoff=handoff)
         native = native_dispatch("export", canonical_path(plot))
         if native is not None:

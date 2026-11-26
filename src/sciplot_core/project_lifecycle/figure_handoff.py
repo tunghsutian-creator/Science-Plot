@@ -23,7 +23,7 @@ from sciplot_core.plot_ir.figure_document import is_figure
 from sciplot_core.project_store.source_resolver import ProjectSourceResolver
 from sciplot_core.studio_core.source_update_files import reject_symlink_path
 
-from .context import active, has_head, load_head, project_query
+from .context import active, exists, has_head, load_head, project_query
 from .contracts import RevisionToken
 from .errors import EngineError
 from .paths import canonical_path
@@ -74,7 +74,7 @@ def _installed_matches(out: Path, token: RevisionToken, result: dict[str, Any], 
 
 
 def _publication(root: Path, out: Path, request: dict[str, Any],
-                 backend: PlotBackend) -> tuple[RevisionToken, list[dict[str, str]] | _PlottedSeal | _EditableSeal]:
+                 backend: PlotBackend, *, cold_export: bool = False) -> tuple[RevisionToken, list[dict[str, str]] | _PlottedSeal | _EditableSeal]:
     with project_query(root):
         if not has_head(root):
             raise EngineError("figure_handoff_managed_required", "Select an exact current Managed v2 plot.")
@@ -96,6 +96,8 @@ def _publication(root: Path, out: Path, request: dict[str, Any],
         if any(out.is_relative_to(canonical_path(path)) for path in protected):
             raise EngineError("figure_handoff_output_overlap", "Choose a new directory outside the original project, sources and artifacts.")
         require_current(backend, binding)
+        if cold_export and not exists(root / "export-cache.json"):
+            raise EngineError("figure_handoff_cache_missing", "This committed figure has no disposable export cache.")
         publication = sealed_publication(root, head) or {}
         if publication.get("ready_to_use") is True:
             if request["formats"] == ["editable_vsz"]:
@@ -113,7 +115,8 @@ def _publication(root: Path, out: Path, request: dict[str, Any],
 
 def handoff_figure(root: Path, request: dict[str, Any], backend: PlotBackend, *,
                    before_install: Callable[[FigureInstall], None] | None = None,
-                   installed: FigureInstall | None = None) -> dict[str, Any]:
+                   installed: FigureInstall | None = None,
+                   rebuild_missing: Callable[[], None] | None = None) -> dict[str, Any]:
     """Install a new visible delivery, or only verify one task's frozen installation."""
     validate_wire(request, figure_handoff_schema(), code="figure_handoff_invalid_request")
     if type(request["revision"]) is not int:
@@ -126,7 +129,13 @@ def handoff_figure(root: Path, request: dict[str, Any], backend: PlotBackend, *,
         raise EngineError("figure_handoff_destination_exists", "Choose a new output directory; nothing was replaced.")
     if not out.parent.is_dir():
         raise EngineError("figure_handoff_invalid_destination", "The parent directory must already exist.")
-    token, evidence = _publication(root, out, request, backend)
+    try:
+        token, evidence = _publication(root, out, request, backend, cold_export=rebuild_missing is not None)
+    except EngineError as exc:
+        if rebuild_missing is None or exc.reason_code != "figure_handoff_cache_missing":
+            raise
+        rebuild_missing()
+        token, evidence = _publication(root, out, request, backend)
     result = {"kind": "sciplot_figure_handoff", "version": 1, "status": "exported", "ready_to_use": True,
               "plot": str(root), "plot_id": token.plot_id, "revision": token.revision, "output_dir": str(out)}
     if isinstance(evidence, list):

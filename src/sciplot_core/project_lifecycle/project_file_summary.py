@@ -15,7 +15,7 @@ from .project_file import ProjectFileSession, open_project_file
 
 
 @contextmanager
-def project_file_figure(path: Path, figure_id: str | None) -> Iterator[
+def project_file_figure(path: Path, figure_id: str | None, *, exact_plot_id: bool = False) -> Iterator[
         tuple[ProjectFileSession, AttachedProjectRepository, dict[str, Any]]]:
     """Identify one sealed Managed v2 plot in a private file session."""
     with ExitStack() as stack:
@@ -28,7 +28,8 @@ def project_file_figure(path: Path, figure_id: str | None) -> Iterator[
         except (OSError, ValueError, KeyError, TypeError) as exc:
             raise EngineError("project_file_invalid", "Open a valid, regular .sciplot project file, not a symbolic alias.",
                               action="check_project_file") from exc
-        matches = [entry for entry in entries if figure_id is None or figure_id in {entry["plot_id"], entry["figure_id"]}]
+        matches = [entry for entry in entries if figure_id in (None, entry["plot_id"])
+                   or (not exact_plot_id and figure_id == entry["figure_id"])]
         if len(matches) > 1:
             raise EngineError("project_file_figure_ambiguous", "Choose one exact saved plot or figure ID.",
                               action="select_figure")
