@@ -145,8 +145,28 @@ is not a substitute.
 Keep using one active location for the project. This operation does not give
 two independently writable identities and does not remove the previous
 location. Export rejects unadmitted project changes. Neither command replaces
-an existing destination; inspect any directory left by an interrupted
-operation before choosing a new destination.
+an existing destination; inspect any path left by an interrupted operation
+before choosing a new destination.
+
+### Save the same project as one `.sciplot` file
+
+```bash
+sciplot project bundle-export SAVED_PLOT_OR_STORE --single-file --out NEW_PROJECT.sciplot --json
+sciplot plot open NEW_PROJECT.sciplot --figure SAVED_PLOT_ID --json
+```
+
+With `--single-file`, you can pass the exact saved Managed v2 plot handle from
+`task create` or `plot open`, or the exact Store root. Either input saves the
+**whole project**, including its other figures, source versions and history.
+The project and plot IDs do not change. Use `--expected-generation` to require
+an already observed Store generation; otherwise SciPlot captures the current
+admitted generation. The receipt identifies the new `project_file`, generation,
+and archive SHA-256. Open that file directly; `bundle-import` is for directory
+bundles. In daily or expert MCP, use the existing
+`sciplot_project_bundle_export` with `single_file: true`, the `.sciplot`
+filename in `output_dir` and optional `expected_generation`, then
+`sciplot_project_open` with the file. If there are multiple figures, specify the
+exact plot ID when opening; saving does not select or discard any figure.
 
 ## Make a new, independently editable copy
 

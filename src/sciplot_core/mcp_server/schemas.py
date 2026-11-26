@@ -143,8 +143,9 @@ def tool_definitions(profile: ToolProfile = "expert") -> list[Tool]:
         ["target", "output_dir"])
     add("project_legacy_convert", "Create a separately editable Managed copy of a supported archived XY figure. Use a new local directory outside the old project; supply original axis units only when needed. Never modifies or upgrades the original.",
         {**legacy_target, "x_unit": string, "y_unit": string}, ["target", "output_dir"])
-    add("project_bundle_export", "Prepare a project move: bundle the exact existing Store root (not a plot, task, or paper package) at a new path. Preserves project identity and history; excludes host permissions.",
-        {"project": semantic_path, "output_dir": semantic_path}, ["project", "output_dir"])
+    add("project_bundle_export", "Prepare a project move: bundle the whole existing Store, including all its figures and history, at a new path. The default takes the exact Store root and creates a directory. With single_file true, use a new .sciplot filename and supply the exact Store root or exact saved Managed v2 plot handle. It preserves the same project identity and excludes host permissions. Optional expected_generation rejects a changed Store.",
+        {"project": semantic_path, "output_dir": semantic_path, "single_file": {"type": "boolean"},
+         "expected_generation": {"type": "string", "minLength": 1}}, ["project", "output_dir"])
     add("project_bundle_import", "Finish a project move: import the Store bundle into a new directory and continue there under the same project ID and history. No host permissions or old external export paths transfer. The old location is not removed.",
         {"bundle": semantic_path, "output_dir": semantic_path}, ["bundle", "output_dir"])
     add("plot_describe", "Read current object capabilities and values without rebuilding science. When advertised, use scope edit for one target/property and its exact schema. Supported native suite values come from the current selected VSZ. Omit description for full state; stale inputs and pending work remain explicit.",
