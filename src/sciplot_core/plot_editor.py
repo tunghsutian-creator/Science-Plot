@@ -32,7 +32,6 @@ class PlotEditor(QtWidgets.QMainWindow):
         self.socket_path = socket_path
         self.timeout = timeout
         self.summary: dict[str, Any] = {}
-        self.tick_details: dict[str, Any] = {}
         self.viewer: Any = None
         self.unconfirmed: tuple[int, str] | None = None
         self.setWindowTitle(f"{plot.name} · SciPlot" if self.archive else "SciPlot · 坐标轴")
@@ -50,7 +49,6 @@ class PlotEditor(QtWidgets.QMainWindow):
         self.edit_property.setAccessibleName("坐标轴属性")
         self.edit_property.addItem("标题", "axis.label")
         self.edit_property.addItem("主刻度", "axis.ticks")
-        self.edit_property.setHidden(self.archive)
         self.label = QtWidgets.QLineEdit()
         self.label.setAccessibleName("新坐标轴标题")
         self.label.setPlaceholderText("新坐标轴标题")
@@ -79,8 +77,7 @@ class PlotEditor(QtWidgets.QMainWindow):
         target = self.axes.currentData()
         selected = self.summary.get("edit_targets", {}).get(target, {})
         enabled = target is not None and self.axes.isEnabled() and self.archive_request is None
-        ticks = not self.archive and self.edit_property.currentData() == "axis.ticks"
-        self.tick_details = {}
+        ticks = self.edit_property.currentData() == "axis.ticks"
         self.edit_property.setEnabled(enabled)
         self.label.setAccessibleName("主刻度" if ticks else "新坐标轴标题")
         self.label.setPlaceholderText("逗号分隔的主刻度" if ticks else "新坐标轴标题")
@@ -89,12 +86,14 @@ class PlotEditor(QtWidgets.QMainWindow):
             try:
                 if "axis.ticks" not in selected["properties"]:
                     raise ValueError("此坐标轴不支持设置主刻度。")
-                detail = self._call("plot.describe", description={"scope": "edit", "target": target,
-                                                                 "property": "axis.ticks"})
-                if (detail["plot_id"], detail["revision"]) != (self.summary["plot_id"], self.summary["revision"]):
-                    raise ValueError("图已更新。")
-                self.tick_details = detail
-                value = detail["current_value"]
+                if self.archive:
+                    value = self.summary["axis_ticks"][target]
+                else:
+                    detail = self._call("plot.describe", description={"scope": "edit", "target": target,
+                                                                     "property": "axis.ticks"})
+                    if (detail["plot_id"], detail["revision"]) != (self.summary["plot_id"], self.summary["revision"]):
+                        raise ValueError("图已更新。")
+                    value = detail["current_value"]
                 self.label.setText(", ".join(map(str, value)) if isinstance(value, list) else "")
                 self.label.setPlaceholderText("留空恢复自动刻度" if self.summary.get("domain_semantics")
                                               else "留空隐藏主刻度")
@@ -147,8 +146,7 @@ class PlotEditor(QtWidgets.QMainWindow):
         for target, edit in summary["edit_targets"].items():
             if "axis.label" in edit["properties"]:
                 self.axes.addItem(f"{edit['label']}  ({target})", target)
-        properties = "坐标轴标题" if self.archive else "坐标轴标题和主刻度"
-        self.status.setText(f"修订 {summary['revision']} · {summary['plot_id']}。可修改{properties}。")
+        self.status.setText(f"修订 {summary['revision']} · {summary['plot_id']}。可修改坐标轴标题和主刻度。")
         self._selected_axis()
         if self.archive_request is not None:
             self._show_archive_unconfirmed()
@@ -215,26 +213,24 @@ class PlotEditor(QtWidgets.QMainWindow):
         return dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted
 
     def _edit(self) -> None:
+        prop = self.edit_property.currentData()
+        value: str | list[float] | dict[str, str] | None
+        value = self._ticks_value() if prop == "axis.ticks" else self.label.text()
+        if value is None:
+            return
         request = {"plot_id": self.summary["plot_id"], "base_revision": self.summary["revision"],
-                   "idempotency_key": uuid4().hex, "property": "axis.label",
-                   "target_id": self.axes.currentData(), "value": self.label.text()}
+                   "idempotency_key": uuid4().hex, "property": prop,
+                   "target_id": self.axes.currentData(), "value": value}
         if self.archive:
             self._edit_archive(request)
             return
         applying = False
         try:
-            if self.edit_property.currentData() == "axis.ticks":
-                patch = self._ticks_patch(request)
-                if patch is None:
-                    return
-                applying = True
-                result = self._call("plot.patch", request=patch)
-            else:
-                plan = self._call("plot.intent", request={**request, "mode": "plan"})
-                if not self._approve_axis(plan):
-                    return
-                applying = True
-                result = self._call("plot.intent", request={**request, "mode": "apply"})
+            plan = self._call("plot.intent", request={**request, "mode": "plan"})
+            if not self._approve_axis(plan):
+                return
+            applying = True
+            result = self._call("plot.intent", request={**request, "mode": "apply"})
             if result["status"] == "needs_review":
                 result = self._review_native(result)
         except TransportError as exc:
@@ -265,42 +261,34 @@ class PlotEditor(QtWidgets.QMainWindow):
             self._disable_editing()
             self.status.setText("操作尚未确认保存。请读取最新版本并按现有项目的继续提示操作。")
 
-    def _ticks_patch(self, request: dict[str, Any]) -> dict[str, Any] | None:
+    def _ticks_value(self) -> list[float] | dict[str, str] | None:
         literal = self.label.text().strip()
-        value: list[float] | dict[str, str]
-        if literal:
-            try:
-                value = [float(part) for part in literal.replace("，", ",").split(",")]
-                if not all(isfinite(number) for number in value):
-                    raise ValueError
-            except ValueError:
-                self.status.setText("主刻度须为逗号分隔的有限数字，例如 0, 5, 10。")
-                return None
-        else:
-            value = {"mode": "automatic"} if self.summary.get("domain_semantics") else []
-        before = self.tick_details["current_value"]
-        if before == value:
-            self.status.setText("主刻度未改变。")
+        if not literal:
+            return {"mode": "automatic"} if self.summary.get("domain_semantics") else []
+        try:
+            value = [float(part) for part in literal.replace("，", ",").split(",")]
+            if not all(isfinite(number) for number in value):
+                raise ValueError
+        except ValueError:
+            self.status.setText("主刻度须为逗号分隔的有限数字，例如 0, 5, 10。")
             return None
-
-        def display(ticks: list[float] | dict[str, str]) -> str:
-            if isinstance(ticks, dict):
-                return "自动刻度"
-            return ", ".join(map(str, ticks)) if ticks else "隐藏主刻度"
-
-        context = self.tick_details["target_context"]
-        if not self._confirm("核对主刻度", f"现在：{display(before)}\n改为：{display(value)}\n"
-                             f"坐标轴单位不变：{context['unit']}"):
-            return None
-        return {key: request[key] for key in ("plot_id", "base_revision", "idempotency_key")} | {
-            "intent_class": "presentation", "changes": [{"op": "set", "target": [request["target_id"]],
-                                                          "property": "axis.ticks", "value": value}]}
+        return value
 
     def _approve_axis(self, plan: dict[str, Any]) -> bool:
+        ticks = plan["property"] == "axis.ticks"
+        label = "主刻度" if ticks else "坐标轴标题"
         if plan["status"] == "no_change":
-            self.status.setText("标题未改变。")
+            self.status.setText(f"{label}未改变。")
             return False
-        return self._confirm("核对坐标轴标题", f"现在：{plan['before']}\n改为：{plan['after']}\n"
+
+        def display(value: Any) -> str:
+            if isinstance(value, dict):
+                return "自动刻度"
+            if isinstance(value, list):
+                return ", ".join(map(str, value)) if value else "隐藏主刻度"
+            return str(value)
+
+        return self._confirm(f"核对{label}", f"现在：{display(plan['before'])}\n改为：{display(plan['after'])}\n"
                              f"坐标轴单位不变：{plan['target_context']['unit']}")
 
     def _archive_intent(self, expected: RevisionToken, request: dict[str, Any]) -> dict[str, Any]:

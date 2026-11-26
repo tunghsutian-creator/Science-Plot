@@ -275,7 +275,7 @@ def test_managed_editor_and_cli_share_axis_ticks_on_same_native_figure(tmp_path)
             agent = command("patch", plot, "--request", patch)
             assert agent["ready_to_use"] and agent["revision"] == 2
             window.label.setText("4, 8")
-            assert press_save(window) == ["核对主刻度"]
+            click(window.review)
             assert "无法确认保存" in window.status.text() and not window.review.isEnabled()
             assert describe()["current_value"] == [1, 3, 7]
             click(window.refresh)
@@ -295,3 +295,122 @@ def test_managed_editor_and_cli_share_axis_ticks_on_same_native_figure(tmp_path)
                 QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.Type.DeferredDelete)
             if socket.exists():
                 os.kill(read_owner(socket)["pid"], signal.SIGTERM)
+
+
+@pytest.mark.comprehensive
+def test_standalone_editor_and_cli_save_major_ticks_in_the_same_relocated_archive(tmp_path, monkeypatch):
+    import json
+    import subprocess
+
+    from PyQt6 import QtCore, QtTest, QtWidgets
+    from test_current_view import current
+    from test_figure_document import request_for_figure
+
+    from sciplot_core.plot_editor import PlotEditor
+
+    root = tmp_path.resolve()
+    origin = root / "origin"
+    project = origin / "project"
+    project.mkdir(parents=True)
+    store = FileProjectStore(project)
+    store.snapshot(import_legacy=True)
+    request = request_for_figure(origin)
+    request["template_definition"]["figure_spec"] = current()[0]
+    source = (origin / "figure.csv").read_bytes()
+    with closing(PlotService()) as service:
+        created = service.create(request, project=project)
+        assert created["ready_to_use"], created
+    archive = origin / "Original.sciplot"
+    initial = create_project_file(archive, store, expected_generation=store.snapshot()["generation"])
+    destination = root / "Moved"
+    destination.mkdir()
+    moved = archive.rename(destination / "Frequency.sciplot")
+    shutil.rmtree(origin)
+
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    cli = Path(__file__).resolve().parents[1] / "skill/scripts/sciplot"
+    target = "axis:xb"
+    views = []
+    original_view = PlotEditor._view
+
+    def record_view(window, path, seal, **kwargs):
+        views.append(path)
+        original_view(window, path, seal, **kwargs)
+
+    monkeypatch.setattr(PlotEditor, "_view", record_view)
+    literal = {"idempotency_key": "cli-ticks", "plot_id": created["plot_id"], "base_revision": 1,
+               "property": "axis.ticks", "target_id": target, "value": [1, 3, 7]}
+
+    def cli_edit(mode):
+        req = root / "edit.json"
+        req.write_text(json.dumps({**literal, "mode": mode}))
+        result = subprocess.run([cli, "plot", "intent", moved, "--request", req, "--json", "--direct"],
+                                capture_output=True, text=True, timeout=75)
+        assert result.returncode == 0, result.stdout + result.stderr
+        return json.loads(result.stdout)
+
+    def click(widget):
+        QtTest.QTest.mouseClick(widget, QtCore.Qt.MouseButton.LeftButton)
+
+    def choose_ticks():
+        window.axes.setCurrentIndex(window.axes.findData(target))
+        window.edit_property.setCurrentIndex(window.edit_property.findData("axis.ticks"))
+        assert window.review.isEnabled()
+
+    def edit(ticks, *, save=True):
+        prompts = []
+        unchanged = file_sha256(moved)
+        window.label.setText(ticks)
+
+        def confirm():
+            dialog = app.activeModalWidget()
+            assert dialog.windowTitle() == "核对主刻度"
+            assert any("Hz" in label.text() for label in dialog.findChildren(QtWidgets.QLabel))
+            prompts.append(file_sha256(moved))
+            buttons = dialog.findChild(QtWidgets.QDialogButtonBox)
+            click(buttons.button(buttons.StandardButton.Save if save else buttons.StandardButton.Cancel))
+
+        QtCore.QTimer.singleShot(0, confirm)
+        click(window.review)
+        assert prompts == [unchanged]
+
+    window = PlotEditor(moved, socket_path=None, timeout=75)
+    window.show()
+    try:
+        choose_ticks()
+        assert window.label.text() == "" and "自动" in window.label.placeholderText()
+        edit("2，6，9", save=False)
+        assert file_sha256(moved) == initial.sha256 and window.summary["revision"] == 0
+        edit("2，6，9")
+        assert window.summary["revision"] == 1 and window.summary["axis_ticks"][target] == [2, 6, 9]
+        assert "Set('MajorTicks/manualTicks', [2.0, 6.0, 9.0])" in views[-1].read_text()
+        assert window.viewer.__class__.__module__ == "veusz.windows.plotwindow"
+
+        after_manual = file_sha256(moved)
+        planned = cli_edit("plan")
+        assert not planned["saved"] and planned["before"] == [2, 6, 9] and planned["target_context"]["unit"] == "Hz"
+        assert file_sha256(moved) == after_manual
+        assert cli_edit("apply")["revision"] == 2
+
+        choose_ticks()
+        window.label.setText("4, 8")
+        click(window.review)
+        assert "未保存" in window.status.text() and not window.review.isEnabled()
+        click(window.refresh)
+        choose_ticks()
+        assert [float(number) for number in window.label.text().split(",")] == [1, 3, 7]
+        edit("")
+        assert window.summary["revision"] == 3 and window.summary["axis_ticks"][target] == {"mode": "automatic"}
+        assert window.summary["scientific_hash"] == created["scientific_hash"]
+        newest = file_sha256(moved)
+        confirmed = cli_edit("apply")
+        assert (confirmed["status"], confirmed["revision"], confirmed["current_revision"]) == ("already_saved", 2, 3)
+        assert file_sha256(moved) == newest and list(destination.iterdir()) == [moved]
+    finally:
+        window.close()
+        QtCore.QCoreApplication.sendPostedEvents(None, QtCore.QEvent.Type.DeferredDelete)
+
+    with open_project_file(moved) as session:
+        [(source_id, versions)] = session.store.snapshot()["sources"].items()
+        assert session.store.resolve_source(source_id, next(iter(versions))).read_bytes() == source
+    assert all(not path.exists() for path in views)

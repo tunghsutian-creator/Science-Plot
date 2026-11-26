@@ -16,11 +16,12 @@ Choose the first read from authority already established for this figure:
 
 - **Standalone `.sciplot` project file:** `plot open FILE.sciplot --scope summary`
   or `sciplot_project_open` reads the saved figure ID, revision, hashes and
-  axis-label `edit_targets`. Use `--figure PLOT_ID` or MCP `figure_id` when
+  axis `edit_targets`. Use `--figure PLOT_ID` or MCP `figure_id` when
   more than one figure is registered. The summary itself is read-only. To change
-  an exact axis label, pass the `project_file` as `plot` to
+  an exact axis title or major ticks, pass the `project_file` as `plot` to
   `sciplot_plot_intent` with the saved plot ID, revision and an advertised
-  axis ID. Plan first; apply the same axis label request. Use
+  axis ID. Plan first; apply the same axis request. For `axis.ticks`, pass an array
+  of numbers, or `{"mode":"automatic"}` on current-view figures. Use
   `plot intent FILE.sciplot --request REQUEST.json --json` from the CLI.
   For an unconfirmed save, retry the identical request and key. For a selected
   PDF or PDF/TIFF export, use the [figure handoff](managed-delivery.md).
@@ -60,7 +61,7 @@ only when the compact result lacks information needed for the authorized edit.
 If the first open was full, use its returned object values and edit contract
 instead of requesting the same information again.
 
-For an exact ManagedPlot FigureSpec v2 `axis.label` or `annotation.text` change,
+For an exact ManagedPlot FigureSpec v2 `axis.label`, `axis.ticks` or `annotation.text` change,
 use the [typed `plot.intent` route](../../docs/plot_typed_intent.md) after the
 current summary or full description. Its read-only plan supplies the current text, risk, unit/anchor context
 and the exact patch request; a separate scoped edit read is unnecessary. Apply

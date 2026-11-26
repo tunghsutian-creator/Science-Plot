@@ -123,7 +123,7 @@ class ProjectApplication(ManagedPlotApplication, CommandDispatch):
 
     @usecase
     def intent(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
-        """Resolve two explicit FigureSpec text edits into the existing patch owner."""
+        """Resolve an explicit FigureSpec edit into the existing patch owner."""
         from sciplot_core.plot_engine.typed_intent import compile_intent, validate_intent
 
         request = validate_intent(request)

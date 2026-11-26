@@ -1,6 +1,6 @@
-"""A bounded, deterministic text-edit facade over the existing FigureSpec patch.
+"""A bounded, deterministic edit facade over the existing FigureSpec patch.
 
-The request contains the exact replacement text. It never interprets prose, guesses
+The request contains the exact replacement value. It never interprets prose, guesses
 units, changes data bindings, or owns a second transaction lifecycle.
 """
 
@@ -17,12 +17,12 @@ from sciplot_core.plot_ir.figure_document import figure_spec, is_figure
 from .errors import EngineError
 from .figure_updates import current_edit_value, patch_capabilities
 
-EDIT_KINDS = {"axis.label": "axis", "annotation.text": "annotation"}
+EDIT_KINDS = {"axis.label": "axis", "axis.ticks": "axis", "annotation.text": "annotation"}
 
 
 def intent_schema() -> dict[str, Any]:
     """Closed request used identically by the service, RPC, CLI, and MCP."""
-    return closed({
+    request = closed({
         "mode": {"enum": ["plan", "apply"]},
         "plot_id": IDENTIFIER,
         "base_revision": {"type": "integer", "minimum": 0},
@@ -30,8 +30,17 @@ def intent_schema() -> dict[str, Any]:
         "property": {"enum": list(EDIT_KINDS)},
         "target_id": IDENTIFIER,
         "target_label": {"type": "string", "minLength": 1, "maxLength": 4096},
-        "value": {"type": "string", "maxLength": 4096},
+        "value": {},
     }, ["mode", "plot_id", "base_revision", "idempotency_key", "property", "value"])
+    request.update({
+        "if": {"properties": {"property": {"const": "axis.ticks"}}},
+        "then": {"properties": {"value": {"oneOf": [
+            {"type": "array", "items": {"type": "number"}, "uniqueItems": True},
+            closed({"mode": {"const": "automatic"}}, ["mode"]),
+        ]}}},
+        "else": {"properties": {"value": {"type": "string", "maxLength": 4096}}},
+    })
+    return request
 
 
 def validate_intent(request: Any) -> dict[str, Any]:
@@ -81,7 +90,7 @@ def compile_intent(document: dict[str, Any], request: dict[str, Any]) -> tuple[P
     descriptor = contracts[target][prop]
     validate_wire(request["value"], descriptor["value_schema"], code="plot_intent_invalid_value")
     if descriptor["risk"] != "presentation":
-        raise EngineError("plot_intent_scientific_change", "This text edit cannot change scientific state.")
+        raise EngineError("plot_intent_scientific_change", "This edit cannot change scientific state.")
     before = current_edit_value(spec, target, prop)
     target_context: dict[str, Any] = {}
     if kind == "axis":

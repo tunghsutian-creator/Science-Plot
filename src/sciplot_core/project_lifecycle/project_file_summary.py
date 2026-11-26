@@ -16,7 +16,7 @@ from .head_observation import observe_plot_head
 from .project_file import ProjectFileSession, open_project_file
 
 
-PROJECT_FILE_EDIT_PROPERTY = "axis.label"
+PROJECT_FILE_EDIT_PROPERTIES = {"axis.label", "axis.ticks"}
 
 
 @contextmanager
@@ -65,9 +65,9 @@ def project_file_summary(path: Path, figure_id: str | None) -> dict[str, Any]:
     """Report a sealed semantic record without rendering or exposing workspace paths."""
     with project_file_figure(path, figure_id) as (session, _, document):
         objects = document["presentation"]["objects"]
-        axes = {target: [PROJECT_FILE_EDIT_PROPERTY]
+        axes = {target: [prop for prop in properties if prop in PROJECT_FILE_EDIT_PROPERTIES]
                 for target, properties in figure_property_names(figure_spec(document)).items()
-                if PROJECT_FILE_EDIT_PROPERTY in properties and objects[target]["kind"] == "axis"}
+                if "axis.label" in properties and objects[target]["kind"] == "axis"}
         return {"kind": "sciplot_project_file_summary", "version": 1, "read_only": True,
                 "project_file": str(session.path), "project_id": session.project_id,
                 "edit_targets": edit_target_summary(objects, axes, {}),

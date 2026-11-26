@@ -122,8 +122,8 @@ summary --json`; it returns currentness, revision and stable edit targets withou
 the full template/schema payload. Request the chosen target/property's current
 value, exact schema and risk with `plot describe --scope edit --target-id ID
 --property NAME`, then send `plot.patch` with the returned plot ID and revision.
-For an exact FigureSpec v2 axis label or annotation text, `plot.intent` can plan
-the literal edit and then apply it through that same patch transaction. A safe width/color/title
+For exact FigureSpec v2 axis titles, major ticks or annotation text, `plot.intent`
+can plan the literal edit and then apply it through that same patch transaction. A safe width/color/title
 visibility edit validates, commits and exports in one transaction; the program
 owns native paths and recovery. Repeating its idempotency key resumes the same
 work. Structural changes return a bound preview when needed. CLI and MCP share
@@ -134,8 +134,8 @@ For an existing standalone `.sciplot` file, use
 `sciplot plot open FILE.sciplot --scope summary --json` or the MCP
 `sciplot_project_open` summary. Pass `--figure PLOT_ID` (MCP `figure_id`) when
 there is more than one selection. This reads the saved ID, revision, hashes
-and axis-label `edit_targets` without rendering or modifying the file. To
-change an axis label in place, use
+and axis `edit_targets` without rendering or modifying the file. To change a
+title or major ticks in place, use
 `sciplot plot intent FILE.sciplot --request REQUEST.json --json` or daily MCP
 `sciplot_plot_intent`, with the file as `plot`. Use the returned plot ID,
 revision as `base_revision`, and axis ID as `target_id`. Success is reported
@@ -147,10 +147,10 @@ or PDF with 300 dpi TIFF, select the saved revision with the separate
 On a Qt desktop, `sciplot plot editor PLOT` opens the exact Managed FigureSpec v2
 `plot` path from that summary. The native view is read-only. Choose an axis,
 check the before/after values and save through the same plot transaction used by
-CLI and MCP. Directory-backed Managed figures support axis titles and major
-ticks; enter comma-separated numbers, or clear the field to restore automatic
-ticks on current-view figures. Standalone `.sciplot` files support titles. These
-edits leave the scale, units and data intact.
+CLI and MCP. For major ticks, enter comma-separated numbers or clear the field
+to restore automatic ticks on current-view figures. The editor saves standalone
+projects back to the same `.sciplot` file. These edits leave the scale, units and
+data intact.
 If another client saved first, read the latest revision and choose the change
 again; the editor will not overwrite it. A missing current verified native
 artifact must be rebuilt through the existing project command before editing.

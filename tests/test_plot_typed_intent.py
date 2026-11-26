@@ -1,4 +1,4 @@
-"""Deterministic common text edits stay inside the existing patch transaction."""
+"""Deterministic common edits stay inside the existing patch transaction."""
 
 from __future__ import annotations
 
@@ -79,6 +79,12 @@ def test_annotation_text_and_exact_type_restrictions(tmp_path: Path) -> None:
     with pytest.raises(ValueError) as unsupported:
         validate_intent({**request, "property": "scale.domain"})
     assert unsupported.value.reason_code == "plot_intent_invalid"
+    for invalid in (_request(property="axis.ticks", value="1, 3, 7"),
+                    _request(property="axis.ticks", value={"mode": "automatic", "extra": True}),
+                    _request(value=[1, 3, 7])):
+        with pytest.raises(ValueError) as wrong_type:
+            validate_intent(invalid)
+        assert wrong_type.value.reason_code == "plot_intent_invalid"
 
 
 def test_ambiguous_label_returns_typed_stable_candidates_and_does_not_mutate(tmp_path: Path) -> None:
@@ -280,7 +286,7 @@ def test_rpc_cli_mcp_parity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cap
     tool = tools["sciplot_plot_intent"]
     assert not tool.annotations.read_only_hint and tool.annotations.destructive_hint
     assert tool.input_schema["properties"]["request"]["properties"]["property"]["enum"] == [
-        "axis.label", "annotation.text"]
+        "axis.label", "axis.ticks", "annotation.text"]
     monkeypatch.setattr("sciplot_core.plot_protocol.client.call", lambda method, params: forwarded.append((method, params)) or {"status": "ready"})
     assert services.invoke_owner("sciplot_plot_intent", call["params"]) == {"status": "ready"}
     assert forwarded[-1] == ("plot.intent", call["params"])
