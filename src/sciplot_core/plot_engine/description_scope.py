@@ -8,6 +8,14 @@ from .errors import EngineError
 _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\Z")
 
 
+def edit_target_summary(objects: dict[str, Any], property_names: dict[str, list[str]],
+                        source_labels: dict[str, str]) -> dict[str, Any]:
+    """Expose stable IDs and display labels without including source or artifact paths."""
+    return {target: {"kind": objects[target]["kind"] if target in objects else "source",
+                     "label": objects[target]["label"] if target in objects else source_labels[target],
+                     "properties": properties} for target, properties in property_names.items()}
+
+
 def selector_issues(value: Any, *, path: str = "/description") -> list[dict[str, Any]]:
     """Return wire-style issues without assuming a particular transport."""
     if not isinstance(value, dict):

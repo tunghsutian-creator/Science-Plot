@@ -5,13 +5,18 @@ from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.plot_ir.figure_document import is_figure
+from sciplot_core.plot_engine.description_scope import edit_target_summary
+from sciplot_core.plot_engine.figure_updates import figure_property_names
+from sciplot_core.plot_ir.figure_document import figure_spec, is_figure
 
 from .attached_repository import AttachedProjectRepository
 from .attachment_index import Attachment, read_index
 from .errors import EngineError
 from .head_observation import observe_plot_head
 from .project_file import ProjectFileSession, open_project_file
+
+
+PROJECT_FILE_EDIT_PROPERTY = "axis.label"
 
 
 @contextmanager
@@ -59,6 +64,11 @@ def project_file_figure(path: Path, figure_id: str | None, *, exact_plot_id: boo
 def project_file_summary(path: Path, figure_id: str | None) -> dict[str, Any]:
     """Report a sealed semantic record without rendering or exposing workspace paths."""
     with project_file_figure(path, figure_id) as (session, _, document):
+        objects = document["presentation"]["objects"]
+        axes = {target: [PROJECT_FILE_EDIT_PROPERTY]
+                for target, properties in figure_property_names(figure_spec(document)).items()
+                if PROJECT_FILE_EDIT_PROPERTY in properties and objects[target]["kind"] == "axis"}
         return {"kind": "sciplot_project_file_summary", "version": 1, "read_only": True,
                 "project_file": str(session.path), "project_id": session.project_id,
+                "edit_targets": edit_target_summary(objects, axes, {}),
                 **{key: document[key] for key in ("plot_id", "revision", "scientific_hash", "presentation_hash")}}

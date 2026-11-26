@@ -113,10 +113,12 @@ def test_project_file_editor_and_daily_mcp_share_one_archive(tmp_path, monkeypat
                         current["revision"], current["scientific_hash"]) == (
                             str(moved), created_file.project_id, created["plot_id"],
                             observed_revision, created["scientific_hash"])
-                saved = await client.call_tool("sciplot_plot_intent", {"plot": str(moved), "request": {
-                    "mode": "apply", "plot_id": created["plot_id"], "base_revision": observed_revision,
-                    "idempotency_key": f"mcp-axis-{observed_revision}", "property": "axis.label",
-                    "target_id": "axis:xb", "value": next_label}})
+                target, axis = next((target, axis) for target, axis in current["edit_targets"].items()
+                                    if axis["label"] == "GUI next")
+                saved = await client.call_tool("sciplot_plot_intent", {"plot": current["project_file"], "request": {
+                    "mode": "apply", "plot_id": current["plot_id"], "base_revision": current["revision"],
+                    "idempotency_key": f"mcp-axis-{observed_revision}", "property": axis["properties"][0],
+                    "target_id": target, "value": next_label}})
                 if saved.is_error:
                     pytest.fail(str(saved.structured_content))
                 assert saved.structured_content["saved"] and saved.structured_content["revision"] == observed_revision + 1

@@ -15,14 +15,15 @@ That route reads the current source selectors and legal fields in one edit conte
 Choose the first read from authority already established for this figure:
 
 - **Standalone `.sciplot` project file:** `plot open FILE.sciplot --scope summary`
-  or `sciplot_project_open` reads the saved figure ID, revision and hashes. Use
-  `--figure PLOT_ID` or MCP `figure_id` when more than one figure is registered.
-  The summary itself is read-only. To change an exact axis label, pass the
-  `project_file` as `plot` to `sciplot_plot_intent` with the observed plot ID
-  and revision. Plan first; apply the same axis label request. Use
+  or `sciplot_project_open` reads the saved figure ID, revision, hashes and
+  axis-label `edit_targets`. Use `--figure PLOT_ID` or MCP `figure_id` when
+  more than one figure is registered. The summary itself is read-only. To change
+  an exact axis label, pass the `project_file` as `plot` to
+  `sciplot_plot_intent` with the saved plot ID, revision and an advertised
+  axis ID. Plan first; apply the same axis label request. Use
   `plot intent FILE.sciplot --request REQUEST.json --json` from the CLI.
-  For an unconfirmed save, retry the identical request and key. Other edits,
-  previews and exports are not available through this file locator.
+  For an unconfirmed save, retry the identical request and key. For a selected
+  PDF or PDF/TIFF export, use the [figure handoff](managed-delivery.md).
 - **Known ManagedPlot:** call `skill/scripts/sciplot plot open TARGET --scope
   summary --json`, or `sciplot_project_open` with `{"target":"/absolute/target",
   "description":{"scope":"summary"}}`. This returns `plot`, `plot_id`,

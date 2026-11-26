@@ -133,11 +133,13 @@ coverage. See the [saved-figure route](skill/references/saved-figure-edit.md).
 For an existing standalone `.sciplot` file, use
 `sciplot plot open FILE.sciplot --scope summary --json` or the MCP
 `sciplot_project_open` summary. Pass `--figure PLOT_ID` (MCP `figure_id`) when
-there is more than one selection. This reads the saved ID, revision and hashes
-without rendering or modifying the file. To change an axis label in place,
-use `sciplot plot intent FILE.sciplot --request REQUEST.json --json` or daily
-MCP `sciplot_plot_intent`, with the file as `plot`. Use the returned plot ID
-and base revision. Success is reported only after the file is replaced.
+there is more than one selection. This reads the saved ID, revision, hashes
+and axis-label `edit_targets` without rendering or modifying the file. To
+change an axis label in place, use
+`sciplot plot intent FILE.sciplot --request REQUEST.json --json` or daily MCP
+`sciplot_plot_intent`, with the file as `plot`. Use the returned plot ID,
+revision as `base_revision`, and axis ID as `target_id`. Success is reported
+only after the file is replaced.
 This route does not open a window or deliver exports.
 
 On a Qt desktop, `sciplot plot editor PLOT` opens the exact Managed FigureSpec v2

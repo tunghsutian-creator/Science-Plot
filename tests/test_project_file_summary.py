@@ -40,6 +40,10 @@ def test_relocated_project_file_opens_read_only_in_cli_and_daily_mcp(tmp_path):
             source = original / label
             source.mkdir()
             request = request_for_figure(source)
+            axes = request["template_definition"]["figure_spec"]["views"][0]["axes"]
+            axes[0]["label"] = f"Frequency {label} (Hz)"
+            if figures:
+                axes[0]["id"] = "axis:x"
             request["idempotency_key"] = "first" if not figures else "second"
             saved = service.create(request, project=store.root)
             assert saved["ready_to_use"] and saved["revision"] == 0
@@ -61,20 +65,36 @@ def test_relocated_project_file_opens_read_only_in_cli_and_daily_mcp(tmp_path):
                 "SCIPLOT_VEUSZ_ROOT": str(root / "absent-renderer")}
     expected = {"kind": "sciplot_project_file_summary", "version": 1, "read_only": True,
                 "project_file": str(moved), "project_id": snapshot["project_id"],
+                "edit_targets": {
+                    "axis:x": {"kind": "axis", "label": "Frequency 乙 (Hz)", "properties": ["axis.label"]},
+                    "axis:yl": {"kind": "axis", "label": "Modulus (Pa)", "properties": ["axis.label"]},
+                },
                 **{key: selected[key] for key in ("plot_id", "revision", "scientific_hash", "presentation_hash")}}
 
-    def cli(target, *flags, returncode=0):
+    def cli(target, *flags, action="open", returncode=0):
         run = subprocess.run(
-            [str(REPO_ROOT / "skill/scripts/sciplot"), "plot", "open", str(target), "--direct", "--json", *flags],
+            [str(REPO_ROOT / "skill/scripts/sciplot"), "plot", action, str(target), "--direct", "--json", *flags],
             env=read_env, cwd=root, capture_output=True, text=True, timeout=60, check=False,
         )
         assert run.returncode == returncode, run.stdout + run.stderr
         assert not list(scratch.iterdir())
         return json.loads(run.stdout)
 
-    assert cli(moved.relative_to(root),
-               "--scope", "summary", "--figure", selected["plot_id"]) == expected
+    summary = cli(moved.relative_to(root), "--scope", "summary", "--figure", selected["plot_id"])
+    assert summary == expected
+    assert cli(moved, "--figure", figures[0]["plot_id"])["edit_targets"]["axis:xb"]["label"] == "Frequency 甲 (Hz)"
     assert cli(moved, returncode=1)["reason_code"] == "project_file_figure_ambiguous"
+    target, axis = next((target, axis) for target, axis in summary["edit_targets"].items()
+                        if axis["label"] == "Frequency 乙 (Hz)")
+    plan_request = {"mode": "plan", "plot_id": summary["plot_id"], "base_revision": summary["revision"],
+                    "idempotency_key": "selected-axis", "target_id": target, "property": axis["properties"][0],
+                    "value": "Revised frequency (Hz)"}
+    plan_path = root / "plan.json"
+    plan_path.write_text(json.dumps(plan_request))
+    plan = cli(summary["project_file"], "--request", str(plan_path), action="intent")
+    assert plan["status"] == "ready" and plan["before"] == axis["label"] and plan["saved"] is False
+    assert plan["target_context"]["unit"] == "Hz"
+    assert str(scratch) not in str(plan) and str(original) not in str(plan)
 
     aliases = root / "aliases"
     aliases.mkdir()
@@ -93,6 +113,11 @@ def test_relocated_project_file_opens_read_only_in_cli_and_daily_mcp(tmp_path):
                 result = await client.call_tool("sciplot_project_open", args)
                 assert not result.is_error, result.content
                 assert result.structured_content == expected
+                planned = await client.call_tool("sciplot_plot_intent",
+                                                 {"plot": result.structured_content["project_file"],
+                                                  "request": plan_request})
+                assert not planned.is_error, planned.content
+                assert planned.structured_content == plan
                 assert not (await client.list_resources()).resources
                 for arguments, code in (
                     ({**args, "figure_id": "plot:unknown"}, "project_file_figure_not_found"),

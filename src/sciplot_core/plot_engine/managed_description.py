@@ -7,6 +7,7 @@ from sciplot_core.plot_document import build_keys, invalidated_nodes
 from sciplot_core.plot_transforms import builtin_files
 
 from .backend import PlotBackend
+from .description_scope import edit_target_summary
 from .errors import EngineError
 from .external_mutation import authority_status
 from .managed_source_revision import source_descriptor, source_value
@@ -138,9 +139,7 @@ def _scoped_description(result: dict[str, Any], document: dict[str, Any], bindin
         from .managed_rebuild_explanation import explain_rebuild
 
         compact["rebuild_explanation"] = explain_rebuild(result, document, binding)
-        compact["edit_targets"] = {target: {"kind": objects[target]["kind"] if target in objects else "source",
-                                            "label": objects[target]["label"] if target in objects else source_labels[target],
-                                            "properties": properties} for target, properties in property_names.items()}
+        compact["edit_targets"] = edit_target_summary(objects, property_names, source_labels)
         if "next_step" not in compact and result["status"] == "current" and compact["pending"] is None and property_names:
             compact["next_step"] = {"action": "plot.describe", "plot": result["plot"],
                                     "description_scope": "edit", "choose_from": "edit_targets",

@@ -15,7 +15,7 @@ from .errors import EngineError
 from .head_observation import observe_plot_head
 from .journal_identity import saved_command
 from .project_file import ProjectFileSaveUnconfirmed
-from .project_file_summary import project_file_figure
+from .project_file_summary import PROJECT_FILE_EDIT_PROPERTY, project_file_figure
 
 if TYPE_CHECKING:
     from .application import ProjectApplication
@@ -58,7 +58,7 @@ def project_file_axis_intent(service: "ProjectApplication", path: Path, request:
                              expected_revision: RevisionToken | None = None) -> dict[str, Any]:
     """Only the archive owner may acknowledge a saved edit, not its disposable Store."""
     request = validate_intent(request)
-    if request["property"] != "axis.label":
+    if request["property"] != PROJECT_FILE_EDIT_PROPERTY:
         raise EngineError("project_file_intent_unsupported", "A .sciplot file currently supports only axis label edits.",
                           action="choose_axis_label")
     with project_file_figure(path, request["plot_id"]) as (session, owner, before):

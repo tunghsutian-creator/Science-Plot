@@ -54,7 +54,8 @@ target/property with `plot describe --scope edit`, then the existing `plot.patch
 ## A single saved project file
 
 For a regular `.sciplot` file, use `plot open FILE.sciplot --scope summary`
-to get the saved plot ID and revision. Use that file as `plot` in the same
+to get the saved plot ID, revision and axis-label `edit_targets`. Use that
+file as `plot` and an advertised axis ID as `target_id` in the same
 `plot.intent` request above. This path supports `axis.label` only. A plan stays
 read-only. Apply uses the existing typed patch and native audit in a private
 workspace; it reports `saved` only after the same archive is replaced. It does
