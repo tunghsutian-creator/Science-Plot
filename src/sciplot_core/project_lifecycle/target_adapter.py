@@ -158,6 +158,15 @@ class FilesystemProjectTargets:
                                        publish_fresh_managed_output=self.publish_fresh_managed_output)
 
 
+def observe_saved_legacy_target(target: Path, figure_id: str | None = None) -> tuple[Path, Path] | None:
+    """Read the selected saved authority for a standalone host operation."""
+    from .repository_router import ComposedProjectRepository
+
+    repository = ComposedProjectRepository()
+    with repository.invocation_scope():
+        return FilesystemProjectTargets(repository).read_legacy_saved(canonical_path(target), figure_id)
+
+
 class PublicFilesystemProjectTargets(FilesystemProjectTargets):
     """New public expert plots publish to their admitted output."""
 

@@ -3,8 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.canonical_paths import canonical_path
-from sciplot_core.project_lifecycle.repository_router import ComposedProjectRepository
-from sciplot_core.project_lifecycle.target_adapter import FilesystemProjectTargets
+from sciplot_core.project_lifecycle.target_adapter import observe_saved_legacy_target
 from sciplot_core.studio_core.legacy_saved_plot import conversion_required
 
 
@@ -15,9 +14,7 @@ def require_public_editable(target: Path, *, figure_id: str | None = None,
     target = canonical_path(target)
     if resolve_native_object(target, figure_id, repair=False) is not None:
         return
-    repository = ComposedProjectRepository()
-    with repository.invocation_scope():
-        saved = FilesystemProjectTargets(repository).read_legacy_saved(target, figure_id)
+    saved = observe_saved_legacy_target(target, figure_id)
     if saved is not None and not _known_review(target, prior_review):
         raise conversion_required(saved[1])
 

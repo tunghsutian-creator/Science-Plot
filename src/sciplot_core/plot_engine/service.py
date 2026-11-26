@@ -87,10 +87,13 @@ class PlotService(ProjectApplication):
         if not self.read_only_legacy or not isinstance(self.targets, FilesystemProjectTargets):
             return
         root = canonical_path(plot)
-        if self.targets.read_legacy_saved(root, None) is None:
+        saved = self.targets.read_legacy_saved(root, None)
+        if saved is None:
             return
         if request.get("reimport") is True:
-            self.require_editable(root)
+            from sciplot_core.studio_core.legacy_saved_plot import conversion_required
+
+            raise conversion_required(saved[1])
         from sciplot_core.project_lifecycle.context import active, exists, read, transaction_path
 
         with self.repository.query_scope(root):

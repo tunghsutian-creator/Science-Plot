@@ -321,6 +321,12 @@ def test_public_legacy_resume_requires_and_only_finishes_a_saved_transaction(tmp
         with pytest.raises(EngineError) as error:
             public.resume(root, retry)
         assert error.value.reason_code == "legacy_transaction_unknown"
+        before = _tree(tmp_path)
+        with pytest.raises(EngineError) as reimport:
+            public.decide(root, {"reimport": True, "base_revision": 0, "decision_id": "b" * 64})
+        assert reimport.value.reason_code == "legacy_conversion_required"
+        assert reimport.value.repair["target"] == str(backend.native)
+        assert _tree(tmp_path) == before
         assert backend.calls["apply"] == 0
         backend.export_failures = [RuntimeError("interrupted historical export")]
         prior = historical.patch(root, request(key="saved"))

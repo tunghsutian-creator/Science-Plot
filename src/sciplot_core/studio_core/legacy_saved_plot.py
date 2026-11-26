@@ -9,12 +9,9 @@ from sciplot_core.foundation.file_hashing import file_sha256
 def resolve_legacy_plot(target: Path, figure_id: str | None) -> tuple[Path, Path]:
     """Use the same saved authority as public open, without attaching or importing it."""
     from sciplot_core.project_lifecycle.errors import EngineError
-    from sciplot_core.project_lifecycle.repository_router import ComposedProjectRepository
-    from sciplot_core.project_lifecycle.target_adapter import FilesystemProjectTargets
+    from sciplot_core.project_lifecycle.target_adapter import observe_saved_legacy_target
 
-    repository = ComposedProjectRepository()
-    with repository.invocation_scope():
-        saved = FilesystemProjectTargets(repository).read_legacy_saved(canonical_path(target), figure_id)
+    saved = observe_saved_legacy_target(target, figure_id)
     if saved is None:
         raise EngineError("legacy_plot_not_found", "Select a saved legacy project, delivery, or exact .vsz file.",
                           action="select_legacy_plot")
