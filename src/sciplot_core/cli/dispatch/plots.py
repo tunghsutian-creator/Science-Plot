@@ -32,7 +32,7 @@ def dispatch_plot(args: Any, argv: list[str] | None = None) -> int | None:
         maybe_reexec_with_qt_runtime(sys.argv[1:] if argv is None else argv)
         from sciplot_core.plot_editor import run_editor
 
-        return run_editor(args.plot, socket_path=args.socket, timeout=args.timeout)
+        return run_editor(args.plot, socket_path=args.socket, timeout=args.timeout, figure_id=args.figure)
     if action == "serve":
         from sciplot_core.plot_protocol.server import serve
 

@@ -75,7 +75,7 @@ def test_bundle_entrypoint_uses_only_moved_bundle_runtime(tmp_path: Path) -> Non
         info = plistlib.load(stream)
     [handler] = info["CFBundleDocumentTypes"]
     [project_type] = info["UTExportedTypeDeclarations"]
-    assert handler["CFBundleTypeRole"] == "Viewer"
+    assert handler["CFBundleTypeRole"] == "Editor"
     assert handler["LSItemContentTypes"] == [project_type["UTTypeIdentifier"]]
     assert project_type["UTTypeTagSpecification"] == {"public.filename-extension": ["sciplot"]}
     result = subprocess.run(

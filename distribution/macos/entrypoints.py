@@ -75,7 +75,7 @@ exec "$APP_ROOT/../../MacOS/sciplot" "$@"
             "NSHighResolutionCapable": True,
             "CFBundleDocumentTypes": [{
                 "CFBundleTypeName": "SciPlot 项目",
-                "CFBundleTypeRole": "Viewer",
+                "CFBundleTypeRole": "Editor",
                 "LSHandlerRank": "Owner",
                 "LSItemContentTypes": ["local.sciplot.desktop.project"],
             }],

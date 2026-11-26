@@ -53,13 +53,18 @@ def _receipt(status: str, locator: dict[str, Any], document: dict[str, Any], *,
             **{key: document[key] for key in ("revision", "scientific_hash", "presentation_hash")}, **details}
 
 
-def project_file_axis_intent(service: "PlotService", path: Path, request: dict[str, Any]) -> dict[str, Any]:
+def project_file_axis_intent(service: "PlotService", path: Path, request: dict[str, Any], *,
+                             expected_project_id: str | None = None,
+                             expected_revision: RevisionToken | None = None) -> dict[str, Any]:
     """Only the archive owner may acknowledge a saved edit, not its disposable Store."""
     request = validate_intent(request)
     if request["property"] != "axis.label":
         raise EngineError("project_file_intent_unsupported", "A .sciplot file currently supports only axis label edits.",
                           action="choose_axis_label")
     with project_file_figure(path, request["plot_id"]) as (session, owner, before):
+        if expected_project_id is not None and session.project_id != expected_project_id:
+            raise EngineError("project_file_identity_conflict", "This path no longer contains the original project file.",
+                              action="inspect_project_file")
         locator = {"project_file": str(session.path), "project_id": session.project_id,
                    "plot_id": before["plot_id"], "idempotency_key": request["idempotency_key"]}
         if request["mode"] == "apply":
@@ -75,6 +80,10 @@ def project_file_axis_intent(service: "PlotService", path: Path, request: dict[s
                                   action="inspect_project_file") from exc
             if published is not None:
                 return _receipt("already_saved", locator, published, current_revision=before["revision"], saved=True)
+
+        if expected_revision is not None and RevisionToken.of(before) != expected_revision:
+            raise EngineError("document_revision_conflict", "Read the current revision before changing this plot.",
+                              action="inspect_project_file", current_revision=before["revision"])
 
         # A sealed semantic head suffices for a plan; no renderer or files change.
         _, plan = compile_intent(before, request)

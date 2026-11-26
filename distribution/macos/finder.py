@@ -10,10 +10,9 @@ from typing import cast
 
 from PyQt6.QtCore import QEvent, QTimer, Qt
 from PyQt6.QtGui import QFileOpenEvent
-from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtWidgets import QApplication, QMessageBox, QWidget
 
 from sciplot_core.project_lifecycle.errors import EngineError
-from sciplot_core.project_lifecycle.project_file_summary import project_file_summary
 
 
 class FinderApplication(QApplication):
@@ -61,9 +60,10 @@ class FinderApplication(QApplication):
 
 
 def main() -> int:
-    """Open its saved project summary, or the connection guide without a file."""
+    """Open its saved figure editor, or the connection guide without a file."""
     command = Path(__file__).resolve().parents[2] / "MacOS" / "sciplot"
     dialogs: list[QMessageBox] = []
+    windows: set[QWidget] = set()
 
     def message(title: str, detail: str, icon: QMessageBox.Icon) -> None:
         dialog = QMessageBox()
@@ -83,22 +83,31 @@ def main() -> int:
         message("无法打开", "请选择本机的 .sciplot 项目文件。", QMessageBox.Icon.Warning)
 
     def open_document(path: Path) -> None:
+        if path.is_dir() and not path.is_symlink():
+            rejected()
+            return
         try:
-            result = project_file_summary(path, None)
+            from sciplot_core.plot_editor import PlotEditor
+
+            window = PlotEditor(path, socket_path=None, timeout=600)
         except EngineError as error:
             if error.reason_code == "project_file_figure_ambiguous":
-                detail = "项目包含多张图。请在命令行或 AI 中指定要查看的图。"
+                detail = "项目包含多张图。请用 sciplot plot editor 文件 --figure 图ID 打开指定图。"
             elif error.reason_code == "project_file_figure_unsupported":
                 detail = "这个项目的图格式暂不支持在这里查看。"
             else:
                 detail = "无法读取这个项目。请检查文件是否存在，以及是否为有效的 .sciplot 项目。"
             message("无法打开", detail, QMessageBox.Icon.Warning)
             return
-        message(
-            "SciPlot 项目信息",
-            f"{path.name}\n图 ID：{result['plot_id']}\n修订：{result['revision']}\n当前窗口仅查看项目状态。",
-            QMessageBox.Icon.Information,
-        )
+        except (ImportError, OSError, ValueError, RuntimeError, KeyError):
+            message("无法打开", "无法显示所选项目中已保存的图。", QMessageBox.Icon.Warning)
+            return
+        windows.add(window)
+        window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        window.destroyed.connect(lambda: windows.discard(window))
+        window.show()
+        window.raise_()
+        window.activateWindow()
 
     def show_welcome() -> None:
         subprocess.Popen([str(command), "--welcome"])
