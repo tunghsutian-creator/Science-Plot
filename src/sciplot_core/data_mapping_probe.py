@@ -255,8 +255,12 @@ def run_data_mapping_probe(
     output_root: str | Path,
 ) -> dict[str, Any]:
     root = Path(output_root).expanduser().resolve()
-    shutil.rmtree(root, ignore_errors=True)
-    root.mkdir(parents=True, exist_ok=True)
+    try:
+        root.mkdir(parents=True)
+    except FileExistsError as exc:
+        raise ValueError(
+            f"Data mapping probe output already exists: {root}. Choose a new output directory."
+        ) from exc
     source = root / "source"
     source.mkdir()
     primary_source = source / "experiment.csv"

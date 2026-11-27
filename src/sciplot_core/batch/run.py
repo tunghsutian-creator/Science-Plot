@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -60,17 +59,25 @@ def run_batch(
 
     from sciplot_core.foundation.research_destination import require_data_destination
     require_data_destination(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_ancestors = (output_dir, *output_dir.parents)
+    for source_root in (input_dir, *normalized_tensile_roots):
+        # Resolved paths can still have different case on the same Mac volume.
+        if source_root.is_relative_to(output_dir) or any(
+            ancestor.is_dir() and ancestor.samefile(source_root)
+            for ancestor in output_ancestors
+        ):
+            raise ValueError(
+                f"Batch output directory overlaps a source directory: {output_dir} "
+                f"and {source_root}. Choose a new output directory outside the source directories."
+            )
+    try:
+        output_dir.mkdir(parents=True)
+    except FileExistsError as exc:
+        raise ValueError(
+            f"Batch output already exists: {output_dir}. Choose a new output directory."
+        ) from exc
     runs_dir = output_dir / "runs"
-    if runs_dir.exists():
-        shutil.rmtree(runs_dir)
-    for stale_file in (
-        output_dir / "batch_manifest.json",
-        output_dir / "review_index.html",
-    ):
-        if stale_file.exists():
-            stale_file.unlink()
-    runs_dir.mkdir(parents=True, exist_ok=True)
+    runs_dir.mkdir()
 
     runs: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []

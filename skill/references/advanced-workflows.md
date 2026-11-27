@@ -381,8 +381,11 @@ skill/scripts/sciplot curate torque INPUT \
   --json
 
 skill/scripts/sciplot qa OUTDIR --strict-publication
-skill/scripts/sciplot batch INPUT_DIR --out .tmp_verify/batch --mode smoke
+skill/scripts/sciplot batch INPUT_DIR --out /path/to/new-batch --mode smoke
 ```
+
+Batch output must be a new directory outside the input, tensile allow-list,
+and SciPlot checkout directories. Choose a new destination for each run.
 
 Curation returns the source-bound selection JSON for the AI workflow; `--open`
 and the browser editor are retired. Existing saved selection files, including
