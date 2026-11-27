@@ -109,6 +109,8 @@ def _publication(root: Path, out: Path, request: dict[str, Any],
             records = [entry for entry in publication["exports"] if entry["format"] in request["formats"]]
             if len(records) == len(request["formats"]) and {entry["format"] for entry in records} == set(request["formats"]):
                 return token, records
+            if cold_export:
+                raise EngineError("figure_handoff_format_missing", "The current publication does not include every selected format.")
         raise EngineError("figure_handoff_publication_unready", "Finish the existing plot export first; this handoff does not rebuild a publication.",
                           action="plot.export", plot=str(root))
 
@@ -133,7 +135,7 @@ def handoff_figure(root: Path, request: dict[str, Any], backend: PlotBackend, *,
         token, evidence = _publication(root, out, request, backend, cold_export=rebuild_missing is not None)
     except EngineError as exc:
         if (rebuild_missing is None or exc.reason_code not in {
-                "figure_handoff_cache_missing", "figure_handoff_publication_unready"}
+                "figure_handoff_cache_missing", "figure_handoff_format_missing", "figure_handoff_publication_unready"}
                 or not rebuild_missing(exc.reason_code)):
             raise
         token, evidence = _publication(root, out, request, backend)

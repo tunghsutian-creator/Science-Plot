@@ -128,13 +128,14 @@ class ManagedVeuszCompiler:
     def audit_ir(self, ir: dict[str, Any], document: Path) -> dict[str, Any]:
         return dict(self._require_exact(ir, document)["scientific_audit"])
 
-    def export_ir(self, ir: dict[str, Any], document: Path, output: Path) -> dict[str, Any]:
+    def export_ir(self, ir: dict[str, Any], document: Path, output: Path, *,
+                  formats: tuple[str, ...] = ("pdf", "tiff_300")) -> dict[str, Any]:
         renderer = compiler_identity()
         before = self._require_exact(ir, document)
         output = output.expanduser().resolve()
-        arguments = ["export-document", str(document), "--formats", "pdf,tiff_300", "--out", str(output)]
+        arguments = ["export-document", str(document), "--formats", ",".join(formats), "--out", str(output)]
         with self._scope(), artifact_scope(arguments, inputs={"document": document}):
-            result = export_studio_document(document, formats=["pdf", "tiff_300"], output_dir=output)
+            result = export_studio_document(document, formats=list(formats), output_dir=output)
         if file_sha256(document) != before["document_sha256"]:
             raise ValueError("Managed native artifact changed during export.")
         evidence = {str(document): before["document_sha256"]}

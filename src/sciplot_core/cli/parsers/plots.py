@@ -31,7 +31,8 @@ def register_plot_commands(subparsers: Any) -> None:
             action.add_argument("--plot-id", help="Exact current Managed v2 identity for --output-dir.")
             action.add_argument("--revision", type=int, help="Exact current Managed v2 revision for --output-dir.")
             formats = action.add_mutually_exclusive_group()
-            formats.add_argument("--tiff", action="store_true", help="Also copy the audited 300 dpi TIFF.")
+            formats.add_argument("--tiff", action="store_true", help="Export the audited PDF and 300 dpi TIFF.")
+            formats.add_argument("--tiff-only", action="store_true", help="Export only the audited 300 dpi TIFF.")
             formats.add_argument("--plotted-csv", action="store_true", help="Export only the current plot's bound data columns as CSVs.")
             formats.add_argument("--editable-vsz", action="store_true", help="Export only one independent editable Veusz file.")
         if name == "create":

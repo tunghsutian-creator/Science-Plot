@@ -134,6 +134,8 @@ def test_relocated_project_file_selected_handoff_through_cli_and_daily_mcp(tmp_p
 
     pdf = destination / "just PDF"
     verify(cli(pdf), pdf, ["pdf"])
+    tiff = destination / "just TIFF"
+    verify(cli(tiff, flags=("--tiff-only",)), tiff, ["tiff_300"])
     vsz = destination / "just editable VSZ"
     result = cli(vsz, flags=("--editable-vsz",))
     editable = verify(result, vsz, ["editable_vsz"])["editable_vsz"]
@@ -182,30 +184,35 @@ def test_relocated_project_file_selected_handoff_through_cli_and_daily_mcp(tmp_p
 
     assert not original.exists() and not list(scratch.glob("sciplot-open-*"))
     assert file_sha256(moved) == archive_receipt.sha256 and sentinel.read_text() == "unrelated file"
-    assert set(destination.iterdir()) == {moved, occupied, sentinel, alias, pdf, both, vsz, data}
+    assert set(destination.iterdir()) == {moved, occupied, sentinel, alias, pdf, tiff, both, vsz, data}
 
     def never_build(*_args, **_kwargs):
         pytest.fail("An archive with an existing export cache must not rebuild it.")
 
     with closing(PlotService()) as service:
         monkeypatch.setattr(service, "_export", never_build)
+        monkeypatch.setattr(service.backend, "export_selected", never_build)
         warm_out, blocked = root / "warm PDF", root / "no PDF after failed QA"
         handoff = {"output_dir": str(warm_out), "plot_id": plot_id, "revision": revision, "formats": ["pdf"]}
         warm_export = service.export(warm, handoff=handoff)
         [warm_pdf] = warm_export["exports"]
         assert warm_pdf["sha256"] == next(item["sha256"] for item in saved["exports"] if item["format"] == "pdf")
-        for formats in (["pdf"], ["plotted_csv"], ["editable_vsz"]):
+        warm_tiff = root / "warm TIFF"
+        [cached_tiff] = service.export(warm, handoff={**handoff, "output_dir": str(warm_tiff), "formats": ["tiff_300"]})["exports"]
+        assert cached_tiff["sha256"] == next(item["sha256"] for item in saved["exports"] if item["format"] == "tiff_300")
+        for formats in (["pdf"], ["tiff_300"], ["plotted_csv"], ["editable_vsz"]):
             with pytest.raises(EngineError, match="handoff does not rebuild") as error:
                 service.export(unready, handoff={**handoff, "output_dir": str(blocked), "formats": formats})
             assert error.value.reason_code == "figure_handoff_publication_unready" and not blocked.exists()
     assert file_sha256(warm) == warm_saved.sha256 and file_sha256(unready) == unready_saved.sha256
 
-    def native_error(private_root):
+    def native_error(binding, output, formats):
+        private_root = binding["root"]
         raise EngineError("native_error", f"Failed to open {private_root} from the old binding {original}",
                           evidence=str(private_root))
 
     with closing(PlotService()) as service:
-        monkeypatch.setattr(service, "_export", native_error)
+        monkeypatch.setattr(service.backend, "export_selected", native_error)
         with pytest.raises(EngineError) as failed:
             service.export(moved, handoff={**handoff, "output_dir": str(refused)})
     assert failed.value.reason_code == "figure_handoff_publication_unready"

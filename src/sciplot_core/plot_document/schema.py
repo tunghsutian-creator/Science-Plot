@@ -68,9 +68,10 @@ def patch_schema() -> dict[str, Any]:
     })}
 
 
-def figure_formats_schema() -> dict[str, Any]:
+def figure_formats_schema(*, require_pdf: bool = False) -> dict[str, Any]:
     return {"type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": True,
-            "contains": {"const": "pdf"}, "items": {"enum": ["pdf", "tiff_300"]}}
+            **({"contains": {"const": "pdf"}} if require_pdf else {}),
+            "items": {"enum": ["pdf", "tiff_300"]}}
 
 
 def figure_handoff_schema() -> dict[str, Any]:

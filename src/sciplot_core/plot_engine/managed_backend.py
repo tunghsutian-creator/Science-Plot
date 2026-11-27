@@ -298,6 +298,27 @@ class ManagedBackend:
     def export(self, binding: dict[str, Any]) -> dict[str, Any]:
         ir, native = self._ensure(binding, verify_existing=False)
         result = self.compiler.export_ir(ir, native, native.parent / "exports")
+        self._seal_export_ir(binding, ir, result)
+        result["exports"].append({"path": str(native), "format": "vsz", "sha256": file_sha256(native)})
+        return result
+
+    def export_selected(self, binding: dict[str, Any], output: Path, formats: tuple[str, ...]) -> dict[str, Any]:
+        """Audit the current native bytes, creating a derivative only when none was saved."""
+        native = Path(binding["document"])
+        if native.exists():
+            canonical = read_canonical(binding)
+            require_inputs(canonical)
+            ir = resolved_ir(Path(binding["root"]), canonical)
+        else:
+            ir, native = self._ensure(binding, verify_existing=False)
+        if ir["ir_hash"] != binding["ir_hash"]:
+            raise EngineError("managed_ir_conflict", "Canonical state does not reproduce the bound PlotIR identity.")
+        result = self.compiler.export_ir(ir, native, output, formats=formats)
+        self._seal_export_ir(binding, ir, result)
+        return result
+
+    @staticmethod
+    def _seal_export_ir(binding: dict[str, Any], ir: dict[str, Any], result: dict[str, Any]) -> None:
         if "native_export_audit" in result:
             import json
             from sciplot_core.source_coverage.file_snapshots import _physical_file_snapshot
@@ -308,8 +329,6 @@ class ManagedBackend:
                 raise EngineError("managed_ir_conflict", "The saved PlotIR differs from the audited export.")
             result["native_export_audit"].update(canonical_sha256=binding["canonical_sha256"], ir_sha256=snapshot["sha256"])
             result["evidence_files"][str(ir_path)] = snapshot["sha256"]
-        result["exports"].append({"path": str(native), "format": "vsz", "sha256": file_sha256(native)})
-        return result
 
     def render(self, binding: dict[str, Any], output: Path) -> dict[str, Any]:
         ir, native = self._ensure(binding, verify_existing=False)

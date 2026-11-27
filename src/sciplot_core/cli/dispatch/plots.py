@@ -38,7 +38,7 @@ def dispatch_plot(args: Any, argv: list[str] | None = None) -> int | None:
 
         serve(args.socket, idle_timeout=args.idle_timeout, request_timeout=args.request_timeout)
         return 0
-    selected_export = action == "export" and (args.tiff or args.plotted_csv or args.editable_vsz
+    selected_export = action == "export" and (args.tiff or args.tiff_only or args.plotted_csv or args.editable_vsz
         or any(value is not None for value in (args.output_dir, args.plot_id, args.revision)))
     params: dict[str, Any] = {}
     if action in {"open", "append"}:
@@ -71,6 +71,8 @@ def dispatch_plot(args: Any, argv: list[str] | None = None) -> int | None:
         destination = str(args.output_dir.expanduser().absolute()) if args.output_dir is not None else None
         if args.plotted_csv:
             formats = ["plotted_csv"]
+        elif args.tiff_only:
+            formats = ["tiff_300"]
         elif args.editable_vsz:
             formats = ["editable_vsz"]
         else:

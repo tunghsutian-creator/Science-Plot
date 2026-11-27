@@ -68,7 +68,7 @@ def semantic_request_schema() -> dict[str, Any]:
                    "sources": {"type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": True,
                                "items": {"type": "string", "minLength": 1}},
                    "intent": intent_schema(), **presentation_requirement_properties(), "out": {"type": "string", "minLength": 1},
-                   "formats": {**figure_formats_schema(),
+                   "formats": {**figure_formats_schema(require_pdf=True),
                                "description": "Deliver only the selected files (PDF, optionally 300 dpi TIFF); omitted retains the native snapshot."},
                    "project_file": {"type": "string", "minLength": 1,
                                     "description": "New .sciplot file for the first ordinary XY figure. Save only; does not export."},

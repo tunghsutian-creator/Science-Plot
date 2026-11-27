@@ -6,10 +6,12 @@ from typing import TYPE_CHECKING, Any
 
 from sciplot_core.plot_document.schema import figure_handoff_schema
 from sciplot_core.plot_document.validation import validate_wire
-from sciplot_core.plot_engine.export_status import sealed_publication
+from sciplot_core.plot_engine.cache_identity import build_key
+from sciplot_core.plot_engine.export_status import export_cache_record, sealed_publication
 from sciplot_core.project_store.runtime import project_runtime
 
 from .attached_repository import AttachedProjectRepository
+from .context import repository_scope
 from .contracts import RevisionToken
 from .errors import EngineError
 from .project_file_summary import project_file_figure
@@ -47,6 +49,33 @@ def _has_deferred_export(owner: AttachedProjectRepository, root: Path) -> bool:
         return False
 
 
+def _export_formats(service: "ProjectApplication", owner: AttachedProjectRepository, root: Path,
+                    formats: list[str], *, extend: bool) -> None:
+    # The whole Store session is disposable here. No generic export
+    # transaction, paired export, or modification of the .sciplot is needed.
+    with repository_scope(owner, capabilities=service.capabilities), owner.lease(root):
+        head = owner.load_head(root)
+        binding = head["binding"]
+        prior = sealed_publication(root, head) if extend else None
+        if extend and (prior is None or prior.get("ready_to_use") is not True):
+            raise EngineError("figure_handoff_publication_changed", "The saved publication changed before its missing format could be rendered.")
+        existing = prior["exports"] if prior is not None else []
+        missing = tuple(fmt for fmt in ("pdf", "tiff_300")
+                        if fmt in formats and not any(record["format"] == fmt for record in existing))
+        ir_binding = {**binding, "ir_path": str(owner.runtime_path(Path(binding["ir_path"])))}
+        destination = owner.attachment.cache / "selected-exports"
+        export_selected = getattr(service.backend, "export_selected", None)
+        if export_selected is None:
+            raise EngineError("figure_handoff_publication_unready", "The native backend cannot render selected formats.")
+        exported = export_selected(ir_binding, destination, missing)
+        if (exported.get("ready_to_use") is not True
+                or {record["format"] for record in exported["exports"]} != set(missing)):
+            raise EngineError("figure_handoff_publication_unready", "The native export did not produce just the missing formats.")
+        exported["exports"] = [*existing, *exported["exports"]]
+        files = {**exported["evidence_files"], **{record["path"]: record["sha256"] for record in existing}}
+        owner.write(root / "export-cache.json", export_cache_record(build_key(head["document"], binding), exported, files, {}))
+
+
 def project_file_handoff(service: "ProjectApplication", path: Path, request: dict[str, Any], *,
                          expected_project_id: str | None = None,
                          expected_revision: RevisionToken | None = None) -> dict[str, Any]:
@@ -66,8 +95,11 @@ def project_file_handoff(service: "ProjectApplication", path: Path, request: dic
 
         def rebuild_missing(reason: str) -> bool:
             try:
-                if reason != "figure_handoff_cache_missing" and not _has_deferred_export(owner, root):
+                if reason not in {"figure_handoff_cache_missing", "figure_handoff_format_missing"} and not _has_deferred_export(owner, root):
                     return False
+                if set(request["formats"]) <= {"pdf", "tiff_300"}:
+                    _export_formats(service, owner, root, request["formats"], extend=reason == "figure_handoff_format_missing")
+                    return True
                 receipt = service.export(root)
             except (OSError, RuntimeError, ValueError, KeyError, TypeError) as exc:
                 # The native owner may put private binding paths in its error text.

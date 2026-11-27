@@ -55,5 +55,8 @@ class BackendRouter:
     def export(self, binding: dict[str, Any]) -> dict[str, Any]:
         return dict(self._owner(binding).export(binding))
 
+    def export_selected(self, binding: dict[str, Any], output: Path, formats: tuple[str, ...]) -> dict[str, Any]:
+        return self.managed.export_selected(binding, output, formats)
+
     def render(self, binding: dict[str, Any], output: Path) -> dict[str, Any]:
         return dict(self._owner(binding).render(binding, output))
