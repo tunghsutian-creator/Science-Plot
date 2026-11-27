@@ -7,11 +7,14 @@ from typing import Any
 def register_plot_commands(subparsers: Any) -> None:
     parser = subparsers.add_parser("plot", help="Edit persistent scientific documents through semantic patches.")
     actions = parser.add_subparsers(dest="plot_action", required=True)
-    for name in ("open", "describe", "create", "patch", "resume", "intent", "render", "export", "rollback", "decide", "deliver"):
+    for name in ("open", "describe", "create", "append", "patch", "resume", "intent", "render", "export", "rollback", "decide", "deliver"):
         action = actions.add_parser(name)
         if name == "open":
-            action.add_argument("target", type=Path, help="Saved figure target or a .sciplot file (read-only summary).")
+            action.add_argument("target", type=Path, help="Saved figure target or a .sciplot file (read-only summary and generation).")
             action.add_argument("--figure", dest="figure_id", help="Exact saved figure or plot ID; required if selection is ambiguous.")
+        elif name == "append":
+            action.add_argument("target", type=Path, help="Existing .sciplot file to receive one independent ordinary XY figure.")
+            action.add_argument("--expected-generation", required=True, help="Current generation returned by plot open for this file.")
         elif name == "export":
             action.add_argument("plot", type=Path, help="A saved figure or a .sciplot file for selected-file export.")
         elif name not in {"create", "deliver"}:
@@ -20,8 +23,9 @@ def register_plot_commands(subparsers: Any) -> None:
             action.add_argument("--scope", choices=("summary", "edit"), help="Optional compact ManagedPlot description.")
             action.add_argument("--target-id", help="Stable semantic target ID for --scope edit.")
             action.add_argument("--property", help="Property name for --scope edit.")
-        if name in {"create", "patch", "resume", "intent", "rollback", "decide", "deliver"}:
-            action.add_argument("--request", type=Path, required=True)
+        if name in {"create", "append", "patch", "resume", "intent", "rollback", "decide", "deliver"}:
+            action.add_argument("--request", type=Path, required=True,
+                                help="JSON file with the frozen ordinary XY Managed request." if name == "append" else None)
         if name == "export":
             action.add_argument("--output-dir", type=Path, help="Put only selected files in a fresh directory (requires exact plot ID and revision).")
             action.add_argument("--plot-id", help="Exact current Managed v2 identity for --output-dir.")

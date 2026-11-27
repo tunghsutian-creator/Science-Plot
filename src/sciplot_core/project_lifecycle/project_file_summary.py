@@ -46,7 +46,7 @@ def project_file_figure(path: Path, figure_id: str | None, *, exact_plot_id: boo
                 message = "Choose one exact saved plot or figure ID."
             choices = [{key: entry[key] for key in ("figure_id", "plot_id")} for entry in matches or entries]
             raise EngineError(code, message, action="select_figure", project_id=session.project_id,
-                              project_file=str(session.path), figures=choices)
+                              project_file=str(session.path), generation=session.opened_generation, figures=choices)
 
         attachment = Attachment(session.store, matches[0])
         owner = AttachedProjectRepository(attachment)
@@ -89,6 +89,6 @@ def _summarize(session: ProjectFileSession, document: dict[str, Any]) -> dict[st
                if "axis.label" in properties and objects[target]["kind"] == "axis"}
     targets.update({target: [LINE_COLOR] for target in line_color_targets(document, spec)})
     return {"kind": "sciplot_project_file_summary", "version": 1, "read_only": True,
-            "project_file": str(session.path), "project_id": session.project_id,
+            "project_file": str(session.path), "project_id": session.project_id, "generation": session.opened_generation,
             "edit_targets": edit_target_summary(objects, targets, {}),
             **{key: document[key] for key in ("plot_id", "revision", "scientific_hash", "presentation_hash")}}

@@ -183,6 +183,32 @@ accidentally use bundle import on the file, the error gives the same direct-open
 arguments and leaves the destination untouched. If there are multiple figures, specify the
 exact plot ID when opening; saving does not select or discard any figure.
 
+### Append an independent ordinary XY figure
+
+Use the `managed_request` frozen in the confirmed ordinary XY task's `task.json`.
+`task inspect TASK_DIRECTORY --json` reports that file at `source_plan.evidence.path`.
+Copy the `managed_request` object into `REQUEST.json` with its original source bindings
+and `idempotency_key`. The request carries `rule_id: "ordinary_xy"` and
+`storage: "project_store_v2"`. Resolve any scientific questions in the original task first.
+
+```bash
+sciplot plot open FILE.sciplot --scope summary --json
+sciplot plot append FILE.sciplot --expected-generation GENERATION --request REQUEST.json --json
+sciplot plot open FILE.sciplot --figure NEW_PLOT_ID --scope summary --json
+```
+
+Use `generation` from the summary, or `repair.generation` when open asks which
+saved figure to select. Use `plot_id` from the append receipt as `NEW_PLOT_ID`.
+Append saves the new figure with its bound sources and preserves the existing
+figures and their revisions. A stale generation is refused. After a lost reply,
+retry the same request and generation. An already-saved append returns the same
+plot ID.
+
+In daily or expert MCP, call `sciplot_project_open`, then
+`sciplot_project_file_append` with `target` (the absolute `.sciplot` filename),
+`expected_generation`, and `request` (the frozen `managed_request` object).
+Pass the append receipt's `next_step.arguments` to `sciplot_project_open`.
+
 ## Make a new, independently editable copy
 
 Use Save As for **one current Managed plot**, not for moving a whole project or

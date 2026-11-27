@@ -41,9 +41,11 @@ def dispatch_plot(args: Any, argv: list[str] | None = None) -> int | None:
     selected_export = action == "export" and (args.tiff or args.plotted_csv or args.editable_vsz
         or any(value is not None for value in (args.output_dir, args.plot_id, args.revision)))
     params: dict[str, Any] = {}
-    if action == "open":
+    if action in {"open", "append"}:
         params["target"] = str(args.target.expanduser().absolute())
-        if args.figure_id is not None:
+        if action == "append":
+            params["expected_generation"] = args.expected_generation
+        elif args.figure_id is not None:
             params["figure_id"] = args.figure_id
     elif action not in {"create", "deliver"}:
         plot = args.plot.expanduser()
@@ -51,7 +53,7 @@ def dispatch_plot(args: Any, argv: list[str] | None = None) -> int | None:
     if action in {"open", "describe"} and any(value is not None for value in (args.scope, args.target_id, args.property)):
         params["description"] = {key: value for key, value in
             (("scope", args.scope), ("target", args.target_id), ("property", args.property)) if value is not None}
-    if action in {"create", "patch", "resume", "intent", "rollback", "decide", "deliver"}:
+    if action in {"create", "append", "patch", "resume", "intent", "rollback", "decide", "deliver"}:
         params["request"] = _request(args.request)
         if action == "create":
             if args.project is not None:
@@ -74,7 +76,7 @@ def dispatch_plot(args: Any, argv: list[str] | None = None) -> int | None:
         else:
             formats = ["pdf", "tiff_300"] if args.tiff else ["pdf"]
         params["handoff"] = {"output_dir": destination, "plot_id": args.plot_id, "revision": args.revision, "formats": formats}
-    method = "project.open" if action == "open" else f"plot.{action}"
+    method = {"open": "project.open", "append": "project.file-append"}.get(action, f"plot.{action}")
     result = call(method, params, socket_path=args.socket, direct=args.direct, timeout=args.timeout)
     _print_json(result)
     return 1 if result.get("status") in {"error", "blocked", "partial"} else 0

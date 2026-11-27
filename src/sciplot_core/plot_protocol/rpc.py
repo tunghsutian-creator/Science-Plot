@@ -23,6 +23,7 @@ class Service(Protocol):
     def export(self, plot: Path, *, handoff: dict[str, Any] | None = None) -> dict[str, Any]: ...
     def rollback(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
     def create(self, request: dict[str, Any], *, project: Path | None = None) -> dict[str, Any]: ...
+    def append_project_file_xy(self, path: Path, request: dict[str, Any], *, expected_generation: str) -> dict[str, Any]: ...
     def deliver(self, request: dict[str, Any]) -> dict[str, Any]: ...
     def decide(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
 
@@ -86,6 +87,7 @@ def validate_call(value: Any) -> tuple[str | int, str, dict[str, Any]]:
 def validate_params(method: str, params: dict[str, Any]) -> None:
     fields: dict[str, tuple[set[str], set[str]]] = {
         "project.open": ({"target"}, {"target", "figure_id", "description"}),
+        "project.file-append": ({"target", "request", "expected_generation"}, {"target", "request", "expected_generation"}),
         "plot.create": ({"request"}, {"request", "project"}),
         "plot.deliver": ({"request"}, {"request"}),
         "plot.describe": ({"plot"}, {"plot", "description"}),
@@ -106,7 +108,7 @@ def validate_params(method: str, params: dict[str, Any]) -> None:
         issues.append({"path": "/params", "constraint": "required", "missing": sorted(required - params.keys())})
     if params.keys() - allowed:
         issues.append({"path": "/params", "constraint": "additionalProperties", "allowed": sorted(allowed)})
-    for key in ("target", "plot", "figure_id", "project"):
+    for key in ("target", "plot", "figure_id", "project", "expected_generation"):
         if key in params and (not isinstance(params[key], str) or not params[key].strip()):
             issues.append({"path": f"/params/{key}", "constraint": "nonempty_string"})
         elif key in {"target", "plot", "project"} and key in params and not Path(params[key]).is_absolute():
@@ -141,6 +143,9 @@ def _invoke_validated(service: Service, method: str, params: dict[str, Any]) -> 
         if "description" in params:
             return service.open(target, figure_id=params.get("figure_id"), description=params["description"])
         return service.open(target, figure_id=params.get("figure_id"))
+    if method == "project.file-append":
+        return service.append_project_file_xy(Path(params["target"]), params["request"],
+                                              expected_generation=params["expected_generation"])
     if method == "plot.create":
         return (service.create(params["request"], project=Path(params["project"]))
                 if "project" in params else service.create(params["request"]))

@@ -260,6 +260,7 @@ class ProjectFileSession:
         self.path = path
         self.store = store
         self.project_id = manifest.project_id
+        self.opened_generation = manifest.generation
         self._version = version
         self._pending: _Candidate | None = None
         self._closed = False

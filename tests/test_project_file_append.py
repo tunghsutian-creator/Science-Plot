@@ -190,3 +190,84 @@ def test_append_does_not_overwrite_an_archive_saved_after_it_opened(ordinary_arc
         assert archive.read_bytes() == latest
         current = service.open(archive)
         assert current["plot_id"] == first_id and current["revision"] == 2
+
+
+@pytest.mark.comprehensive
+@pytest.mark.parametrize("writer", ["cli", "daily"])
+def test_public_append_uses_observed_generation_and_opens_new_plot(ordinary_archive, writer):
+    import os
+    import signal
+    import subprocess
+    import sys
+
+    import anyio
+    from mcp import Client
+    from socket_fixture_helpers import socket_directory
+    from test_mcp_stdio import _call, _parameters
+
+    from sciplot_core._paths import REPO_ROOT
+    from sciplot_core.plot_protocol.paths import read_owner
+
+    archive, first_id, incoming, request = ordinary_archive
+    request_file = archive.parent / "append.json"
+
+    with socket_directory(prefix="sp-append-", dir="/tmp") as directory:
+        socket = Path(directory) / "engine.sock"
+        env = {**os.environ, "SCIPLOT_PYTHON": sys.executable, "SCIPLOT_ENGINE_SOCKET": str(socket)}
+
+        def cli(*arguments, fails=False):
+            run = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "plot", *map(str, arguments), "--json"],
+                                 env=env, cwd=archive.parent, capture_output=True, text=True, timeout=60, check=False)
+            assert run.returncode == int(fails), run.stdout + run.stderr
+            return json.loads(run.stdout)
+
+        def cli_append(payload, generation, *, fails=False):
+            request_file.write_text(json.dumps(payload), encoding="utf-8")
+            return cli("append", archive.name, "--request", request_file, "--expected-generation", generation, fails=fails)
+
+        parameters = _parameters(cli=True, profile="daily")
+        parameters.env = {**(parameters.env or {}), **env}
+
+        async def scenario():
+            async with Client(parameters, read_timeout_seconds=60) as client:
+                original = cli("open", archive.name, "--scope", "summary")
+                target = {"target": str(archive), "description": {"scope": "summary"}}
+                assert original == await _call(client, "sciplot_project_open", target)
+                generation = original["generation"]
+                call = {"target": str(archive), "expected_generation": generation, "request": request}
+                unchanged = archive.read_bytes()
+                unresolved = {"idempotency_key": "unresolved", "source": str(incoming)}
+                if writer == "cli":
+                    rejected = cli_append(unresolved, generation, fails=True)
+                    assert rejected["reason_code"] == "project_file_append_unsupported"
+                else:
+                    rejected = await client.call_tool("sciplot_project_file_append", {**call, "request": unresolved})
+                    assert rejected.is_error and rejected.structured_content["error"]["code"] == "project_file_append_unsupported"
+                assert archive.read_bytes() == unchanged
+
+                saved = (cli_append(request, generation) if writer == "cli"
+                         else await _call(client, "sciplot_project_file_append", call))
+                assert saved["status"] == "saved" and saved["generation"] != generation
+                assert saved["plot_id"] != first_id and saved["project_id"] == original["project_id"]
+                assert saved["next_step"]["action"] == "project.open"
+                new_figure = await _call(client, "sciplot_project_open", saved["next_step"]["arguments"])
+                assert all(new_figure[key] == saved[key] for key in ("plot_id", "revision", "scientific_hash", "generation"))
+                assert cli("open", archive.name, "--figure", saved["plot_id"]) == new_figure
+                assert cli("open", archive.name, "--figure", first_id) == {**original, "generation": saved["generation"]}
+                selection = await client.call_tool("sciplot_project_open", target)
+                assert selection.is_error and selection.structured_content["repair"]["generation"] == saved["generation"]
+
+                published = archive.read_bytes()
+                stale = cli_append({**request, "idempotency_key": "new-stale-key"}, generation, fails=True)
+                assert stale["reason_code"] == "project_file_generation_conflict"
+                incoming.unlink()
+                replay = (await _call(client, "sciplot_project_file_append", call) if writer == "cli"
+                          else cli_append(request, generation))
+                assert replay == {**saved, "status": "already_saved"}
+                assert archive.read_bytes() == published
+
+        try:
+            anyio.run(scenario)
+        finally:
+            if socket.exists():
+                os.kill(read_owner(socket)["pid"], signal.SIGTERM)

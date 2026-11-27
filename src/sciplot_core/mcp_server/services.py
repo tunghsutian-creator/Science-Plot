@@ -38,6 +38,7 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         return composition_capabilities() if name == "sciplot_compose_capabilities" else compose(arguments["request"])
     semantic_methods = {
         "sciplot_project_open": "project.open", "sciplot_plot_describe": "plot.describe",
+        "sciplot_project_file_append": "project.file-append",
         "sciplot_plot_create": "plot.create", "sciplot_plot_patch": "plot.patch",
         "sciplot_plot_intent": "plot.intent",
         "sciplot_plot_resume": "plot.resume",

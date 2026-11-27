@@ -65,6 +65,7 @@ def test_relocated_project_file_opens_read_only_in_cli_and_daily_mcp(tmp_path):
                 "SCIPLOT_VEUSZ_ROOT": str(root / "absent-renderer")}
     expected = {"kind": "sciplot_project_file_summary", "version": 1, "read_only": True,
                 "project_file": str(moved), "project_id": snapshot["project_id"],
+                "generation": receipt.generation,
                 "edit_targets": {
                     "axis:x": {"kind": "axis", "label": "Frequency 乙 (Hz)", "properties": ["axis.label", "axis.ticks"]},
                     "axis:yl": {"kind": "axis", "label": "Modulus (Pa)", "properties": ["axis.label", "axis.ticks"]},
@@ -91,6 +92,7 @@ def test_relocated_project_file_opens_read_only_in_cli_and_daily_mcp(tmp_path):
     assert bad_selection["repair"] == repair
     assert repair["action"] == "select_figure"
     assert repair["project_file"] == str(moved) and repair["project_id"] == snapshot["project_id"]
+    assert repair["generation"] == receipt.generation
     choices = {item["plot_id"]: item for item in repair["figures"]}
     assert set(choices) == {item["plot_id"] for item in figures}
     selected_arguments = choices[selected["plot_id"]]["open_arguments"]

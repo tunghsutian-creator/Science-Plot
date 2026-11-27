@@ -19,7 +19,7 @@ _DAILY_TOOLS = frozenset({
     "capabilities", "task_capabilities", "task_start", "task_continue",
     "task_edit", "task_inspect", "task_table_region", "task_find", "task_resume",
     "project_open", "project_legacy_redraw", "project_legacy_convert", "project_inspect",
-    "project_bundle_export", "project_bundle_import", "project_save_as", "plot_describe", "plot_patch", "plot_intent",
+    "project_bundle_export", "project_bundle_import", "project_save_as", "project_file_append", "plot_describe", "plot_patch", "plot_intent",
     "plot_decide", "plot_resume", "plot_export", "plot_deliver", "preview", "annotation_inspect", "export",
     "compose_capabilities", "compose", "pdf_review_create", "pdf_review_read", "read_result",
 })
@@ -39,6 +39,12 @@ _DAILY_CONTRACTS: dict[str, tuple[str, dict[str, Any], str]] = {
     "sciplot_plot_decide": (
         "request", {"type": "object", "minProperties": 1},
         "Use the current decision or recovery request returned by the plot owner, with its exact guard fields. Do not invent a decision or accept an unreviewed preview.",
+    ),
+    "sciplot_project_file_append": (
+        "request",
+        {"type": "object", "required": ["idempotency_key", "template_definition", "data_binding", "rule_id", "storage"],
+         "properties": {"rule_id": {"const": "ordinary_xy"}, "storage": {"const": "project_store_v2"}}},
+        "Use the confirmed ordinary XY task's frozen managed_request from its task.json. Keep the request and idempotency_key unchanged on retry.",
     ),
 }
 
@@ -135,8 +141,12 @@ def tool_definitions(profile: ToolProfile = "expert") -> list[Tool]:
     semantic_plot = {"plot": {**semantic_path, "description": "Exact absolute plot target returned in plot_objects or project_open: a document directory or a supported bound native figure VSZ."}}
     add("plot_deliver", "Package an ordered list of exact current ManagedPlot revisions into a new native-snapshot delivery and ZIP. Reuses per-plot audited export and native Save, retains original source bytes, reports partial completion and resumes the identical request. Never replaces an existing destination or claims a portable ManagedPlot registry. Local semantic continuation and independent native editing remain distinct.",
         {"request": managed_delivery_schema()}, ["request"], idempotent=True)
-    add("project_open", "Open one existing saved figure. A known ManagedPlot or supported bound native suite object advertises summary/edit scopes and legal deltas in object_operations. A multi-figure suite requires figure_id or its exact returned VSZ. A .sciplot file opens with a read-only summary of exact plot_intent targets including eligible ordinary XY curves; use figure_id if ambiguous. Archived legacy figures open read-only and require conversion for newer editing features. Unknown authority uses full open. Does not overwrite or promote native coverage.",
+    add("project_open", "Open one existing saved figure. A known ManagedPlot or supported bound native suite object advertises summary/edit scopes and legal deltas in object_operations. A multi-figure suite requires figure_id or its exact returned VSZ. A .sciplot file opens with a read-only summary containing its current generation and exact plot_intent targets including eligible ordinary XY curves. If ambiguous, the selection reply includes the generation and exact figure IDs. Archived legacy figures open read-only and require conversion for newer editing features. Unknown authority uses full open. Does not overwrite or promote native coverage.",
         {"target": semantic_path, "figure_id": string, "description": description}, ["target"], idempotent=True)
+    add("project_file_append", "Append one independent figure to an existing .sciplot file. Use the confirmed ordinary XY task's frozen managed_request and the generation from project_open. A retry of the same request returns its saved plot. Open the new figure with next_step.arguments.",
+        {"target": {**semantic_path, "description": "Exact existing .sciplot file."},
+         "request": create_schema(), "expected_generation": {**string, "description": "Generation returned by project_open for this file."}},
+        ["target", "request", "expected_generation"], idempotent=True, destructive=True)
     legacy_target = {"target": semantic_path, "output_dir": semantic_path, "figure_id": string}
     add("project_legacy_redraw", "Redraw an exact archived VSZ without changing it. Use a new local output directory outside the original project; formats default to PDF. The result remains read-only.",
         {**legacy_target, "formats": {"type": "array", "items": string, "minItems": 1, "uniqueItems": True}},
