@@ -223,6 +223,35 @@ def test_optional_instrument_units_are_not_assumed(tmp_path):
         read_tts_blocks(path)
 
 
+def test_duplicate_tts_evidence_never_rebinds_to_the_last_column(tmp_path):
+    request = _request(tmp_path)
+    path = Path(request["frequency_source"])
+    selected = path.read_text(encoding="utf-16")
+    decoy = _block("Decoy", 180, point_count=2, frequency_scan=True).splitlines()
+    for index, line in enumerate(decoy):
+        if line.startswith("Interval data:"):
+            decoy[index] += "\tTemperature"
+        elif "[°C]" in line:
+            decoy[index] += "\t[°C]"
+        elif line.startswith(("\t1\t", "\t2\t")):
+            decoy[index] += "\t190.2"
+    path.write_text("\n".join(decoy) + "\n" + selected, encoding="utf-16")
+    original = path.read_bytes()
+
+    # The excluded block cannot borrow a second measured temperature; the
+    # selected block still uses its own untouched physical rows and units.
+    result = analyze_tts_request(request)
+    block = result["frequency_samples"][0]["block"]
+    assert block["actual_temperature_C"]["mean"] == pytest.approx(210.2)
+    assert block["points"][0]["temperature_C"] == pytest.approx(210.2)
+    assert block["points"][0]["source_row"] > 10
+    failure = result["excluded_blocks"][0]["reason"]
+    assert "Ambiguous TTS temperature at original row 6, columns 3 and 11" in failure
+    with pytest.raises(ValueError, match="Ambiguous TTS temperature"):
+        read_tts_blocks(path, selected_tests={"Decoy"})
+    assert path.read_bytes() == original
+
+
 def test_source_drift_is_rejected(tmp_path, monkeypatch):
     import sciplot_core.semantic_sources.rheology_tts_source as owner
 

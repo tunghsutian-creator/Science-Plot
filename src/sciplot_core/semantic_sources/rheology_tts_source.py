@@ -109,7 +109,21 @@ def _read_tts_interval(
 ) -> dict[str, Any]:
     i = int(interval.index[0])
     headers = [clean_text(v) for v in interval.iloc[0]]
-    indices = {token(header_quantity_text(v)): j for j, v in enumerate(headers)}
+    fields = {
+        "pointno", "angularfrequency", "frequency", "storagemodulus", "lossmodulus",
+        "temperature", "shearstrain", "torque", "lossfactor", "status",
+    }
+    indices: dict[str, int] = {}
+    for column, header in enumerate(headers):
+        field = token(header_quantity_text(header))
+        if field not in fields:
+            continue
+        if field in indices:
+            raise ValueError(
+                f"Ambiguous TTS {field} at original row {i + 1}, "
+                f"columns {indices[field] + 1} and {column + 1} in {path}."
+            )
+        indices[field] = column
     frequency_columns = {"angularfrequency", "frequency"} & indices.keys()
     required = {"pointno", "storagemodulus", "lossmodulus"}
     if not required <= indices.keys() or len(frequency_columns) != 1:
