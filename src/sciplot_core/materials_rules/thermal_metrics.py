@@ -19,15 +19,21 @@ def _dsc_metrics(source_path: Path | pd.DataFrame) -> list[dict[str, Any]]:
     )
     rows: list[dict[str, Any]] = []
     for sample, data in series:
-        finite = (
-            data.replace([np.inf, -np.inf], np.nan)
-            .dropna()
-            .sort_values("x", kind="stable")
-            .drop_duplicates(subset="x", keep="last")
-        )
+        finite = data.replace([np.inf, -np.inf], np.nan).dropna()
         suffix = "" if len(series) == 1 else f"[{sample}]"
+        temperatures = finite["x"].to_numpy(dtype=float)
+        steps = np.diff(temperatures)
+        reason = ""
         if len(finite) < 3:
             reason = "At least three finite temperature/heat-flow points are required."
+        elif not (np.all(steps > 0) or np.all(steps < 0)):
+            # Temperature does not identify a row in a thermal cycle or hold.
+            # Keep the acquired curve and require a single scan for descriptors.
+            reason = (
+                "Temperature reverses or repeats in acquisition order; "
+                "select a single heating or cooling segment for analysis."
+            )
+        if reason:
             rows.append(
                 _metric(
                     f"maximum_absolute_heat_flow_slope_temperature_C{suffix}",
@@ -47,7 +53,6 @@ def _dsc_metrics(source_path: Path | pd.DataFrame) -> list[dict[str, Any]]:
                 )
             )
             continue
-        temperatures = finite["x"].to_numpy(dtype=float)
         heat_flow = finite["y"].to_numpy(dtype=float)
         slope = np.gradient(heat_flow, temperatures)
         slope_index = int(np.nanargmax(np.abs(slope)))
