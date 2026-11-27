@@ -152,11 +152,16 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
     assert shared["command"].count(timestamp_node) == 1
     policy_node = "tests/test_repository_policy.py::test_distribution_policy_changes_select_policy_regressions"
     assert shared["command"].count(policy_node) == 1
-    assert timestamp_node not in ci_targets
-    assert not set(CHEAP_SOURCE_TARGETS) & set(ci_targets[6:])
+    assert ci_targets[:9] == [
+        sys.executable, "-m", "pytest", "-q", "-m", "focused",
+        "-p", "sciplot_core.verification.public_stage_selection", "--sciplot-omit-shared-contracts",
+    ]
+    owner_selectors = set(ci_targets[9:])
+    assert timestamp_node not in owner_selectors
+    assert not set(CHEAP_SOURCE_TARGETS) & owner_selectors
     declared = {target for owner in ci_plan["owners"] for target in owner["pytest_targets"]}
-    covered = {*shared["command"][4:], *ci_targets[6:]}
-    assert set(ci_targets[6:]) <= declared
+    covered = {*shared["command"][4:], *owner_selectors}
+    assert owner_selectors <= declared
     assert all(any(target == selector or target.startswith(selector + "::") for selector in covered)
                for target in declared)
     timestamp_plan = build_changed_verification_plan(["tests/test_iso_timestamps.py"], repo_root=ROOT)
