@@ -168,35 +168,36 @@ def _write_veusz_document(
         width_mm=width,
         height_mm=height,
     )
-    render_options = _apply_categorical_box_aspect_width(
-        render_options,
-        series,
-        axis_contract=axis_contract,
-        template_id=template_id,
-    )
     if template_id in {"box", "box_strip"}:
+        # Only boxes change their width and category positions after the first pass.
+        render_options = _apply_categorical_box_aspect_width(
+            render_options,
+            series,
+            axis_contract=axis_contract,
+            template_id=template_id,
+        )
         series = _reindex_categorical_series(
             series,
             render_options=render_options,
             source_bindings=axis_info.get("source_bindings"),
         )
-    categorical_contract = _categorical_plot_contract(
-        series,
-        template_id=template_id,
-        render_options=render_options,
-        source_bindings=axis_info.get("source_bindings"),
-    )
-    axis_contract, visual_extent_diagnostics = _expand_axis_for_visual_extents(
-        base_axis_contract,
-        request=request,
-        render_options=render_options,
-        template_id=template_id,
-        series=series,
-        categorical_contract=categorical_contract,
-        style=style,
-        width_mm=width,
-        height_mm=height,
-    )
+        categorical_contract = _categorical_plot_contract(
+            series,
+            template_id=template_id,
+            render_options=render_options,
+            source_bindings=axis_info.get("source_bindings"),
+        )
+        axis_contract, visual_extent_diagnostics = _expand_axis_for_visual_extents(
+            base_axis_contract,
+            request=request,
+            render_options=render_options,
+            template_id=template_id,
+            series=series,
+            categorical_contract=categorical_contract,
+            style=style,
+            width_mm=width,
+            height_mm=height,
+        )
     render_options = dict(render_options)
     render_options["_visual_extent_axis_diagnostics"] = visual_extent_diagnostics
     if visual_extent_diagnostics.get("expanded_axes"):
