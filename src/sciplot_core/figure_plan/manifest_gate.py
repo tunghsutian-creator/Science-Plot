@@ -7,6 +7,7 @@ from typing import Any
 from sciplot_core.figure_plan.constants import REQUIRED_FIGURE_PLAN_RULE_IDS
 from sciplot_core.figure_plan.artifact_locations import artifact_is_file
 from sciplot_core.figure_plan.execution import figure_plan_gate
+from sciplot_core.figure_plan.plan import ResolvedFigurePlan
 from sciplot_core.figure_plan.payload_types import (
     FigurePlanManifestGatePayload,
     FigurePlanManifestGateValidPayload,
@@ -17,7 +18,7 @@ from sciplot_core.figure_plan.payload_types import (
 def figure_plan_manifest_gate(
     manifest: dict[str, Any],
 ) -> FigurePlanManifestGatePayload | None:
-    """Verify that every durable manifest projection carries one completed plan."""
+    """Verify one durable completed run; delivery verifies live file bytes separately."""
 
     declared_rule_ids = _manifest_rule_ids(manifest)
     applicable_rule_ids = declared_rule_ids & REQUIRED_FIGURE_PLAN_RULE_IDS
@@ -65,9 +66,17 @@ def figure_plan_manifest_gate(
             for path in outcome["artifacts"]
         ),
     }
+    structural_complete = bool(gate["complete"] and all(consistency.values()))
+    exports_verified = True
+    if structural_complete and result.get("kind") == "sciplot_studio_export_result":
+        from sciplot_core.delivery.plan_binding import studio_outcome_exports_verified
+
+        exports_verified = studio_outcome_exports_verified(
+            ResolvedFigurePlan.from_payload(plan_payload), manifest
+        )
     manifest_gate: FigurePlanManifestGateValidPayload = {
         "valid": True,
-        "complete": bool(gate["complete"] and all(consistency.values())),
+        "complete": structural_complete and exports_verified,
         "plan_id": gate["plan_id"],
         "plan_sha256": gate["plan_sha256"],
         "source_sha256": gate["source_sha256"],
@@ -79,7 +88,9 @@ def figure_plan_manifest_gate(
     }
     if not manifest_gate["complete"]:
         manifest_gate["reason"] = (
-            "resolved_figure_plan_projection_mismatch"
+            "resolved_figure_plan_export_evidence_mismatch"
+            if not exports_verified
+            else "resolved_figure_plan_projection_mismatch"
             if not all(consistency.values())
             else "resolved_figure_plan_incomplete"
         )

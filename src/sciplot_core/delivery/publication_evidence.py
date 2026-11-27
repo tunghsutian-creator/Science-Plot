@@ -12,26 +12,31 @@ from sciplot_core.delivery.contracts import (
 from sciplot_core.figure_plan.artifact_locations import artifact_path_key
 
 
+def qa_artifact_observations(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Index the run's format-specific QA observations without reopening artifacts."""
+    qa_value = manifest.get("qa")
+    qa = qa_value if isinstance(qa_value, dict) else {}
+    observations: dict[str, dict[str, Any]] = {}
+    for key, fmt in (("pdfs", "pdf"), ("tiffs", "tiff_300"), ("pngs", None), ("svgs", "svg")):
+        reports = qa.get(key)
+        if isinstance(reports, list):
+            for report in reports:
+                if isinstance(report, dict) and report.get("path") and report.get("sha256"):
+                    path = artifact_path_key(str(report["path"]))
+                    observations[path] = {} if path in observations else {
+                        **report, "export_format": fmt or report.get("export_format"),
+                    }
+    return observations
+
+
 def _qa_hash_evidence(
     manifest: dict[str, Any], figure_records: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    qa_value = manifest.get("qa")
-    qa_payload = qa_value if isinstance(qa_value, dict) else {}
-    qa_hashes = {
-        artifact_path_key(str(report.get("path"))): str(
-            report.get("sha256")
-        )
-        for report_group in (qa_payload.get(key) for key in ("pdfs", "tiffs", "pngs", "svgs"))
-        if isinstance(report_group, list)
-        for report in report_group
-        if isinstance(report, dict) and report.get("path") and report.get("sha256")
-    }
+    observations = qa_artifact_observations(manifest)
     return [
         {
             "source": record["source"],
-            "qa_sha256": qa_hashes.get(
-                artifact_path_key(record["source"])
-            ),
+            "qa_sha256": observations.get(artifact_path_key(record["source"]), {}).get("sha256"),
             "source_sha256": record.get("source_sha256"),
             "delivery_sha256": record.get("delivery_sha256"),
         }

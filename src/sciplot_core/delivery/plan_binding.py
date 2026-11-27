@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal, NotRequired, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict
 
 from sciplot_core.figure_plan.plan import ResolvedFigurePlan
 from sciplot_core.figure_plan.artifact_locations import artifact_path_key
@@ -112,6 +112,61 @@ def plan_source_figure_ids(plan: ResolvedFigurePlan) -> dict[str, str]:
         for artifact_path in current_paths:
             bindings[artifact_path] = outcome.figure_id
     return bindings
+
+
+def studio_outcome_exports_verified(
+    plan: ResolvedFigurePlan, manifest: dict[str, Any],
+) -> bool:
+    """Separate structural outcome paths from the Studio run's decoded exports."""
+    from sciplot_core.delivery.publication_evidence import qa_artifact_observations
+
+    qa = manifest.get("qa")
+    result = manifest["result"]
+    exports = result.get("exports")
+    documents = result.get("veusz_document_hashes")
+    if (not isinstance(qa, dict) or qa.get("kind") != "sciplot_artifact_qa"
+            or qa.get("status") != "passed" or not isinstance(exports, list)
+            or not isinstance(documents, dict)):
+        return False
+    try:
+        bindings = plan_source_figure_ids(plan)
+    except ValueError:
+        return False
+    expected = {path: figure_id for path, figure_id in bindings.items()
+                if export_format_from_path(path) in CANONICAL_EXPORT_FORMATS}
+    document_by_figure = {figure_id: path for path, figure_id in bindings.items()
+                          if Path(path).suffix.casefold() == ".vsz"}
+    document_hashes = {artifact_path_key(path): digest for path, digest in documents.items()}
+    observations = qa_artifact_observations(manifest)
+    if set(observations) != set(expected) or len(exports) != len(expected):
+        return False
+    seen: set[str] = set()
+    for record in exports:
+        if not isinstance(record, dict) or not all(
+            isinstance(record.get(key), str) and record[key]
+            for key in ("path", "document", "sha256", "document_sha256")
+        ):
+            return False
+        size = record.get("size_bytes")
+        if type(size) is not int or size <= 0:
+            return False
+        path = artifact_path_key(record["path"])
+        figure_id = record.get("figure_id")
+        if len(plan.tasks) == 1 and figure_id == "primary":
+            # The current single-document Studio exporter labels it primary.
+            figure_id = plan.primary_figure_id
+        document = artifact_path_key(record["document"])
+        observed = observations.get(path, {})
+        if (path in seen or path not in expected or figure_id != expected[path]
+                or document != document_by_figure.get(figure_id)
+                or record["document_sha256"] != document_hashes.get(document)
+                or record.get("format") != export_format_from_path(path)
+                or record.get("format") != observed.get("export_format")
+                or record["sha256"] != observed.get("sha256")
+                or size != observed.get("size_bytes")):
+            return False
+        seen.add(path)
+    return True
 
 
 def delivery_records_match_plan(

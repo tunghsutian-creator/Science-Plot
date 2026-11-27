@@ -988,3 +988,82 @@ def test_manifest_rule_must_match_embedded_plan(
     assert gate["valid"] is True
     assert gate["complete"] is False
     assert gate["projection_consistency"]["manifest_rule_matches"] is False
+
+
+
+def test_studio_package_requires_decoded_exports_bound_to_the_selected_outcome(tmp_path):
+    from hashlib import sha256
+
+    import pymupdf
+    from PIL import Image
+
+    from sciplot_core.delivery.plan_binding import figure_artifact_hashes_current
+    from sciplot_core.qa import run_qa
+    from sciplot_core.study_model import build_output_package_contract
+
+    task = FigureTask(figure_id="impact", order=1, title="Impact", x_metric="sample",
+                      y_metric="impact_strength", template="point_line",
+                      artifact_stem="impact", document_stem="impact")
+    plan = ResolvedFigurePlan.planned(rule_id="impact_metric", selection_policy="single_render_request",
+                                     primary_figure_id=task.figure_id, tasks=(task,))
+    output = tmp_path / "run"
+    figures = output / "figures"
+    studio = output / "studio"
+    for directory in (figures, studio):
+        directory.mkdir(parents=True)
+    vsz, pdf, tiff = studio / "document.vsz", figures / "impact.pdf", figures / "impact_300dpi.tiff"
+    vsz.write_text("# Veusz binding fixture (not a native render audit)")
+    with pymupdf.Document() as document:
+        page = document.new_page(width=48, height=24)
+        page.draw_line((2, 2), (46, 22))
+        document.save(pdf)
+    with Image.new("RGB", (200, 100), "navy") as image:
+        image.save(tiff, format="TIFF", dpi=(300, 300))
+
+    def digest(path):
+        return sha256(path.read_bytes()).hexdigest()
+
+    completed = merge_figure_outcomes(plan, outcomes_for_artifact_map(plan, {
+        task.figure_id: [str(path) for path in (vsz, pdf, tiff)],
+    }))
+    assert completed.complete  # Structural only. Its answer never changes below.
+    payload = completed.to_payload()
+    for filename in ("request_snapshot.json", "manifest.json", "review.html", "revision_brief.md"):
+        (output / filename).write_text("{}")
+
+    exports = [{"format": fmt, "path": str(path), "sha256": digest(path), "size_bytes": path.stat().st_size,
+                "figure_id": task.figure_id, "document": str(vsz), "document_sha256": digest(vsz)}
+               for path, fmt in ((pdf, "pdf"), (tiff, "tiff_300"))]
+    manifest = {
+        "figures": [str(pdf), str(tiff)],
+        "resolved_figure_plan": payload,
+        "result": {"kind": "sciplot_studio_export_result", "resolved_figure_plan": payload,
+                   "exports": exports, "veusz_document_hashes": {str(vsz): digest(vsz)}},
+        "study_model": {"run": {"resolved_figure_plan": payload}},
+        "qa": run_qa(output),
+    }
+    package = build_output_package_contract(output, manifest=manifest)
+    assert package["complete"]
+    assert figure_plan_manifest_gate(manifest)["complete"]
+
+    delivered = tmp_path / "delivered.pdf"
+    delivered.write_bytes(pdf.read_bytes())
+    live_records = [{"source": str(pdf), "path": str(delivered), "source_sha256": digest(pdf),
+                     "delivery_sha256": digest(delivered), "copy_hash_matches": True}]
+    assert figure_artifact_hashes_current(live_records)
+
+    exports[0]["figure_id"] = "another_figure"
+    assert not build_output_package_contract(output, manifest=manifest)["complete"]
+    exports[0]["figure_id"] = task.figure_id
+
+    pdf.write_bytes(b"Not a PDF, even though the renderer returned a structurally complete outcome")
+    # Sealed old run evidence did not approve the now-changed source at handoff.
+    assert not figure_artifact_hashes_current(live_records)
+    with pytest.raises(ValueError, match="Cannot read the declared PDF artifact"):
+        run_qa(output)
+    exports[0].update(sha256=digest(pdf), size_bytes=pdf.stat().st_size)
+    # Borrowing the old successful QA for the same path cannot approve the new bytes.
+    gate = figure_plan_manifest_gate(manifest)
+    assert gate["valid"] and not gate["complete"]
+    assert gate["reason"] == "resolved_figure_plan_export_evidence_mismatch"
+    assert not build_output_package_contract(output, manifest=manifest)["complete"]
