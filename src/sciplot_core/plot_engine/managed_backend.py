@@ -150,7 +150,7 @@ class ManagedBackend:
         original = sources[0]['path'] if sources else name
         return existing_file_sha256(source_input_path(canonical, original, sha) if canonical is not None else Path(name))
 
-    def _ensure(self, binding: dict[str, Any], *, verify_existing: bool = True) -> tuple[dict[str, Any], Path]:
+    def _bound_ir(self, binding: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         canonical = read_canonical(binding)
         require_inputs(canonical)
         root = Path(binding["root"])
@@ -161,6 +161,10 @@ class ManagedBackend:
         ir_path = Path(binding["ir_path"])
         if not exists(ir_path):
             write(ir_path, ir)
+        return canonical, ir
+
+    def _ensure(self, binding: dict[str, Any], *, verify_existing: bool = True) -> tuple[dict[str, Any], Path]:
+        canonical, ir = self._bound_ir(binding)
         native, _ = self._materialize_native(binding, canonical, ir, verify_existing=verify_existing)
         return ir, native
 
@@ -214,6 +218,16 @@ class ManagedBackend:
         require_inputs(canonical)
         return native, built
 
+    @staticmethod
+    def _copy_compiled_preview(native: Path, built: dict[str, Any], destination: Path) -> dict[str, Any]:
+        """Copy only the exact preview just compiled from these audited native bytes."""
+        image = built["preview"]
+        pixels = Path(image["path"]).read_bytes()
+        if sha256(pixels).hexdigest() != image["sha256"] or file_sha256(native) != built["document_sha256"]:
+            raise EngineError("managed_external_mutation", "The audited managed native document or preview changed before reuse.")
+        destination.write_bytes(pixels)
+        return {**image, "path": str(destination)}
+
     def preview(self, document: dict[str, Any], binding: dict[str, Any], new_document: dict[str, Any],
                 diff: list[dict[str, Any]], output: Path) -> dict[str, Any]:
         prepared = prepare_binding(Path(binding["root"]), new_document, output=Path(binding["output"]))
@@ -236,13 +250,7 @@ class ManagedBackend:
         else:
             # The compiler rendered these exact audited bytes in this invocation.
             # Keep the review image in its transaction directory as before.
-            image = built["preview"]
-            pixels = Path(image["path"]).read_bytes()
-            if sha256(pixels).hexdigest() != image["sha256"] or file_sha256(native) != built["document_sha256"]:
-                raise EngineError("managed_external_mutation", "The audited managed native document or preview changed before review.")
-            preview_path = output / "preview.png"
-            preview_path.write_bytes(pixels)
-            preview = {**built, "preview": {**image, "path": str(preview_path)}}
+            preview = {**built, "preview": self._copy_compiled_preview(native, built, output / "preview.png")}
         review: dict[str, Any] = {"scientific_audit": preview["scientific_audit"], "preview": preview.get("preview", preview),
                   "_managed_binding": candidate,
                   **{key: preview[key] for key in ("native_state_hash", "compiler_identity") if key in preview}}
@@ -331,6 +339,17 @@ class ManagedBackend:
             result["evidence_files"][str(ir_path)] = snapshot["sha256"]
 
     def render(self, binding: dict[str, Any], output: Path) -> dict[str, Any]:
-        ir, native = self._ensure(binding, verify_existing=False)
+        canonical, ir = self._bound_ir(binding)
+        native, built = self._materialize_native(binding, canonical, ir, verify_existing=False)
         output.mkdir(parents=True, exist_ok=True)
-        return self.compiler.render_ir(ir, native, output / "preview.png")
+        if built is None:
+            return self.compiler.render_ir(ir, native, output / "preview.png")
+
+        # The worker just audited the saved VSZ and ran the same PNG painter as
+        # render_ir. Preserve its public receipt and output directory, without
+        # commissioning a second inspection and painting of the same bytes.
+        return {"kind": "sciplot_document_preview", "version": 1, "status": "passed",
+                "document": {"path": str(native.resolve()), "sha256": built["document_sha256"]},
+                "preview": self._copy_compiled_preview(native, built, output.resolve() / "preview.png"),
+                **{key: built[key] for key in ("scientific_audit", "native_state_hash", "compiler_identity", "publication_qa")
+                   if key in built}}

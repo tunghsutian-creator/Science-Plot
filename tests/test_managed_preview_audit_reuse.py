@@ -91,6 +91,53 @@ def test_fresh_compile_preview_reuses_audited_bytes_only(tmp_path, monkeypatch):
     assert not (tmp_path / "review2" / "preview.png").exists()
 
 
+def test_managed_render_reuses_only_this_invocations_exact_compile(tmp_path, monkeypatch):
+    backend = object.__new__(managed_backend.ManagedBackend)
+    ir = managed_ir()
+    native, image = tmp_path / "document.vsz", tmp_path / "compile.png"
+    native.write_bytes(b"exact native document")
+    image.write_bytes(b"exact native preview")
+    receipt = {**_inspection(native), "native_state_hash": "a" * 64,
+               "compiler_identity": {"name": "native", "version": "2", "content_hash": "b" * 64},
+               "preview": {"path": str(image), "sha256": file_sha256(image), "width": 110, "height": 100}}
+    original_document, original_image = native.read_bytes(), image.read_bytes()
+    compile_result = receipt
+    monkeypatch.setattr(backend, "_bound_ir", lambda _: ({}, ir))
+    monkeypatch.setattr(backend, "_materialize_native",
+                        lambda *_args, **_kwargs: (native, compile_result))
+    backend.compiler = SimpleNamespace(render_ir=lambda *_: pytest.fail("A fresh compile already rendered the PNG"))
+
+    destination = tmp_path / "render" / "preview.png"
+    result = backend.render({}, destination.parent)
+    assert result == {
+        "kind": "sciplot_document_preview", "version": 1, "status": "passed",
+        "document": {"path": str(native), "sha256": file_sha256(native)},
+        "preview": {**receipt["preview"], "path": str(destination)},
+        **{key: receipt[key] for key in ("scientific_audit", "publication_qa", "native_state_hash",
+                                         "compiler_identity")},
+    }
+    assert destination.read_bytes() == original_image and native.read_bytes() == original_document
+
+    for path in (image, native):
+        original = path.read_bytes()
+        path.write_bytes(b"changed")
+        with pytest.raises(managed_backend.EngineError) as error:
+            backend.render({}, tmp_path / "stale")
+        assert error.value.reason_code == "managed_external_mutation"
+        assert not (tmp_path / "stale" / "preview.png").exists()
+        path.write_bytes(original)
+
+    # An existing or recovered candidate carries no current compile proof.
+    compile_result = None
+
+    def render_existing(observed_ir, observed_native, png):
+        assert (observed_ir, observed_native, png) == (ir, native, destination)
+        return result
+
+    backend.compiler.render_ir = render_existing
+    assert backend.render({}, destination.parent) == result
+
+
 @pytest.mark.parametrize("failure,code", [
     ("science", "external_mutation"), ("publication", "publication_qa_failed"),
 ])
