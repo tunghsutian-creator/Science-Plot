@@ -91,8 +91,10 @@ It still runs shared source checks, lint/type checks when selected, and whitespa
 checks. It reports the remaining owner checks, comprehensive lifecycle tests,
 private science and later gates separately. Use `--changed` for the broader
 owner checks or while adding tests that are not yet in the reviewed collection.
-Mixed changes outside the reviewed paths, deletions and shared contracts keep
-the broader owner checks; unknown owners still stop before running checks.
+Unreviewed changes, including a mixed scope that is not fully covered, return
+`BLOCKED` without running the broad suite. Run a short check for the changed
+behavior, or choose `--changed` explicitly for the broader owner route. Unknown
+owners still stop before running checks.
 
 An isolated native editor change runs the focused axis-description, stale revision
 and fixed-tick contracts through the changed-owner path. The two offscreen

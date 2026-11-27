@@ -112,14 +112,14 @@ def build_changed_verification_plan(
     matched_owners.sort(key=CHANGED_OWNERS.index)
     public_feedback = reviewed_feedback(paths, repo_root, unowned_paths, base=feedback_base,
                                        scope_validator=scope_validator)
-    public_nodes = (quick_public_nodes(public_feedback["targets"])
-                    if quick and public_feedback["targets"] else None)
+    public_nodes = quick_public_nodes(public_feedback["targets"]) if quick and public_feedback["targets"] else None
+    quick_blocked = quick and bool(matched_owners) and not unowned_paths and not public_nodes
     pytest_targets.update(public_feedback["targets"])
 
     python_paths = [
         path for path in paths if path.endswith(".py") and (repo_root / path).is_file()
     ]
-    checks = [] if unowned_paths else _planned_checks(
+    checks = [] if unowned_paths or quick_blocked else _planned_checks(
         python_paths=python_paths,
         pytest_targets=sorted(pytest_targets),
         mypy_required=any(owner.mypy_required for owner in matched_owners),
@@ -131,7 +131,12 @@ def build_changed_verification_plan(
     return {
         "kind": "sciplot_changed_verification",
         "version": 1,
-        "status": "failed" if unowned_paths else "planned" if checks else "NO_TESTS",
+        "status": "failed" if unowned_paths else "BLOCKED" if quick_blocked else "planned" if checks else "NO_TESTS",
+        **({"error": {
+            "reason_code": "quick_scope_unverified",
+            "message": ("No reviewed public-focused behavior covers this change. "
+                        "Run a targeted check for the changed behavior, or use --changed for broader owner checks."),
+        }} if quick_blocked else {}),
         "comparison": dict(comparison) if comparison else {
             "base": "HEAD",
             "includes": ["staged", "unstaged", "untracked"],
@@ -151,7 +156,7 @@ def build_changed_verification_plan(
         "checks": checks,
         **({"quick_scope": {"profile": "public-focused",
                             "deferred": ["remaining_owner_checks", "public_comprehensive", "private_science"]}}
-           if public_nodes is not None else {}),
+           if public_nodes else {}),
         "required_later": {
             "handoff": _unique_gates(owner.handoff_gates for owner in matched_owners),
             "final_milestone": _unique_gates(
@@ -199,7 +204,7 @@ def run_changed_verification(
         )
         return payload
     payload.update(plan_only=plan_only, checks_executed=0, execution_target="current_worktree")
-    if payload["unowned_paths"] or payload["status"] == "NO_TESTS" or plan_only:
+    if payload["status"] != "planned" or plan_only:
         return payload
     evidence_directory = record if record is not None else reuse
     if evidence_directory is not None:

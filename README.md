@@ -694,8 +694,8 @@ not part of the current workflow.
 - [Architecture](docs/ARCHITECTURE.md) · [Development roadmap](DEVELOPMENT_ROADMAP.md)
 - [Report a bug or request a feature](https://github.com/tunghsutian-creator/Science-Plot/issues)
 
-For small code changes, run `skill/scripts/sciplot verify --quick` for the complete
-related focused checks and static gates. Add `--base main` to include committed
+For small code changes, run `skill/scripts/sciplot verify --quick` for reviewed
+short checks. If no short check covers the change, the command reports it as unverified. Add `--base main` to include committed
 branch changes or `--plan-only` to inspect selection. This is development feedback;
 the [development guide](skill/references/development.md) keeps full merge/release
 acceptance separate.

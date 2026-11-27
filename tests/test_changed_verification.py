@@ -1532,24 +1532,25 @@ def test_quick_verify_preserves_unknown_and_shared_owner_scope(path, monkeypatch
         return run_changed_verification(repo_root=REPO_ROOT, changed_paths=[path],
             command_runner=lambda command, _cwd: calls.append(list(command)) or _completed(command), **kwargs)
     monkeypatch.setattr(verification, "run_changed_verification", run)
-    assert cli.main(["verify", "--quick", "--json"]) == (1 if "unowned" in path else 0)
+    assert cli.main(["verify", "--quick", "--json"]) == 1
     payload = json.loads(capsys.readouterr().out)
     baseline = build_changed_verification_plan([path], repo_root=REPO_ROOT)
     for field in ("owners", "unowned_paths", "required_later"):
         assert payload[field] == baseline[field]
-    assert [check["command"] for check in payload["checks"]] == [check["command"] for check in baseline["checks"]]
-    assert calls == [check["command"] for check in baseline["checks"]]
+    assert payload["checks"] == calls == []
     if "unowned" not in path:
         assert "full_pytest" in payload["required_later"]["release"]
+        assert payload["status"] == "BLOCKED" and payload["checks_executed"] == 0
+        assert payload["error"]["reason_code"] == "quick_scope_unverified"
 
 
-    # One unreviewed or missing path keeps the existing conservative scope.
+    # A mixed or missing path does not claim the reviewed leaf covers the change.
     leaf = "src/sciplot_core/source_tables/curve_tables.py"
     for paths, root in (([leaf, path], REPO_ROOT), ([leaf], REPO_ROOT / "missing")):
         quick = build_changed_verification_plan(paths, repo_root=root, quick=True)
         changed = build_changed_verification_plan(paths, repo_root=root)
         assert "quick_scope" not in quick
-        assert quick["checks"] == changed["checks"]
+        assert quick["checks"] == [] and quick["status"] != "passed"
         assert quick["required_later"] == changed["required_later"]
 
 
@@ -1577,7 +1578,7 @@ def test_quick_human_output_reports_selection_actual_summary_and_feedback_limit(
     assert cli.main(["verify", "--quick"]) == 0
     output = capsys.readouterr().out
     assert "Quick development feedback only; this is not merge acceptance." in output
-    assert "Pytest tier: focused (may include bounded native checks); comprehensive lifecycle tests are deferred." in output
+    assert "Pytest tier: focused" not in output
     assert "Owners: changed_verification" in output
     assert "Declared pytest targets:" in output
     assert "Pytest final output: 4 passed in 0.10s" in output
@@ -1630,11 +1631,7 @@ def test_quick_human_output_reports_selection_actual_summary_and_feedback_limit(
     owner, = editor["owners"]
     assert owner["owner_id"] == "managed_native_plot_editor"
     assert owner["changed_paths"] == sorted([editor_path, editor_test])
-    assert not editor["unowned_paths"] and editor["status"] == "planned"
-    owner_command = next(c["command"] for c in editor["checks"] if c["check_id"] == "pytest_changed_owners")
-    assert "-m" in owner_command and "focused" in owner_command
-    assert editor_test in owner_command
-    assert "tests/test_current_view.py::test_fixed_ticks_conflict_is_atomic_and_same_property_can_restore_auto" in owner_command
+    assert not editor["unowned_paths"] and editor["status"] == "BLOCKED" and editor["checks"] == []
     assert editor["public_feedback"]["reason"] == "conservative_risk"
     assert "quick_scope" not in editor and editor["required_later"]["release"] == ["full_pytest"]
 

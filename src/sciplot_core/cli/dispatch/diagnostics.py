@@ -164,8 +164,6 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
                 if scope := payload.get("quick_scope"):
                     print("Pytest owner tier: public-focused (reviewed local worktree).")
                     print("Not run: " + ", ".join(scope["deferred"]) + ".")
-                else:
-                    print("Pytest tier: focused (may include bounded native checks); comprehensive lifecycle tests are deferred.")
             owner_ids = [owner["owner_id"] for owner in payload["owners"]]
             print("Owners: " + (", ".join(owner_ids) if owner_ids else "none"))
             print(f"Checks: {len(payload['checks'])}; base: {payload['comparison']['base']}")
