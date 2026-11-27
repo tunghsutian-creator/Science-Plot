@@ -228,7 +228,7 @@ class ProjectApplication(ManagedPlotApplication, CommandDispatch):
     @usecase
     def export(self, plot: Path, *, handoff: dict[str, Any] | None = None) -> dict[str, Any]:
         if handoff is not None:
-            return self.handoff_figure(plot, handoff)
+            return self.handoff_figure(plot, handoff, render_missing_formats=True)
         root = canonical_path(plot)
         with external_project_session(root):
             return self._export(root)

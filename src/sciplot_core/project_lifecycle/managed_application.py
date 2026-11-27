@@ -54,11 +54,13 @@ class ManagedPlotApplication:
     def handoff_figure(self, plot: Path, request: dict[str, Any], *,
                        before_install: "Callable[[FigureInstall], None] | None" = None,
                        installed: "FigureInstall | None" = None,
-                       rebuild_missing: Callable[[str], bool] | None = None) -> dict[str, Any]:
+                       rebuild_missing: Callable[[str], bool] | None = None,
+                       render_missing_formats: bool = False) -> dict[str, Any]:
         from .figure_handoff import handoff_figure
 
         return handoff_figure(canonical_path(plot), request, self.backend,
-                              before_install=before_install, installed=installed, rebuild_missing=rebuild_missing)
+                              before_install=before_install, installed=installed, rebuild_missing=rebuild_missing,
+                              render_missing_formats=render_missing_formats)
 
     @usecase
     def describe(self, plot: Path, *, description: dict[str, Any] | None = None) -> dict[str, Any]:

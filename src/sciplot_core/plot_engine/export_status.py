@@ -74,7 +74,11 @@ def sealed_publication(root: Path, head: dict[str, Any]) -> dict[str, Any] | Non
     path = root / "export-cache.json"
     if not exists(path):
         return None
-    cache = read(path)
+    return verify_publication(read(path), head)
+
+
+def verify_publication(cache: dict[str, Any], head: dict[str, Any]) -> dict[str, Any] | None:
+    """Verify the same byte seal for saved and private publications."""
     binding, exported, files = head["binding"], cache["export"], cache["artifact_files"]
     proof = exported.get("native_export_audit")
     if (not isinstance(proof, dict) or not proof.get("native_state_hash")

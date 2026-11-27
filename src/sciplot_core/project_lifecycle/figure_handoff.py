@@ -1,6 +1,7 @@
 """Copy only the requested files from one ready, current Managed publication."""
 
 from collections.abc import Callable
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 from stat import S_ISDIR, S_ISREG
@@ -17,7 +18,7 @@ from sciplot_core.plot_document.schema import figure_handoff_schema
 from sciplot_core.plot_document.validation import validate_wire
 from sciplot_core.plot_engine.backend import PlotBackend
 from sciplot_core.plot_engine.current import require_current
-from sciplot_core.plot_engine.export_status import sealed_publication
+from sciplot_core.plot_engine.export_status import sealed_publication, verify_publication
 from sciplot_core.plot_engine.managed_delivery_data import capture_plot_data, plotted_dataset_csvs
 from sciplot_core.plot_ir.figure_document import is_figure
 from sciplot_core.project_store.source_resolver import ProjectSourceResolver
@@ -74,7 +75,8 @@ def _installed_matches(out: Path, token: RevisionToken, result: dict[str, Any], 
 
 
 def _publication(root: Path, out: Path, request: dict[str, Any],
-                 backend: PlotBackend, *, cold_export: bool = False) -> tuple[RevisionToken, list[dict[str, str]] | _PlottedSeal | _EditableSeal]:
+                 backend: PlotBackend, *, cold_export: bool = False,
+                 private_publication: dict[str, Any] | None = None) -> tuple[RevisionToken, list[dict[str, str]] | _PlottedSeal | _EditableSeal]:
     with project_query(root):
         if not has_head(root):
             raise EngineError("figure_handoff_managed_required", "Select an exact current Managed v2 plot.")
@@ -98,7 +100,8 @@ def _publication(root: Path, out: Path, request: dict[str, Any],
         require_current(backend, binding)
         if cold_export and not exists(root / "export-cache.json"):
             raise EngineError("figure_handoff_cache_missing", "This committed figure has no disposable export cache.")
-        publication = sealed_publication(root, head) or {}
+        publication = (verify_publication(private_publication, head) if private_publication is not None
+                       else sealed_publication(root, head)) or {}
         if publication.get("ready_to_use") is True:
             if request["formats"] == ["editable_vsz"]:
                 return token, _EditableSeal(Path(binding["document"]), publication["document_sha256"])
@@ -115,11 +118,52 @@ def _publication(root: Path, out: Path, request: dict[str, Any],
                           action="plot.export", plot=str(root))
 
 
+def _render_missing_formats(root: Path, backend: PlotBackend, request: dict[str, Any],
+                            output: Path, *, extend: bool) -> dict[str, Any]:
+    with project_query(root):
+        head = load_head(root)
+        binding = head["binding"]
+        token = RevisionToken.of(head["document"])
+        if (token.plot_id, token.revision) != (request["plot_id"], request["revision"]):
+            raise EngineError("figure_handoff_publication_changed", "The selected revision changed before export.")
+        existing = []
+        if extend:
+            cached = sealed_publication(root, head)
+            if cached is None or cached.get("ready_to_use") is not True:
+                raise EngineError("figure_handoff_publication_changed", "The saved publication changed before export.")
+            existing = cached["exports"]
+        missing = tuple(fmt for fmt in ("pdf", "tiff_300")
+                        if fmt in request["formats"] and not any(record["format"] == fmt for record in existing))
+        render = getattr(backend, "export_selected", None)
+        if render is None or not Path(binding["document"]).is_file():
+            raise EngineError("figure_handoff_publication_unready", "The selected saved native figure is not available for rendering.")
+        try:
+            exported = render(binding, output, missing)
+        except (OSError, ValueError, RuntimeError) as exc:
+            raise EngineError("figure_handoff_publication_unready", "The selected native figure did not pass export checks.") from exc
+        if (len(exported["exports"]) != len(missing)
+                or {record["format"] for record in exported["exports"]} != set(missing)):
+            raise EngineError("figure_handoff_publication_unready", "The native renderer did not produce exactly the selected formats.")
+        files = {**exported["evidence_files"], **{record["path"]: record["sha256"] for record in existing}}
+        return {"export": {**exported, "exports": [*existing, *exported["exports"]]}, "artifact_files": files}
+
+
 def handoff_figure(root: Path, request: dict[str, Any], backend: PlotBackend, *,
                    before_install: Callable[[FigureInstall], None] | None = None,
                    installed: FigureInstall | None = None,
-                   rebuild_missing: Callable[[str], bool] | None = None) -> dict[str, Any]:
+                   rebuild_missing: Callable[[str], bool] | None = None,
+                   render_missing_formats: bool = False) -> dict[str, Any]:
     """Install a new visible delivery, or only verify one task's frozen installation."""
+    with ExitStack() as cleanup:
+        return _handoff_figure(root, request, backend, before_install=before_install, installed=installed,
+                               rebuild_missing=rebuild_missing, render_missing_formats=render_missing_formats,
+                               cleanup=cleanup)
+
+
+def _handoff_figure(root: Path, request: dict[str, Any], backend: PlotBackend, *,
+                    before_install: Callable[[FigureInstall], None] | None, installed: FigureInstall | None,
+                    rebuild_missing: Callable[[str], bool] | None, render_missing_formats: bool,
+                    cleanup: ExitStack) -> dict[str, Any]:
     validate_wire(request, figure_handoff_schema(), code="figure_handoff_invalid_request")
     if type(request["revision"]) is not int:
         raise EngineError("figure_handoff_invalid_request", "Use the integer revision from plot describe.")
@@ -131,14 +175,24 @@ def handoff_figure(root: Path, request: dict[str, Any], backend: PlotBackend, *,
         raise EngineError("figure_handoff_destination_exists", "Choose a new output directory; nothing was replaced.")
     if not out.parent.is_dir():
         raise EngineError("figure_handoff_invalid_destination", "The parent directory must already exist.")
+    render_missing_formats = (render_missing_formats and installed is None
+                              and set(request["formats"]) <= {"pdf", "tiff_300"})
+    private_publication = None
     try:
-        token, evidence = _publication(root, out, request, backend, cold_export=rebuild_missing is not None)
+        token, evidence = _publication(root, out, request, backend,
+                                       cold_export=rebuild_missing is not None or render_missing_formats)
     except EngineError as exc:
-        if (rebuild_missing is None or exc.reason_code not in {
+        if render_missing_formats and exc.reason_code in {"figure_handoff_cache_missing", "figure_handoff_format_missing"}:
+            temporary = Path(cleanup.enter_context(TemporaryDirectory(prefix=".sciplot-render-", dir=out.parent)))
+            private_publication = _render_missing_formats(root, backend, request, temporary,
+                extend=exc.reason_code == "figure_handoff_format_missing")
+            token, evidence = _publication(root, out, request, backend, private_publication=private_publication)
+        elif (rebuild_missing is not None and exc.reason_code in {
                 "figure_handoff_cache_missing", "figure_handoff_format_missing", "figure_handoff_publication_unready"}
-                or not rebuild_missing(exc.reason_code)):
+                and rebuild_missing(exc.reason_code)):
+            token, evidence = _publication(root, out, request, backend)
+        else:
             raise
-        token, evidence = _publication(root, out, request, backend)
     result = {"kind": "sciplot_figure_handoff", "version": 1, "status": "exported", "ready_to_use": True,
               "plot": str(root), "plot_id": token.plot_id, "revision": token.revision, "output_dir": str(out)}
     if isinstance(evidence, list):
@@ -176,7 +230,8 @@ def handoff_figure(root: Path, request: dict[str, Any], backend: PlotBackend, *,
             if before_install is not None:
                 before_install({"directory_identity": _directory_identity(staged),
                                 "revision_token": token.to_payload(), "result": result})
-            if _publication(root, out, request, backend) != (token, evidence):
+            if _publication(root, out, request, backend,
+                            **({"private_publication": private_publication} if private_publication is not None else {})) != (token, evidence):
                 raise EngineError("figure_handoff_publication_changed", "The selected publication changed during handoff.")
             install_new_delivery(staged, out)
     except FileExistsError as exc:
