@@ -10309,7 +10309,18 @@
       "tests/test_project_file_append.py::test_public_append_uses_observed_generation_and_opens_new_plot[cli]",
       "tests/test_project_file_append.py::test_public_append_uses_observed_generation_and_opens_new_plot[daily]",
       "tests/test_project_file_intent.py::test_relocated_semantic_xy_can_save_twice_across_installations",
-      "tests/test_operator_versions.py::test_registered_pin_relocation_requires_one_exact_closure_and_no_source_role_overlap"
+      "tests/test_operator_versions.py::test_registered_pin_relocation_requires_one_exact_closure_and_no_source_role_overlap",
+      "tests/test_artifact_raster_visibility.py::test_qa_cli_strict_without_profile_is_not_evaluated_but_keeps_artifact_evidence",
+      "tests/test_artifact_raster_visibility.py::test_qa_does_not_admit_corrupt_tiff_pixels_or_renamed_png",
+      "tests/test_artifact_raster_visibility.py::test_qa_pair_uses_the_same_pdf_and_tiff_bytes_for_decoding_and_hashing",
+      "tests/test_artifact_raster_visibility.py::test_semantic_inventory_reports_missing_label_on_its_own_exported_figure",
+      "tests/test_managed_delivery.py::test_group_delivery_names_files_by_registered_identity_not_labels",
+      "tests/test_mechanical_source_facts.py::test_reported_tensile_break_integrates_only_acquired_loading_from_zero",
+      "tests/test_project_file_append.py::test_ordinary_csv_missing_coordinates_keep_literal_sample_and_original_rows",
+      "tests/test_project_file_append.py::test_ordinary_delimited_coordinates_resolve_only_valid_separator_evidence",
+      "tests/test_project_file_append.py::test_task_create_appends_from_original_without_a_request_file",
+      "tests/test_project_file_append.py::test_task_create_saves_first_figure_directly_from_selected_workbook_sheet",
+      "tests/test_resolved_figure_plan.py::test_studio_package_requires_decoded_exports_bound_to_the_selected_outcome"
     ],
     "private": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
@@ -20408,7 +20419,18 @@
       "tests/test_task_selected_delivery.py::test_formats_are_normalized_and_only_accepted_for_standalone_semantic_creation",
       "tests/test_task_selected_delivery.py::test_identical_foreign_output_winning_install_race_is_never_claimed",
       "tests/test_task_selected_delivery.py::test_interruption_after_atomic_install_recovers_without_another_install",
-      "tests/test_operator_versions.py::test_registered_pin_relocation_requires_one_exact_closure_and_no_source_role_overlap"
+      "tests/test_operator_versions.py::test_registered_pin_relocation_requires_one_exact_closure_and_no_source_role_overlap",
+      "tests/test_artifact_raster_visibility.py::test_qa_cli_strict_without_profile_is_not_evaluated_but_keeps_artifact_evidence",
+      "tests/test_artifact_raster_visibility.py::test_qa_does_not_admit_corrupt_tiff_pixels_or_renamed_png",
+      "tests/test_artifact_raster_visibility.py::test_qa_pair_uses_the_same_pdf_and_tiff_bytes_for_decoding_and_hashing",
+      "tests/test_artifact_raster_visibility.py::test_semantic_inventory_reports_missing_label_on_its_own_exported_figure",
+      "tests/test_managed_delivery.py::test_group_delivery_names_files_by_registered_identity_not_labels",
+      "tests/test_mechanical_source_facts.py::test_reported_tensile_break_integrates_only_acquired_loading_from_zero",
+      "tests/test_project_file_append.py::test_ordinary_csv_missing_coordinates_keep_literal_sample_and_original_rows",
+      "tests/test_project_file_append.py::test_ordinary_delimited_coordinates_resolve_only_valid_separator_evidence",
+      "tests/test_project_file_append.py::test_task_create_appends_from_original_without_a_request_file",
+      "tests/test_project_file_append.py::test_task_create_saves_first_figure_directly_from_selected_workbook_sheet",
+      "tests/test_resolved_figure_plan.py::test_studio_package_requires_decoded_exports_bound_to_the_selected_outcome"
     ],
     "comprehensive": [
       "tests/test_annotation_operations_native.py::test_initial_crop_can_be_reviewed_and_exported_without_regeneration",
