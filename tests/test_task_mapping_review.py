@@ -70,18 +70,47 @@ def test_invalid_scientific_unit_keeps_the_current_question_for_reselection(tmp_
 
 def test_filename_unsafe_sample_stays_correctable_without_renaming(tmp_path, monkeypatch):
     source = tmp_path / "UVvis.csv"
-    source.write_text("Wavelength,Absorbance,Wavelength,Absorbance\nnm,a.u.,nm,a.u.\nE/0,E/0,E3,E3\n400,0.3,400,0.8\n450,0.4,450,0.9\n")
+    from sciplot_core.studio_core.series_request import _series_from_request
+
+    source.write_text("Wavelength,Absorbance,Wavelength,Absorbance\nnm,a.u.,nm,a.u.\nE/0,E/0,E_0,E_0\n400,0.3,400,0.8\n450,0.4,450,0.9\n")
+    original = source.read_bytes()
     calls = _capture_creation(monkeypatch, tmp_path)
-    task = tmp_path / "task"
+    stems = []
+    for i, label, y_values in ((0, "E/0", [0.3, 0.4]), (2, "E_0", [0.8, 0.9])):
+        task = tmp_path / f"task-{i}"
+        question = task_control.start_task({"version": 1, "action": "create", "source": str(source),
+                                            "rule_id": "uvvis_spectrum", "choose_columns": True}, task_dir=task)
+        accepted = task_control.resume_task(task, _answer(question, i, i + 1))
+        assert accepted["status"] == "complete", accepted.get("blocker")
+        execution = load_data_mapping_execution(accepted["data_mapping"]["data_mapping_execution"])
+        output = execution["outputs"][0]
+        assert output["sample_label"] == label
+        stem = Path(output["path"]).stem
+        stems.append(stem)
+        request = json.loads(Path(execution["request_seed"]).read_text())
+        prepared, info, _, _ = _series_from_request(request, base_dir=tmp_path)
+        assert [curve.label for curve in prepared] == [label]
+        assert list(prepared[0].x_values) == [400, 450]
+        assert list(prepared[0].y_values) == y_values
+        assert calls[-1]["scientific_transform"]["output"]["series_order"] == [stem]
+        if i == 0:
+            assert execution["provider"] == "explicit_table_choice"
+            assert stem == output["source_id"]
+            assert info["source_bindings"][prepared[0].x_name]["sample"] == label
+    assert len(set(stems)) == 2 and all("/" not in stem for stem in stems)
+    task = tmp_path / "task-aliased"
     question = task_control.start_task({"version": 1, "action": "create", "source": str(source),
                                         "rule_id": "uvvis_spectrum", "choose_columns": True}, task_dir=task)
-    before = (task / "task.json").read_bytes()
-    with pytest.raises(TaskControlError, match="sample label cannot be preserved exactly"):
-        task_control.resume_task(task, _answer(question, 0, 1))
-    assert not calls and (task / "task.json").read_bytes() == before
-    accepted = task_control.resume_task(task, _answer(question, 2, 3))
+    answer = _answer(question, 0, 1)
+    answer["column_mapping"]["label"] = "E_0"
+    accepted = task_control.resume_task(task, answer)
     assert accepted["status"] == "complete"
-    assert calls[0]["scientific_transform"]["output"]["series_order"] == ["E3"]
+    execution = load_data_mapping_execution(accepted["data_mapping"]["data_mapping_execution"])
+    request = json.loads(Path(execution["request_seed"]).read_text())
+    prepared, info, _, _ = _series_from_request(request, base_dir=tmp_path)
+    assert prepared[0].label == "E_0"
+    assert info["source_bindings"][prepared[0].x_name]["sample"] == "E/0"
+    assert source.read_bytes() == original
 
 
 def _direct_execution(tmp_path, *, sample="E0"):

@@ -113,11 +113,15 @@ def test_real_figure_task_projection_keeps_science_order_and_id_only_terminal_en
 
 
 def test_literal_original_samples_are_retained_without_filename_or_factor_reinterpretation(tmp_path, monkeypatch):
-    samples = ("A || original", "B/original")
-    _, proposal, _, request = paired(tmp_path, samples=samples)
+    samples = ("E/0", "E_0")
+    _, proposal, execution, request = paired(tmp_path, samples=samples, aliases=samples)
+    stems = [Path(item["path"]).stem for item in execution["outputs"]]
+    assert stems == [ref.source_id for ref in proposal.sources]
+    assert len(set(stems)) == 2 and all("/" not in stem for stem in stems)
     assert list(proposal.sample_labels.values()) == list(samples)
     series, info, _, _ = _series_from_request(request, base_dir=tmp_path)
     assert info["semantic_terminal_series_order"] == [item.source_id for item in proposal.sources]
+    assert [item.label for item in series] == list(samples)
     assert [info["source_bindings"][item.x_name]["sample"] for item in series] == list(samples)
     spec = written(request, tmp_path, monkeypatch, "literal_original")
     assert spec["legend"].get("presentation_kind") != "factorized_curve"

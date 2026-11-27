@@ -11,6 +11,7 @@ import pandas as pd
 from sciplot_core.data_mapping.raw_tables import _coerce_mapping_numeric, _original_text as _original_text, _read_raw_table
 from sciplot_core.data_mapping.output_files import _safe_output_name
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.path_names import safe_filename
 from sciplot_core.mapping_contract import (
     DataColumnMapping,
     DataMappingProposal,
@@ -165,13 +166,33 @@ def proposal_for_column_choice(
         proposal_id=proposal_id,
         created_at=created_at,
     )
-    if Path(_safe_output_name(proposal.sources[0], proposal, used=set())).stem != sample:
-        raise ValueError(
-            "The selected sample label cannot be preserved exactly by the current "
-            "mapped-table filename; choose another supported sample."
-        )
     if file_sha256(source) != fresh["file_sha256"] or file_sha256(request_path) != request_hash:
         raise ValueError("Column-choice source or request changed while creating the proposal.")
+    if (Path(_safe_output_name(proposal.sources[0], proposal, used=set())).stem != sample
+            or Path(safe_filename(f"{x['sample']}.csv")).stem != x["sample"]):
+        # The legacy paired-column adapter reads the sample from the filename.
+        # Use the existing table owner when that filename cannot represent it.
+        from sciplot_core.data_mapping.table_choice import proposal_for_table_columns, select_table, table_choice_snapshot
+
+        table = table_choice_snapshot(source, fresh["rule_id"], expected_sha256=fresh["file_sha256"])
+        if table is None:
+            raise ValueError("The confirmed source cannot be represented as a mapped table.")
+        three_row = fresh["layout"] == "three_row"
+        selection = {
+            "sheet": None, "header_rows": [0],
+            "data_start_row": fresh["header_row"] + 1,
+            "data_end_row": table["tables"][0]["row_count"],
+            **({"unit_row": 1, "sample_row": 2} if three_row else {}),
+        }
+        pair: dict[str, Any] = {"x_column": x_column, "y_column": y_column}
+        if label is not None:
+            pair["label"] = label
+        proposal = proposal_for_table_columns(
+            select_table(table, selection), pairs=[pair], request_path=request_path,
+            proposal_id=proposal_id, created_at=created_at,
+        )
+        if proposal.base_request_sha256 != request_hash:
+            raise ValueError("Column-choice request changed while creating the proposal.")
     return proposal
 
 
