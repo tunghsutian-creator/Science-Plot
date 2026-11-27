@@ -984,18 +984,14 @@ def test_project_manifest_commit_rolls_back_every_written_copy(
         original,
         mirror_path=mirror_path,
     )
-    real_writer = project_manifest.atomic_write_json
-    write_count = 0
+    from sciplot_core.project_store import state
 
-    def fail_second_write(path: Path, payload: dict[str, object]) -> Path:
-        nonlocal write_count
-        write_count += 1
-        if write_count == 2:
-            raise OSError("synthetic mirror write failure")
-        return real_writer(path, payload)
+    def fail_before_publication(boundary: str) -> None:
+        if boundary == "before_head":
+            raise OSError("synthetic pre-publication failure")
 
-    monkeypatch.setattr(project_manifest, "atomic_write_json", fail_second_write)
-    with pytest.raises(OSError, match="synthetic mirror write failure"):
+    monkeypatch.setattr(state, "boundary", fail_before_publication)
+    with pytest.raises(OSError, match="synthetic pre-publication failure"):
         project_manifest.commit_intake_project_manifest(
             project_dir,
             {**original, "state": "new"},

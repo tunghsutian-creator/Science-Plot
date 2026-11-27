@@ -21,18 +21,23 @@ def test_staging_zip_uses_pending_whole_project_without_installing(tmp_path):
     (root / "intake_manifest.json").write_text('{"project_slug":"project"}')
     store = _manifest_store(root, {"project_slug": "project"})
     before = store.snapshot(import_legacy=True)
-    payload = {"project_slug": "project", "new_run": "runs/new/result.json"}
+    payload = {"project_slug": "project", "new_run": "runs/new/result.json", "title": "储能模量 G′", "values": [1.5, None]}
+    mirror = root / "project.sciplot.json"
+    from sciplot_core.foundation.json_io import atomic_write_json
+    expected = atomic_write_json(tmp_path / "manifest.json", payload).read_bytes()
     overlay = {"source.csv": b"new source", "runs/new/result.json": b"new result"}
-    staged = stage_intake_project_manifest(root, payload, store=store, project_writes=overlay)
+    staged = stage_intake_project_manifest(root, payload, store=store, mirror_path=mirror, project_writes=overlay)
+    assert staged["intake_manifest.json"] == staged[mirror.name] == expected
     assert store.snapshot()["generation"] == before["generation"]
     assert (root / "source.csv").read_bytes() == b"old source"
     assert not (root / "runs").exists()
     with ZipFile(BytesIO(staged["@snapshot/project.zip"])) as archive:
         assert archive.read("project/source.csv") == b"new source"
         assert archive.read("project/runs/new/result.json") == b"new result"
-        assert json.loads(archive.read("project/intake_manifest.json")) == payload
+        assert archive.read("project/intake_manifest.json") == archive.read(f"project/{mirror.name}") == expected
     publish_files(store, {**overlay, **staged}, kind="publish")
     assert (root / "source.csv").read_bytes() == b"new source"
+    assert (root / "intake_manifest.json").read_bytes() == mirror.read_bytes() == expected
     assert (tmp_path / "project.zip").read_bytes() == staged["@snapshot/project.zip"]
 
 

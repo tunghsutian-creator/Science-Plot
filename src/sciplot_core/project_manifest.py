@@ -11,7 +11,7 @@ from tempfile import TemporaryDirectory
 from threading import RLock, get_ident
 from typing import Any
 
-from sciplot_core.foundation.json_io import atomic_write_json, read_json_object
+from sciplot_core.foundation.json_io import read_json_object
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.foundation.project_archives import write_project_archive
 from sciplot_core.foundation.private_project_manifest import (
@@ -107,14 +107,11 @@ def _stage_manifest_bytes(project: Path, payload: dict[str, Any], *, mirror_path
     safe = json_safe(payload)
     if not isinstance(safe, dict):
         raise TypeError("An intake project manifest must be a JSON object.")
-    writes = {}
-    with TemporaryDirectory(prefix="sciplot-manifest-stage-") as folder:
-        for target in _project_manifest_paths(project, mirror_path=mirror_path):
-            staged = atomic_write_json(Path(folder) / target.name, safe)
-            if _read_manifest_path(staged) != safe:
-                raise RuntimeError("The staged intake manifest failed validation.")
-            writes[target.name] = staged.read_bytes()
-    return writes
+    targets = _project_manifest_paths(project, mirror_path=mirror_path)
+    data = (json.dumps(safe, indent=2, ensure_ascii=False, allow_nan=False) + "\n").encode("utf-8")
+    if json.loads(data) != safe:
+        raise RuntimeError("The staged intake manifest failed validation.")
+    return {target.name: data for target in targets}
 
 
 def _captured_project_write(value: bytes | Path | PreparedFile) -> PreparedFile:
@@ -166,20 +163,11 @@ def _stage_snapshot(store: FileProjectStore, payload: dict[str, Any], writes: Ma
     with TemporaryDirectory(prefix="sciplot-package-stage-") as folder:
         candidate = Path(folder) / store.root.name
         candidate.mkdir()
-        for name in snapshot["files"]:
-            if name.startswith("@"):
-                continue
-            if name in writes and writes[name] is None:
-                continue
-            if name in writes:
-                data = writes[name]
-            else:
-                captured_data = members.pop(name).data
-                if captured_data is None:
-                    raise ProjectStoreError("The logical resource is not a member of this generation.")
-                data = PreparedFile(captured_data, snapshot["files"][name]["mode"])
-            assert data is not None
-            _write_snapshot_member(candidate, name, data)
+        for name in names:
+            captured_data = members.pop(name).data
+            if captured_data is None:
+                raise ProjectStoreError("The logical resource is not a member of this generation.")
+            _write_snapshot_member(candidate, name, PreparedFile(captured_data, snapshot["files"][name]["mode"]))
         for name, data in writes.items():
             if not name.startswith("@") and data is not None:
                 _write_snapshot_member(candidate, name, data)
