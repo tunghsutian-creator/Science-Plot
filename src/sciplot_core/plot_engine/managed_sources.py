@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 import math
 
+from sciplot_core.data_mapping.contracts import _MISSING_STRINGS
 from sciplot_core.data_mapping.original_tables import read_original_table, source_table_snapshot
 from sciplot_core.data_mapping.table_choice import select_table
 from sciplot_core.foundation.file_hashing import file_sha256
@@ -91,7 +92,9 @@ def load_sources(document: dict[str, Any], rule_id: str, *,
         for column in selected["columns"]:
             values: list[float | None] = []
             for raw in frame.iloc[start:end, column["index"]]:
-                if raw is None or str(raw).strip() in {"", "nan"}:
+                text = str(raw).strip()
+                if (raw is None or text in {"", "nan"}
+                        or (rule_id == "ordinary_xy" and text.casefold() in _MISSING_STRINGS)):
                     values.append(None)
                     continue
                 try:

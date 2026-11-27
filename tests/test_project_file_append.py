@@ -185,6 +185,42 @@ def test_task_create_saves_first_figure_directly_from_selected_workbook_sheet(tm
         assert _coordinates(owner, document) == {"x": [66., 61., 61., 53.], "y": [-.023, .008, None, -.016]}
 
 
+def test_ordinary_csv_missing_coordinates_keep_literal_sample_and_original_rows(tmp_path, monkeypatch, capsys):
+    from sciplot_core.cli import main
+
+    source = tmp_path / "measurements.csv"
+    original = b"\nTemperature,Heat Flow\nC,W/g\nNA,NA\n3,0\n1,NaN\n2,1.2345678901234567\n1,NA\n7,-0.015\n"
+    source.write_bytes(original)
+    monkeypatch.setattr("platformdirs.user_state_path", lambda _: tmp_path / "state")
+    archive = tmp_path / "plot.sciplot"
+    args = ["task", "create", str(source), "--x", "temperature", "--y", "heat_flow",
+            "--project-file", str(archive), "--json"]
+    assert main(args) == 0
+    result = json.loads(capsys.readouterr().out)["result"]
+    moved = archive.rename(tmp_path / "moved.sciplot")
+    source.unlink()
+    with project_file_figure(moved, result["plot_id"]) as (session, owner, document):
+        assert _coordinates(owner, document) == {
+            "x": [3., 1., 2., 1., 7.],
+            "y": [0., None, float.fromhex("0x1.3c0ca428c59fbp+0"), None, -.015],
+        }
+        assert [mapping["sample"] for mapping in document["scientific"]["mappings"].values()] == ["NA"]
+        with repository_scope(owner), owner.query_scope(owner.attachment.root):
+            expanded = resolve_document_content(owner.attachment.root, document)
+        observed, = expanded["scientific"]["provenance"]["datasets"]["source:0"]["provenance"]["sources"]
+        assert observed["rows"] == [4, 5, 6, 7, 8]
+        assert observed["column_indices"] == {"column:0": 0, "column:1": 1}
+        [(source_id, version)] = [(source_id, version) for source_id, versions in session.store.snapshot()["sources"].items()
+                                  for version, entry in versions.items() if entry["locator"] == str(source)]
+        assert session.store.resolve_source(source_id, version).read_bytes() == original
+
+    source.write_bytes(original.replace(b"1,NaN", b"1,Inf"))
+    refused_archive = tmp_path / "nonfinite.sciplot"
+    assert main([*args[:-2], str(refused_archive), "--json"]) == 1
+    assert json.loads(capsys.readouterr().out)["blocker"]["reason_code"] == "managed_source_nonfinite"
+    assert not refused_archive.exists()
+
+
 def test_task_create_appends_from_original_without_a_request_file(ordinary_archive, tmp_path, monkeypatch, capsys):
     from sciplot_core.cli import main
 
