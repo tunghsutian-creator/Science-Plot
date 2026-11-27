@@ -22,48 +22,70 @@ PROJECT_FILE_EDIT_PROPERTIES = PROJECT_FILE_AXIS_PROPERTIES | {LINE_COLOR}
 
 
 @contextmanager
-def project_file_figure(path: Path, figure_id: str | None, *, exact_plot_id: bool = False) -> Iterator[
-        tuple[ProjectFileSession, AttachedProjectRepository, dict[str, Any]]]:
-    """Identify one sealed Managed v2 plot in a private file session."""
+def project_file_read_session(path: Path) -> Iterator[ProjectFileSession]:
+    """Open a verified project file using the public read diagnostics."""
     with ExitStack() as stack:
         try:
             session = stack.enter_context(open_project_file(path))
-            entries = list(read_index(session.store)["attachments"].values())
         except FileNotFoundError as exc:
             raise EngineError("path_not_found", "The specified .sciplot file or its saved state was not found.",
                               action="check_project_file") from exc
         except (OSError, ValueError, KeyError, TypeError) as exc:
             raise EngineError("project_file_invalid", "Open a valid, regular .sciplot project file, not a symbolic alias.",
                               action="check_project_file") from exc
-        matches = [entry for entry in entries if figure_id in (None, entry["plot_id"])
-                   or (not exact_plot_id and figure_id == entry["figure_id"])]
-        if len(matches) != 1:
-            if not matches:
-                code = "project_file_figure_not_found"
-                message = "This .sciplot file has no saved figure matching the selection."
-            else:
-                code = "project_file_figure_ambiguous"
-                message = "Choose one exact saved plot or figure ID."
-            choices = [{key: entry[key] for key in ("figure_id", "plot_id")} for entry in matches or entries]
-            raise EngineError(code, message, action="select_figure", project_id=session.project_id,
-                              project_file=str(session.path), generation=session.opened_generation, figures=choices)
+        yield session
 
-        attachment = Attachment(session.store, matches[0])
-        owner = AttachedProjectRepository(attachment)
-        try:
-            head = observe_plot_head(attachment.root, owner=owner)
-            assert head is not None
-            document = head["document"]
-        except (OSError, ValueError, KeyError, TypeError) as exc:
-            # Inner owner diagnostics can refer to an extracted or old workspace.
-            raise EngineError("project_file_figure_unreadable", "The selected figure has no valid committed revision in this .sciplot file.",
-                              action="check_project_file") from exc
-        if document.get("plot_type") != "ManagedPlot" or not is_figure(document):
-            raise EngineError("project_file_figure_unsupported", "This .sciplot operation supports saved Managed FigureSpec v2 figures only.")
-        if document["plot_id"] != attachment.entry["plot_id"]:
-            raise EngineError("project_file_figure_unreadable", "The registered identity does not match the saved figure.",
-                              action="check_project_file")
 
+def saved_project_file_figure(
+    session: ProjectFileSession, figure_id: str | None, *, exact_plot_id: bool = False
+) -> tuple[AttachedProjectRepository, dict[str, Any]]:
+    """Select one committed figure from an already verified file session."""
+    try:
+        entries = list(read_index(session.store)["attachments"].values())
+    except FileNotFoundError as exc:
+        raise EngineError("path_not_found", "The specified .sciplot file or its saved state was not found.",
+                          action="check_project_file") from exc
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise EngineError("project_file_invalid", "Open a valid, regular .sciplot project file, not a symbolic alias.",
+                          action="check_project_file") from exc
+    matches = [entry for entry in entries if figure_id in (None, entry["plot_id"])
+               or (not exact_plot_id and figure_id == entry["figure_id"])]
+    if len(matches) != 1:
+        if not matches:
+            code = "project_file_figure_not_found"
+            message = "This .sciplot file has no saved figure matching the selection."
+        else:
+            code = "project_file_figure_ambiguous"
+            message = "Choose one exact saved plot or figure ID."
+        choices = [{key: entry[key] for key in ("figure_id", "plot_id")} for entry in matches or entries]
+        raise EngineError(code, message, action="select_figure", project_id=session.project_id,
+                          project_file=str(session.path), generation=session.opened_generation, figures=choices)
+
+    attachment = Attachment(session.store, matches[0])
+    owner = AttachedProjectRepository(attachment)
+    try:
+        head = observe_plot_head(attachment.root, owner=owner)
+        assert head is not None
+        document = head["document"]
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        # Inner owner diagnostics can refer to an extracted or old workspace.
+        raise EngineError("project_file_figure_unreadable", "The selected figure has no valid committed revision in this .sciplot file.",
+                          action="check_project_file") from exc
+    if document.get("plot_type") != "ManagedPlot" or not is_figure(document):
+        raise EngineError("project_file_figure_unsupported", "This .sciplot operation supports saved Managed FigureSpec v2 figures only.")
+    if document["plot_id"] != attachment.entry["plot_id"]:
+        raise EngineError("project_file_figure_unreadable", "The registered identity does not match the saved figure.",
+                          action="check_project_file")
+
+    return owner, document
+
+
+@contextmanager
+def project_file_figure(path: Path, figure_id: str | None, *, exact_plot_id: bool = False) -> Iterator[
+        tuple[ProjectFileSession, AttachedProjectRepository, dict[str, Any]]]:
+    """Identify one sealed Managed v2 plot in a private file session."""
+    with project_file_read_session(path) as session:
+        owner, document = saved_project_file_figure(session, figure_id, exact_plot_id=exact_plot_id)
         yield session, owner, document
 
 

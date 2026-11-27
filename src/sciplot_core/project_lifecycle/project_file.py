@@ -265,6 +265,14 @@ class ProjectFileSession:
         self._pending: _Candidate | None = None
         self._closed = False
 
+    def matches_path(self, path: Path) -> bool:
+        """Cheap view-cache check only. Saves still verify the exact bytes."""
+        try:
+            return not self._closed and self._version.identity == _identity(
+                path.expanduser().stat(follow_symlinks=False))
+        except FileNotFoundError:
+            return False
+
     def save(self, *, expected_generation: str) -> ProjectFileSave:
         """Persist this exact accepted Store generation; never replay its edits."""
         if self._closed:

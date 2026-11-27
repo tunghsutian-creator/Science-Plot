@@ -20,6 +20,8 @@ from sciplot_core.plot_protocol.client import call
 from sciplot_core.plot_protocol.paths import TransportError
 from sciplot_core.project_lifecycle.contracts import RevisionToken
 from sciplot_core.project_lifecycle.errors import EngineError
+from sciplot_core.project_lifecycle.project_file import ProjectFileSession
+from sciplot_core.project_lifecycle.project_file_summary import project_file_read_session
 from sciplot_core.studio_core.qt_compat import ensure_veusz_qsettings_compat
 from sciplot_core.studio_core.runtime import ensure_veusz_runtime_path
 from sciplot_core.veusz_worker.document_edit import loaded_native_document
@@ -32,6 +34,9 @@ class PlotEditor(QtWidgets.QMainWindow):
         self.archive = is_archive_target(plot)
         self.figure_id = figure_id
         self.archive_project_id: str | None = None
+        self._archive_session: ProjectFileSession | None = None
+        self._archive_lifetime = ExitStack()
+        self.destroyed.connect(self._archive_lifetime.close)
         self.archive_request: tuple[RevisionToken, dict[str, Any]] | None = None
         self.socket_path = socket_path
         self.timeout = timeout
@@ -194,19 +199,34 @@ class PlotEditor(QtWidgets.QMainWindow):
 
     def _load_archive(self, selection: str | None = None) -> None:
         target = self.figure_id if selection is None else selection
-        with ExitStack() as staged:
-            summary, native, seal = staged.enter_context(
-                archive_plot_view(self.plot, target, expected_project_id=self.archive_project_id))
-            if native is None:
-                self.archive_project_id = summary["project_id"]
-                self._show_figure_choices(summary["figures"])
+        session = self._archive_session
+        if session is not None and session.matches_path(self.plot):
+            if target == self.summary.get("plot_id") and self.viewer is not None:
+                self._show_summary(self.summary)
                 return
-            assert seal is not None
-            self._view(native, seal, lifetime=staged)
+            summary, has_view = self._show_archive_view(session, target)
+        else:
+            with ExitStack() as staged:
+                session = staged.enter_context(project_file_read_session(self.plot))
+                summary, has_view = self._show_archive_view(session, target)
+                self._archive_lifetime.close()
+                self._archive_lifetime.enter_context(staged.pop_all())
+                self._archive_session = session
+        if not has_view:
+            self.archive_project_id = summary["project_id"]
+            self._show_figure_choices(summary["figures"])
+            return
         self.archive_project_id = summary["project_id"]
         self.figure_id = summary["plot_id"]
         self.figures.setEnabled(self.archive_request is None)
         self._show_summary(summary)
+
+    def _show_archive_view(self, session: ProjectFileSession, target: str | None) -> tuple[dict[str, Any], bool]:
+        summary, native, seal = archive_plot_view(session, target, expected_project_id=self.archive_project_id)
+        if native is not None:
+            assert seal is not None
+            self._view(native, seal)
+        return summary, native is not None
 
     def _show_figure_choices(self, choices: list[dict[str, str]]) -> None:
         self._disable_editing()
@@ -218,7 +238,7 @@ class PlotEditor(QtWidgets.QMainWindow):
         self.figures.show()
         self.status.setText("请选择要查看和编辑的图。")
 
-    def _view(self, path: Path, expected_sha: str, *, lifetime: ExitStack | None = None) -> None:
+    def _view(self, path: Path, expected_sha: str) -> None:
         if file_sha256(path) != expected_sha:
             raise ValueError("原生图已改变，请读取最新版本。")
         with loaded_native_document(path) as document:
@@ -226,9 +246,6 @@ class PlotEditor(QtWidgets.QMainWindow):
                 raise ValueError("加载时原生图已改变，请读取最新版本。")
             PlotWindow = import_module("veusz.windows.plotwindow").PlotWindow
             viewer = PlotWindow(document, self)
-        if lifetime is not None:
-            retained = lifetime.pop_all()
-            viewer.destroyed.connect(lambda: retained.close())
         viewer.setAttribute(QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         viewer.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         self._close_viewer()
@@ -247,6 +264,8 @@ class PlotEditor(QtWidgets.QMainWindow):
 
     def closeEvent(self, event: QtGui.QCloseEvent | None) -> None:
         self._close_viewer()
+        self._archive_lifetime.close()
+        self._archive_session = None
         super().closeEvent(event)
 
     def _intent_request(self, prop: str, target: str, value: Any) -> dict[str, Any]:
