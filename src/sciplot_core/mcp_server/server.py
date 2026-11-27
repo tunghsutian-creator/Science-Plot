@@ -83,6 +83,7 @@ DAILY_INSTRUCTIONS = (
     "To save the first ordinary XY figure, use task_start with sources, intent and project_file. To append to an existing .sciplot, "
     "use append_to and expected_generation from project_open instead. No request file or export is needed. Open the new figure using next_step.arguments. "
     "To add a curve to that same saved figure instead, use project_file_add_series: plan, inspect the exact source selection, then apply. "
+    "For a separate same-layout source version of one existing curve, use project_file_replace_series_source with its exact layer ID. "
     "For a selected PDF/TIFF handoff use plot_export. "
     "If it returns an archived read_only native figure, call sciplot_project_legacy_redraw with its target and a new output directory; "
     "for an edit, use sciplot_project_legacy_convert to create a separate supported XY copy first. "

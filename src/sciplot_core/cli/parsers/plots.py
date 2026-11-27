@@ -7,7 +7,7 @@ from typing import Any
 def register_plot_commands(subparsers: Any) -> None:
     parser = subparsers.add_parser("plot", help="Edit persistent scientific documents through semantic patches.")
     actions = parser.add_subparsers(dest="plot_action", required=True)
-    for name in ("open", "describe", "create", "append", "add-series", "patch", "resume", "intent", "render", "export", "rollback", "decide", "deliver"):
+    for name in ("open", "describe", "create", "append", "add-series", "replace-series-source", "patch", "resume", "intent", "render", "export", "rollback", "decide", "deliver"):
         action = actions.add_parser(name)
         if name == "open":
             action.add_argument("target", type=Path, help="Saved figure target or a .sciplot file (read-only summary and generation).")
@@ -15,8 +15,8 @@ def register_plot_commands(subparsers: Any) -> None:
         elif name == "append":
             action.add_argument("target", type=Path, help="Existing .sciplot file to receive one independent ordinary XY figure.")
             action.add_argument("--expected-generation", required=True, help="Current generation returned by plot open for this file.")
-        elif name == "add-series":
-            action.add_argument("target", type=Path, help="Existing .sciplot file; this adds a curve to one figure, not a new figure.")
+        elif name in {"add-series", "replace-series-source"}:
+            action.add_argument("target", type=Path, help="Existing .sciplot file; only the selected figure is changed.")
             action.add_argument("source", type=Path, help="Exact original CSV, TSV or Excel file.")
             action.add_argument("--plot-id", required=True, help="Exact plot ID from plot open.")
             action.add_argument("--revision", type=int, required=True, help="Current plot revision from plot open.")
@@ -24,8 +24,12 @@ def register_plot_commands(subparsers: Any) -> None:
             action.add_argument("--sheet", help="Exact worksheet title, needed when sheets are ambiguous.")
             action.add_argument("--x-column", type=int, required=True, help="Zero-based physical X column index.")
             action.add_argument("--y-column", type=int, required=True, help="Zero-based physical Y column index.")
-            action.add_argument("--sample", required=True, help="Exact scientific sample label.")
-            action.add_argument("--label", help="Optional display alias only.")
+            if name == "replace-series-source":
+                action.add_argument("--layer-id", dest="replace_layer", required=True,
+                                    help="Exact current curve ID from plot open edit_targets; not a display alias.")
+            else:
+                action.add_argument("--sample", required=True, help="Exact scientific sample label.")
+                action.add_argument("--label", help="Optional display alias only.")
             action.add_argument("--apply", action="store_true", help="Save only the previously planned exact selection.")
             action.add_argument("--plan-id", help="Required to apply; use the exact ID from plan's apply_request.")
             action.add_argument("--source-sha256", help="Required to apply; use the exact original SHA from plan's apply_request.")

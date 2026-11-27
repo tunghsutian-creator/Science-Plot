@@ -75,9 +75,9 @@ def test_official_stdio_client_discovery_and_error_recovery():
     async def scenario():
         async with Client(_parameters(cli=True), read_timeout_seconds=60) as client:
             tools = await client.list_tools()
-            assert len(tools.tools) == 56
+            assert len(tools.tools) == 57
             discovered = {tool.name: tool for tool in tools.tools}
-            assert len(discovered) == 56
+            assert len(discovered) == 57
             assert {"sciplot_project_bundle_export", "sciplot_project_bundle_import"} <= discovered.keys()
             assert {"sciplot_intake_prepare", "sciplot_intake_table", "sciplot_intake_create"} <= discovered.keys()
             assert "sciplot_plot_intent" in discovered
@@ -120,7 +120,8 @@ def test_official_stdio_client_discovery_and_error_recovery():
                     "sciplot_plot_export", "sciplot_plot_resume", "sciplot_plot_decide", "sciplot_compose",
                     "sciplot_project_legacy_redraw", "sciplot_project_legacy_convert", "sciplot_plot_deliver",
                     "sciplot_project_bundle_export", "sciplot_project_bundle_import", "sciplot_project_save_as",
-                    "sciplot_project_file_append", "sciplot_project_file_add_series", "sciplot_project_file_save_as"} <= daily.keys()
+                    "sciplot_project_file_append", "sciplot_project_file_add_series", "sciplot_project_file_replace_series_source",
+                    "sciplot_project_file_save_as"} <= daily.keys()
             assert daily.keys() < discovered.keys()
             for tool in daily_tools:
                 Draft202012Validator.check_schema(tool.input_schema)

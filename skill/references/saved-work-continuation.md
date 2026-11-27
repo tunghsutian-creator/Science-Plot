@@ -247,6 +247,19 @@ figure without altering other figures or exporting. If the data or archive
 changed, reopen and plan again. The exact applied request can be retried after
 reply loss, even once the source is no longer at its original location.
 
+### Replace the original for one saved curve
+
+Use `plot replace-series-source FILE.sciplot REVISED.xlsx` with the same
+`--plot-id`, `--revision`, `--expected-generation`, `--sheet`, `--x-column`,
+and `--y-column` selectors as above, plus `--layer-id` from `plot open`'s
+`edit_targets` instead of `--sample`. MCP uses
+`sciplot_project_file_replace_series_source` with `replace_layer`. Plan first,
+then apply the exact returned proposal. The new original must retain the same
+worksheet, physical columns, row region and scientific metadata; a shared
+original or changed layout needs a different operation. Only the selected
+curve's version changes. Other curves and figures, and the old revision's
+sealed source, stay intact.
+
 ## Make a new, independently editable copy
 
 Use Save As for **one current Managed plot**, not for moving a whole project or

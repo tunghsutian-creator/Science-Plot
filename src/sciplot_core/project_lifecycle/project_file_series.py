@@ -1,4 +1,4 @@
-"""Add one original XY series to an exact saved figure, not a second figure."""
+"""Save one original XY change in an exact existing project-file figure."""
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -30,17 +30,18 @@ if TYPE_CHECKING:
     from .application import ProjectApplication
 
 
-def project_file_series_schema() -> dict[str, Any]:
+def project_file_series_schema(*, replace: bool = False) -> dict[str, Any]:
     string = {"type": "string", "minLength": 1}
     index = {"type": "integer", "minimum": 0}
     proof = {"type": "string", "pattern": "^[0-9a-f]{64}$"}
     schema = closed({
         "plot_id": string, "base_revision": index, "expected_generation": string,
         "source": {**string, "pattern": "^/"}, "mode": {"enum": ["plan", "apply"]},
-        "sheet": string, "x_column": index, "y_column": index, "sample": string, "label": string,
+        "sheet": string, "x_column": index, "y_column": index,
+        **({"replace_layer": string} if replace else {"sample": string, "label": string}),
         "plan_id": proof, "source_sha256": proof,
     }, ["plot_id", "base_revision", "expected_generation", "source", "mode",
-        "x_column", "y_column", "sample"])
+        "x_column", "y_column", "replace_layer" if replace else "sample"])
     schema["allOf"] = [{"if": {"properties": {"mode": {"const": "apply"}}},
                         "then": {"required": ["plan_id", "source_sha256"]}}]
     return schema
@@ -51,7 +52,7 @@ def _identity(request: dict[str, Any], project_id: str, source_sha256: str) -> s
                                 if key not in {"mode", "plan_id", "source_sha256"}}])
 
 
-def _saved(owner: Any, plan_id: str) -> dict[str, Any] | None:
+def _saved(owner: Any, plan_id: str, *, replace: bool) -> dict[str, Any] | None:
     root = owner.attachment.root
     path = transaction_path(root, "archive-series:" + plan_id)
     with owner.query_scope(root):
@@ -59,8 +60,9 @@ def _saved(owner: Any, plan_id: str) -> dict[str, Any] | None:
             return None
         transaction = owner.read(path)
         command = saved_command(transaction)
+        expected = "source.sha256" if replace else "source.append"
         if (command is None or command.kind != "patch" or transaction["phase"] != "complete"
-                or transaction["request"]["changes"][0]["property"] != "source.append"):
+                or transaction["request"]["changes"][0]["property"] != expected):
             raise EngineError("project_file_series_unconfirmed", "Reopen the project before retrying this series.",
                               action="inspect_project_file")
         document = transaction["document"]
@@ -72,13 +74,12 @@ def _saved(owner: Any, plan_id: str) -> dict[str, Any] | None:
 
 
 def _patch(request: dict[str, Any], document: dict[str, Any], root: Path,
-           project_id: str) -> tuple[dict[str, Any], str, str]:
+           project_id: str) -> tuple[dict[str, Any], str, str, dict[str, Any]]:
     if document["scientific"]["provenance"]["managed"].get("rule_id") != "ordinary_xy":
         raise EngineError("project_file_series_unsupported", "Choose a saved ordinary XY figure for adding a source series.")
     targets = append_targets(document, root=root)
     if len(targets) != 1:
         raise EngineError("project_file_series_unsupported", "Choose an ordinary XY figure with one unambiguous original-value view.")
-    view_id = next(iter(targets))
     path = Path(request["source"])
     sheet = request.get("sheet")
     snapshot = source_table_snapshot(path, rule_id="ordinary_xy", sheets=[sheet] if sheet is not None else None)
@@ -98,20 +99,27 @@ def _patch(request: dict[str, Any], document: dict[str, Any], root: Path,
                           action="select_source_columns", candidates=candidates[:32])
     selection = next(iter(selections.values()))
     plan_id = _identity(request, project_id, sha)
-    curve = {"sample": request["sample"], "x_column_index": request["x_column"], "y_column_index": request["y_column"],
-             **({"label": request["label"]} if "label" in request else {})}
-    value = {"source": {"path": str(path), "sha256": sha,
-                        "source_id": "raw:added:" + plan_id[:24], "table_selection": selection},
-             "curves": [curve]}
+    if "replace_layer" in request:
+        from .project_file_series_replacement import replacement_change
+
+        change = replacement_change(request, document, root, snapshot, selection)
+    else:
+        curve = {"sample": request["sample"], "x_column_index": request["x_column"], "y_column_index": request["y_column"],
+                 **({"label": request["label"]} if "label" in request else {})}
+        value = {"source": {"path": str(path), "sha256": sha,
+                            "source_id": "raw:added:" + plan_id[:24], "table_selection": selection},
+                 "curves": [curve]}
+        change = {"op": "set", "target": [next(iter(targets))], "property": "source.append", "value": value}
     return {"plot_id": document["plot_id"], "base_revision": document["revision"],
             "idempotency_key": "archive-series:" + plan_id, "intent_class": "scientific",
-            "changes": [{"op": "set", "target": [view_id], "property": "source.append", "value": value}]}, plan_id, sha
+            "changes": [change]}, plan_id, sha, selection
 
 
 def _result(status: str, session: Any, document: dict[str, Any], generation: str,
-            **details: Any) -> dict[str, Any]:
+            *, replace: bool, **details: Any) -> dict[str, Any]:
     target, plot = str(session.path), document["plot_id"]
-    return {"kind": "sciplot_project_file_add_series", "version": 1, "status": status,
+    kind = "sciplot_project_file_replace_series_source" if replace else "sciplot_project_file_add_series"
+    return {"kind": kind, "version": 1, "status": status,
             "project_file": target, "project_id": session.project_id, "generation": generation,
             **{key: document[key] for key in ("plot_id", "revision", "scientific_hash", "presentation_hash")},
             "next_step": {"action": "project.open", "arguments": {"target": target, "figure_id": plot,
@@ -120,9 +128,10 @@ def _result(status: str, session: Any, document: dict[str, Any], generation: str
 
 
 @with_table_reads
-def add_project_file_series(service: "ProjectApplication", path: Path, request: dict[str, Any]) -> dict[str, Any]:
+def add_project_file_series(service: "ProjectApplication", path: Path, request: dict[str, Any], *,
+                            replace: bool = False) -> dict[str, Any]:
     """Plan against exact source bytes, then save the audited scientific delta."""
-    validate_wire(request, project_file_series_schema(), code="project_file_series_invalid_request")
+    validate_wire(request, project_file_series_schema(replace=replace), code="project_file_series_invalid_request")
     request = {**request, "source": str(canonical_path(Path(request["source"])))}
     with project_file_figure(path, request["plot_id"], exact_plot_id=True) as (session, owner, before):
         root = owner.attachment.root
@@ -131,9 +140,9 @@ def add_project_file_series(service: "ProjectApplication", path: Path, request: 
             plan_id = _identity(request, session.project_id, request["source_sha256"])
             if plan_id != request["plan_id"]:
                 raise EngineError("project_file_series_plan_changed", "Plan again for this exact figure, source and column selection.")
-            published = _saved(owner, plan_id)
+            published = _saved(owner, plan_id, replace=replace)
             if published is not None:
-                return _result("already_saved", session, published, session.opened_generation, saved=True)
+                return _result("already_saved", session, published, session.opened_generation, replace=replace, saved=True)
         if (before["revision"] != request["base_revision"]
                 or session.opened_generation != request["expected_generation"]):
             raise EngineError("project_file_series_revision_conflict", "Reopen the exact figure and plan against its current revision and project generation.",
@@ -146,24 +155,26 @@ def add_project_file_series(service: "ProjectApplication", path: Path, request: 
                 raise EngineError("project_file_series_unsupported", "Adding a series requires the composed Managed runtime.")
             owner = service.repository.select(owner.attachment)
             with owner.lease(root):
-                patch, plan_id, sha = _patch(request, before, root, session.project_id)
+                patch, plan_id, sha, selection = _patch(request, before, root, session.project_id)
                 with scientific_sources(owner, patch):
                     if not apply:
                         _, diff, _, _ = prepare_current_update(root, before, patch)
-                        return _result("ready", session, before, session.opened_generation, saved=False,
-                                       selection=diff[0]["after"], apply_request={**request, "mode": "apply",
-                                                                                 "plan_id": plan_id, "source_sha256": sha})
+                        return _result("ready", session, before, session.opened_generation, replace=replace, saved=False,
+                                       selection={**diff[0]["after"], **({"table_selection": selection,
+                                           "layer_id": request["replace_layer"], "x_column": request["x_column"],
+                                           "y_column": request["y_column"]} if replace else {})},
+                                       apply_request={**request, "mode": "apply", "plan_id": plan_id, "source_sha256": sha})
                     # A confirmed exact source plan still requires the normal
                     # native scientific audit before acceptance.
                     with admitted(root, "patch", patch):
                         prepared = execute_patch(root, patch, service.backend, defer_export=True)
             if prepared.get("status") != "needs_review":
-                raise EngineError("project_file_series_not_saved", "The new series did not pass native preview; the file was not replaced.",
+                raise EngineError("project_file_series_not_saved", "The series change did not pass native preview; the file was not replaced.",
                                   native_error=(prepared.get("error") or {}).get("reason_code"))
             edited = service.decide(root, {"decision_id": prepared["decision_id"],
                                            "base_revision": before["revision"], "accept": True})
         if edited.get("status") != "complete":
-            raise EngineError("project_file_series_not_saved", "The new series did not pass native commit; the file was not replaced.",
+            raise EngineError("project_file_series_not_saved", "The series change did not pass native commit; the file was not replaced.",
                               native_error=(edited.get("error") or {}).get("reason_code"))
         head = observe_plot_head(root, owner=owner)
         if head is None or head["document"]["revision"] != before["revision"] + 1:
@@ -181,4 +192,4 @@ def add_project_file_series(service: "ProjectApplication", path: Path, request: 
         except (ProjectConflict, WriterLeaseBusy, WriterLeaseChanged) as exc:
             raise EngineError("project_file_save_conflict", "The project changed before save; this request did not replace it.",
                               action="inspect_project_file") from exc
-        return _result("saved", session, head["document"], generation, saved=True)
+        return _result("saved", session, head["document"], generation, replace=replace, saved=True)

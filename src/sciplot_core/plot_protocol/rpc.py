@@ -24,7 +24,7 @@ class Service(Protocol):
     def rollback(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
     def create(self, request: dict[str, Any], *, project: Path | None = None) -> dict[str, Any]: ...
     def append_project_file_xy(self, path: Path, request: dict[str, Any], *, expected_generation: str) -> dict[str, Any]: ...
-    def add_series_project_file(self, path: Path, request: dict[str, Any]) -> dict[str, Any]: ...
+    def add_series_project_file(self, path: Path, request: dict[str, Any], *, replace: bool = False) -> dict[str, Any]: ...
     def deliver(self, request: dict[str, Any]) -> dict[str, Any]: ...
     def decide(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]: ...
 
@@ -90,6 +90,7 @@ def validate_params(method: str, params: dict[str, Any]) -> None:
         "project.open": ({"target"}, {"target", "figure_id", "description"}),
         "project.file-append": ({"target", "request", "expected_generation"}, {"target", "request", "expected_generation"}),
         "project.file-add-series": ({"target", "request"}, {"target", "request"}),
+        "project.file-replace-series-source": ({"target", "request"}, {"target", "request"}),
         "plot.create": ({"request"}, {"request", "project"}),
         "plot.deliver": ({"request"}, {"request"}),
         "plot.describe": ({"plot"}, {"plot", "description"}),
@@ -148,8 +149,9 @@ def _invoke_validated(service: Service, method: str, params: dict[str, Any]) -> 
     if method == "project.file-append":
         return service.append_project_file_xy(Path(params["target"]), params["request"],
                                               expected_generation=params["expected_generation"])
-    if method == "project.file-add-series":
-        return service.add_series_project_file(Path(params["target"]), params["request"])
+    if method in {"project.file-add-series", "project.file-replace-series-source"}:
+        return service.add_series_project_file(Path(params["target"]), params["request"],
+                                               replace=method == "project.file-replace-series-source")
     if method == "plot.create":
         return (service.create(params["request"], project=Path(params["project"]))
                 if "project" in params else service.create(params["request"]))

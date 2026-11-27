@@ -154,6 +154,8 @@ with the original data, ordinary XY intent and current project generation. This
 append creates no exports and preserves all existing figures and revisions.
 To add an original curve to an existing figure instead, use
 [`plot add-series` / `sciplot_project_file_add_series`](skill/references/saved-work-continuation.md#add-one-original-curve-to-an-existing-figure).
+Revised original files for one independently sourced curve use
+[`plot replace-series-source` / `sciplot_project_file_replace_series_source`](skill/references/saved-work-continuation.md#replace-the-original-for-one-saved-curve).
 
 On a Qt desktop, `sciplot plot editor PLOT` opens the exact Managed FigureSpec v2
 `plot` path from that summary. The native view is read-only. Choose an axis,
