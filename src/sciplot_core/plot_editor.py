@@ -14,6 +14,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 from sciplot_core.archive_plot_view import archive_axis_intent, archive_plot_view, editor_target_path, is_archive_target
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.plot_editor_dialogs import archive_pdf_action, confirm
 from sciplot_core.plot_protocol.client import call
 from sciplot_core.plot_protocol.paths import TransportError
 from sciplot_core.project_lifecycle.contracts import RevisionToken
@@ -69,6 +70,7 @@ class PlotEditor(QtWidgets.QMainWindow):
             form.addWidget(widget)
         self.body_layout.addLayout(form)
         self.setCentralWidget(body)
+        self.export_pdf = archive_pdf_action(self, plot, self.status, lambda: self.summary) if self.archive else None
         self.axes.currentIndexChanged.connect(self._selected_axis)
         self.edit_property.currentIndexChanged.connect(self._selected_axis)
         self.review.clicked.connect(self._edit)
@@ -116,6 +118,8 @@ class PlotEditor(QtWidgets.QMainWindow):
         self.edit_property.setEnabled(False)
         self.label.setEnabled(False)
         self.review.setEnabled(False)
+        if self.export_pdf is not None:
+            self.export_pdf.setEnabled(False)
 
     def _refresh(self, initial: bool = False) -> None:
         try:
@@ -148,6 +152,8 @@ class PlotEditor(QtWidgets.QMainWindow):
 
     def _show_summary(self, summary: dict[str, Any]) -> None:
         self.summary = summary
+        if self.export_pdf is not None:
+            self.export_pdf.setEnabled(self.archive_request is None)
         self.axes.setEnabled(self.archive_request is None)
         self.axes.clear()
         self.axes.addItem("选择坐标轴", None)
@@ -228,25 +234,6 @@ class PlotEditor(QtWidgets.QMainWindow):
         self._close_viewer()
         super().closeEvent(event)
 
-    def _confirm(self, title: str, text: str, *, preview: QtGui.QPixmap | None = None) -> bool:
-        dialog = QtWidgets.QDialog(self)
-        dialog.setWindowTitle(title)
-        layout = QtWidgets.QVBoxLayout(dialog)
-        label = QtWidgets.QLabel(text)
-        label.setTextFormat(QtCore.Qt.TextFormat.PlainText)
-        label.setWordWrap(True)
-        layout.addWidget(label)
-        if preview is not None:
-            image = QtWidgets.QLabel()
-            image.setPixmap(preview.scaled(600, 500, QtCore.Qt.AspectRatioMode.KeepAspectRatio))
-            layout.addWidget(image)
-        buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.StandardButton.Save | QtWidgets.QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
-        layout.addWidget(buttons)
-        return dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted
-
     def _edit(self) -> None:
         prop = self.edit_property.currentData()
         value: str | list[float] | dict[str, str] | None
@@ -323,7 +310,7 @@ class PlotEditor(QtWidgets.QMainWindow):
                 return ", ".join(map(str, value)) if value else "隐藏主刻度"
             return str(value)
 
-        return self._confirm(f"核对{label}", f"现在：{display(plan['before'])}\n改为：{display(plan['after'])}\n"
+        return confirm(self, f"核对{label}", f"现在：{display(plan['before'])}\n改为：{display(plan['after'])}\n"
                              f"坐标轴单位不变：{plan['target_context']['unit']}")
 
     def _edit_archive(self, request: dict[str, Any]) -> None:
@@ -386,7 +373,7 @@ class PlotEditor(QtWidgets.QMainWindow):
         image = QtGui.QPixmap()
         if sha256(data).hexdigest() != preview["sha256"] or not image.loadFromData(data):
             raise ValueError("待确认的原生预览已变更。")
-        accepted = self._confirm("审阅原生候选图", "请核对下面的原生预览，再决定是否保存。", preview=image)
+        accepted = confirm(self, "审阅原生候选图", "请核对下面的原生预览，再决定是否保存。", preview=image)
         return self._call("plot.decide", request={**result["next_step"]["request"], "accept": accepted})
 
 

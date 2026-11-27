@@ -47,13 +47,19 @@ def _has_deferred_export(owner: AttachedProjectRepository, root: Path) -> bool:
         return False
 
 
-def project_file_handoff(service: "ProjectApplication", path: Path, request: dict[str, Any]) -> dict[str, Any]:
+def project_file_handoff(service: "ProjectApplication", path: Path, request: dict[str, Any], *,
+                         expected_project_id: str | None = None,
+                         expected_revision: RevisionToken | None = None) -> dict[str, Any]:
     validate_wire(request, figure_handoff_schema(), code="figure_handoff_invalid_request")
     if type(request["revision"]) is not int:
         raise EngineError("figure_handoff_invalid_request", "Use the integer revision from project.open.")
     with project_file_figure(path, request["plot_id"], exact_plot_id=True) as (session, owner, document):
         locator = {"project_file": str(session.path), "project_id": session.project_id}
-        if (document["plot_id"], document["revision"]) != (request["plot_id"], request["revision"]):
+        if expected_project_id is not None and session.project_id != expected_project_id:
+            raise EngineError("project_file_identity_conflict", "This path no longer contains the original project file.",
+                              action="inspect_project_file", **locator)
+        if ((document["plot_id"], document["revision"]) != (request["plot_id"], request["revision"])
+                or (expected_revision is not None and RevisionToken.of(document) != expected_revision)):
             raise EngineError("figure_handoff_revision_conflict", "Choose the exact current plot ID and revision from project.open.",
                               action="project.open", **locator)
         root = owner.attachment.root

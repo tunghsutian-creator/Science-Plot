@@ -32,7 +32,8 @@ from sciplot_core.verification.project_core_targets import (
 PROJECT_CORE_OWNERS = (
     ChangedOwner(
         owner_id="managed_native_plot_editor",
-        exact_paths=frozenset({"src/sciplot_core/plot_editor.py"}),
+        exact_paths=frozenset({"src/sciplot_core/plot_editor.py", "src/sciplot_core/plot_editor_dialogs.py",
+                               "src/sciplot_core/archive_plot_view.py"}),
         owned_test_paths=frozenset({"tests/test_project_file_editor.py"}),
         pytest_targets=(
             "tests/test_managed_description_scopes.py::test_omitted_full_and_compact_open_describe_equivalence",

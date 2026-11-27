@@ -3,14 +3,18 @@
 from collections.abc import Iterator
 from contextlib import ExitStack, closing, contextmanager
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
+from sciplot_core.delivery.install import install_new_delivery
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_io import read_json_object
+from sciplot_core.foundation.research_destination import require_data_destination
 from sciplot_core.plot_engine.service import public_plot_service
 from sciplot_core.plot_ir.figure_document import figure_spec
 from sciplot_core.project_lifecycle.contracts import RevisionToken
 from sciplot_core.project_lifecycle.errors import EngineError
+from sciplot_core.project_lifecycle.project_file_handoff import project_file_handoff
 from sciplot_core.project_lifecycle.project_file_intent import project_file_axis_intent
 from sciplot_core.project_lifecycle.project_file_summary import project_file_figure
 from sciplot_core.project_store.runtime import project_runtime
@@ -77,10 +81,24 @@ def archive_plot_view(path: Path, figure_id: str | None, *,
                 "axis_ticks": ticks, "domain_semantics": spec.get("domain_semantics")}, native, build["document_sha256"])
 
 
-
 def archive_axis_intent(path: Path, request: dict[str, Any], *, expected_project_id: str,
                         expected_revision: RevisionToken) -> dict[str, Any]:
     """Route a plan or save to the existing typed archive owner."""
     with closing(public_plot_service()) as service:
         return project_file_axis_intent(service, path, request, expected_project_id=expected_project_id,
                                         expected_revision=expected_revision)
+
+
+def export_archive_pdf(path: Path, output: Path, *, project_id: str, revision: RevisionToken) -> None:
+    """Publish a typed handoff to one exact filename, without overwriting."""
+    output = require_data_destination(output.parent) / output.name
+    if output.exists() or output.is_symlink():
+        raise FileExistsError(output)
+    with TemporaryDirectory(prefix=".sciplot-pdf-", dir=output.parent) as temporary:
+        with closing(public_plot_service()) as service:
+            result = project_file_handoff(
+                service, path, {"plot_id": revision.plot_id, "revision": revision.revision,
+                                "formats": ["pdf"], "output_dir": str(Path(temporary) / "handoff")},
+                expected_project_id=project_id, expected_revision=revision)
+        [exported] = result["exports"]
+        install_new_delivery(Path(exported["path"]), output)

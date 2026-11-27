@@ -417,7 +417,8 @@ def test_standalone_editor_and_cli_save_major_ticks_in_the_same_relocated_archiv
 
 
 @pytest.mark.comprehensive
-def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_path):
+def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_path, monkeypatch):
+    import pymupdf
     from PyQt6 import QtCore, QtTest, QtWidgets
     from test_figure_document import request_for_figure
 
@@ -439,7 +440,7 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
             request["idempotency_key"] = figure
             request["template_definition"]["figure_spec"]["views"][0]["axes"][0]["label"] = f"Frequency {figure} (Hz)"
             saved = service.create(request, project=project)
-            assert saved["ready_to_use"]
+            assert saved["ready_to_use"], saved
             plots[figure] = saved["plot_id"]
     archive = original / "Original.sciplot"
     initial = create_project_file(archive, store, expected_generation=store.snapshot()["generation"])
@@ -463,6 +464,7 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
         assert window.figures.isVisible() and window.figures.currentData() is None
         assert not window.axes.isEnabled() and not window.review.isEnabled()
         assert not window.summary and window.viewer is None
+        assert not window.export_pdf.isEnabled()
         assert {window.figures.itemData(i) for i in range(window.figures.count())} == set(plots.values())
         assert file_sha256(moved) == initial.sha256
 
@@ -489,6 +491,22 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
         assert after_b != initial.sha256
         assert project_file_summary(moved, plots["A"]) == before_a
 
+        target = delivery / "Selected B.pdf"
+        names = iter(("", str(target.with_suffix("")), str(target), str(delivery / "stale.pdf")))
+        monkeypatch.setattr(QtWidgets.QFileDialog, "getSaveFileName", lambda *_a, **_kw: (next(names), "PDF (*.pdf)"))
+        assert window.export_pdf.isEnabled()
+        window.export_pdf.trigger()
+        assert list(delivery.iterdir()) == [moved]
+        window.export_pdf.trigger()
+        assert "已导出修订 1" in window.status.text()
+        with pymupdf.open(target) as pdf:
+            assert "Edited B (Hz)" in pdf[0].get_text()
+            assert "Frequency A (Hz)" not in pdf[0].get_text()
+        selected_bytes = target.read_bytes()
+        window.export_pdf.trigger()
+        assert "目标文件已存在" in window.status.text() and target.read_bytes() == selected_bytes
+        assert file_sha256(moved) == after_b
+
         window.figures.setCurrentIndex(window.figures.findData(plots["A"]))
         assert window.summary["plot_id"] == plots["A"] and window.summary["revision"] == 0
         window.axes.setCurrentIndex(window.axes.findData("axis:xb"))
@@ -500,7 +518,16 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
         direct.show()
         assert direct.figures.isHidden() and direct.summary["plot_id"] == plots["B"]
         assert direct.summary["revision"] == 1 and direct.viewer is not None
-        assert file_sha256(moved) == after_b and list(delivery.iterdir()) == [moved]
+        assert file_sha256(moved) == after_b and set(delivery.iterdir()) == {moved, target}
+
+        with closing(PlotService()) as service:
+            changed = service.intent(moved, {"mode": "apply", "property": "axis.label", "target_id": "axis:xb",
+                "plot_id": plots["B"], "base_revision": 1, "idempotency_key": "new-b", "value": "Newest B (Hz)"})
+            assert changed["revision"] == 2
+        latest = file_sha256(moved)
+        direct.export_pdf.trigger()
+        assert "项目或图已更新" in direct.status.text() and not direct.export_pdf.isEnabled()
+        assert file_sha256(moved) == latest and set(delivery.iterdir()) == {moved, target}
     finally:
         for window in windows:
             window.close()
