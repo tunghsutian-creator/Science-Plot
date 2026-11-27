@@ -112,7 +112,8 @@ def build_typography_checks(
                     "Multipart panel labels must use their role-specific "
                     "final-size typography."
                 ),
-                severity="error" if panel_typography["applicable"] else "warning",
+                severity="error" if panel_typography["applicable"]
+                and panel_typography["coverage_complete"] else "warning",
             ),
         ]
     )

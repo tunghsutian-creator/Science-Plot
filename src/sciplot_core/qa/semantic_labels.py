@@ -175,9 +175,9 @@ def _semantic_label_report(
             if label:
                 panel_labels.append(label)
                 compare({"source": f"publication_intent.panels[{index}].panel_label", "text": label},
-                        observed=observed_everywhere)
+                        observed=None if _normalized_label(label) in observed_everywhere else set())
     return {
-        "available": bool(documents) or bool(intent.get("exact_labels")),
+        "available": bool(documents) or bool(intent.get("exact_labels")) or bool(panel_labels),
         "coverage_complete": bool(documents) and bool(expected) and not unverified,
         "passed": not missing and not unverified and bool(expected),
         "expected": expected,
@@ -240,7 +240,6 @@ def _scientific_unit_expression_report(
 
 def _panel_typography_report(
     semantic: dict[str, Any],
-    pdfs: list[dict[str, Any]],
     profile: dict[str, Any],
 ) -> dict[str, Any]:
     panel_labels = [str(value) for value in semantic.get("panel_labels", [])]
@@ -257,39 +256,15 @@ def _panel_typography_report(
             "panel_labels": panel_labels,
             "matches": [],
         }
-    spans = [
-        span for pdf in pdfs for span in pdf["text_objects"].get("visible_spans", [])
-    ]
-    matches: list[dict[str, Any]] = []
-    expected_size = float(panel_profile.get("size_pt") or 0.0)
-    for label in panel_labels:
-        candidates = [
-            span
-            for span in spans
-            if _normalized_label(span.get("text")) == _normalized_label(label)
-        ]
-        valid = [
-            span
-            for span in candidates
-            if abs(float(span.get("size") or 0.0) - expected_size) <= 0.15
-            and (
-                panel_profile.get("weight") != "bold"
-                or "bold" in str(span.get("font") or "").casefold()
-            )
-            and (
-                panel_profile.get("style") != "upright"
-                or all(
-                    token not in str(span.get("font") or "").casefold()
-                    for token in ("italic", "oblique")
-                )
-            )
-        ]
-        matches.append({"label": label, "candidates": candidates, "valid": valid})
+    # The inventory has text and font spans, but no binding from a layout
+    # panel to its actual PDF text object. An identically styled axis/legend
+    # span or a different page must not prove panel typography.
     return {
         "applicable": True,
-        "coverage_complete": True,
-        "passed": all(item["valid"] for item in matches),
+        "coverage_complete": False,
+        "passed": False,
+        "reason_code": "panel_text_role_unbound",
         "panel_labels": panel_labels,
         "expected": panel_profile,
-        "matches": matches,
+        "matches": [],
     }

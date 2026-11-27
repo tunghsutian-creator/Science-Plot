@@ -41,7 +41,7 @@ def _publication_qa(
         exports,
     )
     scientific_units = _scientific_unit_expression_report(veusz_audit)
-    panel_typography = _panel_typography_report(semantic_labels, pdfs, profile)
+    panel_typography = _panel_typography_report(semantic_labels, profile)
     accessibility = _series_accessibility_report(veusz_audit, pdfs, profile)
     vsz_strokes = _vsz_stroke_report(veusz_audit, profile)
 

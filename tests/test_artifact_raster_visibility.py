@@ -211,3 +211,31 @@ def test_semantic_inventory_reports_missing_label_on_its_own_exported_figure(tmp
     assert check["actual"]["missing"] == [] and not check["actual"]["coverage_complete"]
     unverified, = check["actual"]["unverified"]
     assert ":" + str(tmp_path / "second.vsz") + ":" in unverified["source"]
+
+
+def test_an_identically_styled_label_on_another_page_cannot_prove_panel_typography(tmp_path):
+    from sciplot_core.publication import get_publication_profile
+
+    with fitz.open() as document:
+        axis_only = document.new_page(width=252, height=142)
+        axis_only.insert_text((20, 111), "a", fontsize=8, fontname="hebo")
+        intended_panel = document.new_page(width=252, height=142)
+        intended_panel.insert_text((15, 20), "Temperature (K)", fontsize=7)
+        document.save(tmp_path / "panels.pdf")
+
+    intent = {"layout_status": "confirmed", "panels": [
+        {"panel_label": "a", "confirmation_status": "confirmed"},
+    ]}
+    profile = get_publication_profile("nature_flagship_research_2026_v1")
+    (tmp_path / "publication_intent.json").write_text(json.dumps(intent))
+    result = run_qa(tmp_path, publication_profile=profile)
+    qa = result["publication"]
+    checks = {check["id"]: check for check in qa["checks"]}
+    semantic = checks["semantic_label_inventory"]["actual"]
+    assert semantic["observed_lines"] == ["a", "Temperature (K)"]
+    assert semantic["matched"] == []
+    assert semantic["unverified"][0]["text"] == "a"
+    typography = checks["panel_label_typography"]["actual"]
+    assert not typography["passed"] and not typography["coverage_complete"]
+    assert typography["reason_code"] == "panel_text_role_unbound"
+    assert qa["coverage"]["semantic_panel_and_required_label_inventory"] is False

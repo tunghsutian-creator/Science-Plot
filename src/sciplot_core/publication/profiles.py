@@ -128,8 +128,8 @@ _PUBLICATION_PROFILES: dict[str, dict[str, Any]] = {
             "recommended_minimum_text_size_pt": 5.0,
             # Nature's final-submission guidance uses 5--7 pt for ordinary
             # figure text, but explicitly calls for 8 pt bold panel labels in
-            # multipart figures. Confirmed panel labels are matched to final
-            # PDF spans, while the broad artifact envelope remains 5--8 pt.
+            # multipart figures. Verifying that exception requires a panel
+            # role bound to the final PDF text; the broad envelope is 5--8 pt.
             "maximum_text_size_pt": 8.0,
             "ordinary_text_minimum_size_pt": 5.0,
             "ordinary_text_maximum_size_pt": 7.0,
@@ -143,8 +143,8 @@ _PUBLICATION_PROFILES: dict[str, dict[str, Any]] = {
             "role_aware_validation": {
                 "status": "exact_label_inventory_required",
                 "reason": (
-                    "The 8 pt exception is validated only when confirmed panel labels can be matched "
-                    "to final PDF text spans."
+                    "The 8 pt exception requires evidence binding a confirmed panel "
+                    "to its final PDF text span, not a matching string."
                 ),
             },
             "require_embedded_fonts": True,
