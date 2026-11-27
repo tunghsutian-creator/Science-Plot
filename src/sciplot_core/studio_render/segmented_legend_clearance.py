@@ -39,7 +39,7 @@ def segmented_legend_placement(series: list[StudioSeries], options: dict[str, An
     half_height = max(float(footprint["font_height_mm"]) / height,
                       float(legend["swatch_height_fraction"])) / 2
     bottom = min(float(row["y_fraction"]) for row in legend["rows"]) - half_height
-    highest = max(float(group["bar_mean"]) + float(group["bar_error"]) for group in categorical["groups"])
+    highest = max(float(group["bar_mean"]) + float(group["bar_error"] or 0.0) for group in categorical["groups"])
     top = (highest - axis.y_min) / (axis.y_max - axis.y_min)
     # A full-width band conservatively covers the existing row text and swatches;
     # complete bars run continuously from zero to their mean, with SD above it.

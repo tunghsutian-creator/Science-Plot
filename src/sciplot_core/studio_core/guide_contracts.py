@@ -263,8 +263,8 @@ def _categorical_line_contracts(spec: dict[str, Any]) -> list[dict[str, Any]]:
         for bar_index, group in enumerate(groups, start=1):
             position = float(group["position"])
             mean = float(group["bar_mean"])
-            error = float(group["bar_error"])
-            if math.isfinite(error) and error > 0.0:
+            error = group["bar_error"]
+            if error is not None and math.isfinite(error) and error > 0.0:
                 low = mean - error
                 high = mean + error
                 append_segments(

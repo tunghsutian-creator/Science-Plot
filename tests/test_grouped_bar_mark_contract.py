@@ -64,7 +64,7 @@ def test_grouped_bar_native_marker_channel_matches_each_group_contract(tmp_path:
     _add_error_lines(errors, bar_groups=list(groups.values()), bar_style=categorical["visual_style"],
                      bar_width=categorical["visual_style"]["bar_width_fraction"])
     if replicates == 1:
-        assert all(group["bar_error"] == 0.0 for group in groups.values())
+        assert all(group["bar_error"] is None for group in groups.values())
         assert errors.added == []
     else:
         assert all(group["bar_error"] > 0.0 for group in groups.values())

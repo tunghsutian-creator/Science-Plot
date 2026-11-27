@@ -77,7 +77,7 @@ def _categorical_bar_axis_defaults(
             "y_ticks": list(axis_ticks),
         }
 
-    groups: list[tuple[float, float]] = []
+    groups: list[tuple[float, float | None]] = []
     for item in series:
         if item.presentation_kind != "categorical_replicates":
             continue
@@ -92,7 +92,7 @@ def _categorical_bar_axis_defaults(
         return None
     required_upper = max(
         max(mean for mean, _error in groups) / CATEGORICAL_BAR_TARGET_MEAN_FRACTION,
-        max(mean + error for mean, error in groups)
+        max(mean if error is None else mean + error for mean, error in groups)
         / CATEGORICAL_BAR_MAX_ERROR_FRACTION,
     )
     compact_axis = compact_linear_axis((0.0, required_upper), padding_fraction=0.0)

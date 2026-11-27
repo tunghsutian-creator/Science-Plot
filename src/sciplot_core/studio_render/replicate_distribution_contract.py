@@ -112,7 +112,7 @@ def _replicate_distribution_contract(
         values = [
             float(value) for value in item.y_values if math.isfinite(float(value))
         ]
-        bar_statistics: dict[str, float | str] = {}
+        bar_statistics: dict[str, float | str | None] = {}
         if template_id == "bar":
             mean, error = _mean_and_sample_sd(values)
             bar_statistics = {

@@ -100,8 +100,8 @@ def _add_error_lines(
     for bar_index, group in enumerate(bar_groups, start=1):
         position = float(group["position"])
         mean = float(group["bar_mean"])
-        error = float(group["bar_error"])
-        if not math.isfinite(error) or error <= 0.0:
+        error = group["bar_error"]
+        if error is None or not math.isfinite(error) or error <= 0.0:
             continue
         low = mean - error
         high = mean + error

@@ -110,8 +110,8 @@ def _deterministic_category_positions(
     return tuple(center + bounded * offset for offset in assigned_offsets)
 
 
-def _mean_and_sample_sd(values: tuple[float, ...] | list[float]) -> tuple[float, float]:
-    """Return arithmetic mean and the categorical bar contract's sample SD."""
+def _mean_and_sample_sd(values: tuple[float, ...] | list[float]) -> tuple[float, float | None]:
+    """Return arithmetic mean and sample SD, undefined for one replicate."""
 
     mean = math.fsum(float(value) for value in values) / len(values)
     error = (
@@ -120,7 +120,7 @@ def _mean_and_sample_sd(values: tuple[float, ...] | list[float]) -> tuple[float,
             / (len(values) - 1)
         )
         if len(values) >= 2
-        else 0.0
+        else None
     )
     return mean, error
 

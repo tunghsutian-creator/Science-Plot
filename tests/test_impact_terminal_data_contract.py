@@ -98,6 +98,30 @@ def test_impact_replay_requires_one_workbook_and_known_conditions(
         )
 
 
+def test_impact_bar_keeps_unknown_sd_distinct_from_measured_zero(tmp_path: Path) -> None:
+    from sciplot_core.studio_core.guide_contracts import _categorical_line_contracts
+
+    source = tmp_path / "impact-replicates.csv"
+    source.write_text("Impact strength,Impact strength,Impact strength\n"
+                      "kJ/m2,kJ/m2,kJ/m2\nA,B,C\n7,2,3\n,4,3\n")
+    result = derive_terminal_render_data_contract(
+        request={"rule_id": "impact_metric", "template": "bar"}, terminal_sources=[source]
+    )
+    assert result["status"] == "passed"
+    contract = result["units"][0]["categorical_contract"]
+    groups = contract["groups"]
+    assert [group["label"] for group in groups] == ["A", "B", "C"]
+    assert [group["raw_values"] for group in groups] == [[7.0], [2.0, 4.0], [3.0, 3.0]]
+    assert [group["replicate_count"] for group in groups] == [1, 2, 2]
+    assert [group["bar_mean"] for group in groups] == [7, 3, 3]
+    assert [group["bar_error"] for group in groups] == [None, pytest.approx(2**.5), 0]
+    lines = [line for line in _categorical_line_contracts({"categorical": contract})
+             if line["name"].startswith("categorical_bar_error_")]
+    assert [line["name"] for line in lines] == [f"categorical_bar_error_2_{i}" for i in (1, 2, 3)]
+    assert lines[0]["yPos"] == [pytest.approx(3 - 2**.5)]
+    assert lines[0]["yPos2"] == [pytest.approx(3 + 2**.5)]
+
+
 def test_ordinary_terminal_replay_still_rejects_unknown_series_order(
     tmp_path: Path,
 ) -> None:

@@ -27,8 +27,7 @@ def impact_presentation_statistics(template: str, *, summary_statistic: str | No
             "minimum_replicates_for_sample_sd": 2,
             "singleton_rendering": (
                 "blocked_undefined_sample_sd" if summary_statistic == "mean_sample_sd_n"
-                else "mean_without_error_bar" if template == "point_line"
-                else "zero_error_without_a_defined_sample_sd"
+                else "mean_without_error_bar"
             ),
             "source_requirement": ("at_least_two_compatible_workbook_conditions"
                                    if template == "point_line" else "impact_replicates"),

@@ -159,8 +159,11 @@ def _expand_axis_for_visual_extents(
                 half_width = max(bar_width * 0.5, bar_width * cap_ratio * 0.5)
                 x_values.extend((position - half_width, position + half_width))
                 mean = float(group["bar_mean"])
-                error = float(group["bar_error"])
-                y_values.extend((mean - error, mean + error))
+                error = group["bar_error"]
+                if error is None:
+                    y_values.append(mean)
+                else:
+                    y_values.extend((mean - float(error), mean + float(error)))
         elif categorical_kind == "stacked_components":
             bar_width = float(
                 visual_style.get(

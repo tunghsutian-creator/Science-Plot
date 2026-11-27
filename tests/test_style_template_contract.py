@@ -1105,7 +1105,7 @@ def test_grouped_bar_omits_zero_sd_error_caps(tmp_path: Path) -> None:
     spec = json.loads(Path(result["veusz_specs"][0]).read_text(encoding="utf-8"))
     text = Path(result["veusz_documents"][0]).read_text(encoding="utf-8")
 
-    assert all(group["bar_error"] == 0.0 for group in spec["categorical"]["groups"])
+    assert all(group["bar_error"] is None for group in spec["categorical"]["groups"])
     assert "categorical_bar_error_" not in text
     assert not any(
         item["name"].startswith("categorical_bar_error_")
