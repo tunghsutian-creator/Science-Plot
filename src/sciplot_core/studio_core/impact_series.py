@@ -173,7 +173,7 @@ def _impact_point_line_series_from_source(
         display_label = label_mapping.get(condition, condition)
         color = DEFAULT_PALETTE_COLORS[condition_index % len(DEFAULT_PALETTE_COLORS)]
         summaries = tuple(
-            _mean_and_sample_sd(tuple(float(value) for value in values))
+            _mean_and_sample_sd(values) if len(values) >= 2 else (values[0], None)
             for values in payload.values
         )
         means = tuple(summary[0] for summary in summaries)

@@ -72,16 +72,19 @@ def _impact_point_line_contract(
         error_bars = [
             {
                 "condition_label": item.label,
-                "sample_label": sample_labels[index],
+                "sample_label": sample_label,
                 "position": float(position),
-                "mean": float(item.y_values[index]),
-                "error": float(item.error_values[index]),
-                "low": float(item.y_values[index] - item.error_values[index]),
-                "high": float(item.y_values[index] + item.error_values[index]),
+                "mean": float(mean),
+                "error": float(error),
+                "low": float(mean - error),
+                "high": float(mean + error),
                 "color": item.color,
             }
             for item in impact_summary
-            for index, position in enumerate(item.x_values)
+            for sample_label, position, mean, error in zip(
+                sample_labels, item.x_values, item.y_values, item.error_values, strict=True,
+            )
+            if error is not None
         ]
         groups = [
             {

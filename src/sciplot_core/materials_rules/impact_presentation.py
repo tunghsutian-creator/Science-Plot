@@ -25,7 +25,11 @@ def impact_presentation_statistics(template: str, *, summary_statistic: str | No
             "summary_statistic": "mean_sample_sd_n" if template == "bar" and summary_statistic == "mean_sample_sd_n" else "mean_sample_sd", "center": "arithmetic_mean",
             "spread": "sample_standard_deviation", "ddof": 1,
             "minimum_replicates_for_sample_sd": 2,
-            "singleton_rendering": "blocked_undefined_sample_sd" if summary_statistic == "mean_sample_sd_n" else "zero_error_without_a_defined_sample_sd",
+            "singleton_rendering": (
+                "blocked_undefined_sample_sd" if summary_statistic == "mean_sample_sd_n"
+                else "mean_without_error_bar" if template == "point_line"
+                else "zero_error_without_a_defined_sample_sd"
+            ),
             "source_requirement": ("at_least_two_compatible_workbook_conditions"
                                    if template == "point_line" else "impact_replicates"),
             "n_disclosure": "delivered_summary_csv" if template == "bar" and summary_statistic == "mean_sample_sd_n" else "internal_analysis_metrics_only",
