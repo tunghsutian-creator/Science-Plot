@@ -42,7 +42,6 @@ from sciplot_core.render.layout_report import (  # noqa: F401
 from sciplot_core.render.export_files import (  # noqa: F401
     _copy_veusz_exports,
     _validate_export_records,
-    _remove_stale_render_exports,
     _cleanup_worker_exports,
 )
 from sciplot_core.render.panel_render import (  # noqa: F401

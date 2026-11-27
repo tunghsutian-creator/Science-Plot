@@ -28,22 +28,35 @@ def test_worker_export_set_must_match_request() -> None:
         )
 
 
-def test_stale_generated_exports_are_removed_without_touching_other_files(
+def test_terminal_render_preserves_preexisting_files(
     tmp_path: Path,
 ) -> None:
-    stale = [
-        tmp_path / "sample_curve.pdf",
-        tmp_path / "sample_curve_300dpi.tiff",
-        tmp_path / "sample_curve_part02.pdf",
-    ]
-    for path in stale:
-        path.write_bytes(b"stale")
-    unrelated = tmp_path / "notes.pdf"
-    unrelated.write_bytes(b"user")
+    source = tmp_path / "sample.csv"
+    source.write_text("x,y\n0,1\n1,2\n", encoding="utf-8")
+    output = tmp_path / "figures"
+    scratch = output / "_veusz"
+    scratch.mkdir(parents=True)
+    note = scratch / "research.txt"
+    note.write_bytes(b"user")
+    destination = output / "sample_curve.pdf"
+    destination.write_bytes(b"previous figure")
+    with pytest.raises(FileExistsError, match="_veusz"):
+        render.render_to_dir(source, template="curve", output_dir=output)
+    assert note.read_bytes() == b"user"
 
-    render._remove_stale_render_exports(
-        tmp_path, source_stem="sample", template="curve"
-    )
+    second = tmp_path / "other"
+    second.mkdir()
+    collision = second / destination.name
+    collision.write_bytes(destination.read_bytes())
+    with pytest.raises(FileExistsError, match="sample_curve.pdf"):
+        render.render_to_dir(source, template="curve", output_dir=second)
+    assert list(second.iterdir()) == [collision]
+    assert collision.read_bytes() == b"previous figure"
 
-    assert all(not path.exists() for path in stale)
-    assert unrelated.read_bytes() == b"user"
+    with pytest.raises(FileExistsError):
+        render._copy_veusz_exports(
+            {"exports": [{"format": "pdf", "path": str(source)}]},
+            output_dir=second, output_base="sample_curve",
+        )
+    assert list(second.iterdir()) == [collision]
+    assert collision.read_bytes() == b"previous figure"

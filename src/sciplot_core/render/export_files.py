@@ -2,14 +2,25 @@
 
 from __future__ import annotations
 
-import re
 import shutil
 from collections import Counter
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
+from sciplot_core.delivery.install import install_new_delivery
 from sciplot_core.policy.export_formats import export_suffix
 from sciplot_core.policy.frame_export import CANONICAL_EXPORT_FORMATS
+
+
+def _export_destination(output_dir: Path, output_base: str, fmt: str) -> Path:
+    suffix, _dpi = export_suffix(fmt)
+    return output_dir / (Path(f"{output_base}.pdf").stem + suffix)
+
+
+def _require_new_render_path(path: Path) -> None:
+    if path.exists() or path.is_symlink():
+        raise FileExistsError(f"Render target already exists: {path}. Choose a new output directory.")
 
 
 def _copy_veusz_exports(
@@ -39,10 +50,12 @@ def _copy_veusz_exports(
             raise RuntimeError(
                 f"Veusz reported a missing or empty `{fmt}` export: {source}"
             )
-        suffix, _dpi = export_suffix(fmt)
-        destination = output_dir / (Path(f"{output_base}.pdf").stem + suffix)
+        destination = _export_destination(output_dir, output_base, fmt)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
+        with TemporaryDirectory(prefix=".sciplot-export-", dir=destination.parent) as staging:
+            candidate = Path(staging) / destination.name
+            shutil.copy2(source, candidate)
+            install_new_delivery(candidate, destination)
         record = {
             "path": str(destination),
             "format": fmt,
@@ -68,30 +81,6 @@ def _validate_export_records(
         "Veusz export response does not match the requested format set: "
         f"missing={missing or 'none'}, unexpected={unexpected or 'none'}."
     )
-
-
-def _remove_stale_render_exports(
-    output_dir: Path,
-    *,
-    source_stem: str,
-    template: str,
-    keep: set[Path] | None = None,
-) -> None:
-    base = re.escape(f"{source_stem}_{template}")
-    generated_name = re.compile(
-        rf"^{base}(?:_part\d{{2}})?(?:_(?:300|600)dpi)?\.(?:pdf|svg|png|tiff)$",
-        flags=re.IGNORECASE,
-    )
-    if not output_dir.is_dir():
-        return
-    retained = {path.expanduser().resolve() for path in (keep or set())}
-    for path in output_dir.iterdir():
-        if (
-            path.is_file()
-            and generated_name.fullmatch(path.name)
-            and path.resolve() not in retained
-        ):
-            path.unlink()
 
 
 def _cleanup_worker_exports(panel_dir: Path) -> None:

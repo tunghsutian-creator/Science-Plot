@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.json_values import json_safe
@@ -41,7 +40,8 @@ from sciplot_core.render.layout_report import (
 from sciplot_core.render.export_files import (
     _copy_veusz_exports,
     _validate_export_records,
-    _remove_stale_render_exports,
+    _export_destination,
+    _require_new_render_path,
     _cleanup_worker_exports,
 )
 
@@ -145,9 +145,7 @@ def _render_to_dir_veusz(
     normalized_split_policy = normalize_split_policy(split_policy)
     output_dir.mkdir(parents=True, exist_ok=True)
     worker_root = output_dir / "_veusz"
-    if worker_root.exists():
-        shutil.rmtree(worker_root)
-    worker_root.mkdir(parents=True, exist_ok=True)
+    _require_new_render_path(worker_root)
 
     all_outputs: list[Path] = []
     all_exports: list[dict[str, Any]] = []
@@ -166,6 +164,12 @@ def _render_to_dir_veusz(
             split_plan = build_split_plan(labels, policy=normalized_split_policy)
             chunks = [list(chunk["series"]) for chunk in split_plan["chunks"]]
             panels = [(index, chunk) for index, chunk in enumerate(chunks, start=1)]
+
+        for panel_index, _ in panels:
+            output_base = _veusz_target_base(source, template, panel_index=panel_index)
+            for fmt in normalized_exports:
+                _require_new_render_path(_export_destination(output_dir, output_base, fmt))
+        worker_root.mkdir()
 
         for panel_index, chunk in panels:
             panel_options = dict(options)
@@ -213,13 +217,6 @@ def _render_to_dir_veusz(
                 transform_steps,
                 panel_transform_steps,
             )
-
-        _remove_stale_render_exports(
-            output_dir,
-            source_stem=source.stem,
-            template=template,
-            keep=set(all_outputs),
-        )
 
     payload = {
         "kind": "sciplot_render_result",
