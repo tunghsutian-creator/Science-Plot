@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import math
 import re
+from collections.abc import Set
 from pathlib import Path
 from typing import Any
 
@@ -24,10 +25,15 @@ from sciplot_core.semantic_sources.table_candidate_sources import (
 
 def read_tts_blocks(
     source: str | Path, *, selected_tests: set[str] | None = None,
+    selected_intervals: Set[tuple[str, int]] = frozenset(),
+    expected_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Read selected original Tests strictly and report excluded invalid intervals."""
     path = Path(source).expanduser().resolve()
     before = path.read_bytes()
+    digest = hashlib.sha256(before).hexdigest()
+    if expected_sha256 is not None and digest != expected_sha256:
+        raise ValueError(f"Frequency source changed since the original interval was selected: {path}.")
     raw = read_raw_table_normalized(path)
     blocks: list[dict[str, Any]] = []
     test = result = ""
@@ -74,7 +80,7 @@ def read_tts_blocks(
                     block["declared_point_count"] = declared_count
                 block.update(_read_tts_interval(path, interval, regions, test, declared_count))
             except ValueError as exc:
-                if selected_tests is None or test in selected_tests:
+                if selected_tests is None or test in selected_tests or (test, i) in selected_intervals:
                     raise
                 region = regions[0] if regions else {}
                 data_start = region.get("data_start_row")
@@ -94,7 +100,7 @@ def read_tts_blocks(
         raise ValueError(f"Source changed while reading {path}.")
     return {
         "path": str(path),
-        "sha256": hashlib.sha256(before).hexdigest(),
+        "sha256": digest,
         "size_bytes": len(before),
         "blocks": blocks,
     }

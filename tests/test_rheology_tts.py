@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import math
 from pathlib import Path
 
@@ -221,6 +222,43 @@ def test_optional_instrument_units_are_not_assumed(tmp_path):
     )
     with pytest.raises(ValueError, match="Unsupported explicit torque unit"):
         read_tts_blocks(path)
+
+
+def test_frequency_trial_selection_binds_same_test_to_original_row_and_source_sha(tmp_path):
+    from sciplot_core.workflow.rheology_tts_contract import validate_creation_request
+
+    request = _request(tmp_path)
+    path = Path(request["frequency_source"])
+    trials = "".join(_block("Sample", t, point_count=n, frequency_scan=True)
+                     for t, n in ((210, 5), (210, 14)))
+    path.write_text(trials, encoding="utf-16")
+    request["samples"][0]["polymer"] = "HDPE"
+    request["samples"][0].pop("tts_source")
+    request["samples"][0].pop("tts_test")
+    with pytest.raises(ValueError, match="must identify exactly one original interval"):
+        analyze_tts_request(request)
+
+    second_header = [row for row, value in enumerate(trials.splitlines())
+                     if value.startswith("Interval data:")][1]
+    request["samples"][0]["frequency_interval"] = {
+        "header_row": second_header,
+        "source_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+    }
+    validate_creation_request(request)
+    result = analyze_tts_request(request)
+    block = result["frequency_samples"][0]["block"]
+    assert block["header_row"] == second_header
+    assert block["point_count"] == 14
+    first, last = block["points"][0], block["points"][-1]
+    assert first["source_row"] == second_header + 3
+    assert first["omega_rad_s"] == 100
+    assert first["storage_modulus_Pa"] == pytest.approx(6309.57344480193)
+    assert last["omega_rad_s"] == 0.1
+    assert last["storage_modulus_Pa"] == pytest.approx(12.5892541179417)
+    assert result["excluded_blocks"][0]["point_count"] == 5
+    path.write_text(trials.replace("WMa", "Flag"), encoding="utf-16")
+    with pytest.raises(ValueError, match="source changed since the original interval was selected"):
+        analyze_tts_request(request)
 
 
 def test_duplicate_tts_evidence_never_rebinds_to_the_last_column(tmp_path):

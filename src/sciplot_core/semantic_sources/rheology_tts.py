@@ -153,7 +153,8 @@ def analyze_tts_request(request: dict[str, Any]) -> dict[str, Any]:
 
     Required request: version=1, reference_temperature_C, frequency_source,
     frequency_temperature_C, samples. Each sample selects sample_id/polymer/
-    udc_wt_percent/frequency_test and optionally tts_source + tts_test. A filename
+    udc_wt_percent/frequency_test, optionally an exact frequency_interval and
+    optionally tts_source + tts_test. A filename
     never overrides a Test header; aliases are an explicit request declaration.
     """
     if request.get("version") != 1:
@@ -167,36 +168,55 @@ def analyze_tts_request(request: dict[str, Any]) -> dict[str, Any]:
     selections = request["samples"]
     if not selections or len({s["sample_id"] for s in selections}) != len(selections):
         raise ValueError("TTS sample IDs must be nonempty and unique.")
-    if len({s["frequency_test"] for s in selections}) != len(selections):
-        raise ValueError(
-            "One original frequency Test cannot represent multiple sample identities."
-        )
     frequency_path = str(Path(request["frequency_source"]).expanduser().resolve())
-    selected_tests = {frequency_path: {s["frequency_test"] for s in selections}}
+    selected_tests: dict[str, set[str]] = {frequency_path: set()}
+    selected_intervals: set[tuple[str, int]] = set()
+    frequency_digest = None
     for selection in selections:
+        interval = selection.get("frequency_interval")
+        if interval is None:
+            selected_tests[frequency_path].add(selection["frequency_test"])
+        else:
+            if frequency_digest is not None and interval["source_sha256"] != frequency_digest:
+                raise ValueError("All selected intervals must refer to the same original frequency source version.")
+            frequency_digest = interval["source_sha256"]
+            selected_intervals.add((selection["frequency_test"], interval["header_row"]))
         if "tts_source" in selection:
             path = str(Path(selection["tts_source"]).expanduser().resolve())
             selected_tests.setdefault(path, set()).add(selection["tts_test"])
-    sources = {path: read_tts_blocks(path, selected_tests=tests)
-               for path, tests in selected_tests.items()}
+    sources = {
+        path: read_tts_blocks(
+            path, selected_tests=tests,
+            **({"selected_intervals": selected_intervals, "expected_sha256": frequency_digest}
+               if path == frequency_path and selected_intervals else {}),
+        )
+        for path, tests in selected_tests.items()
+    }
     frequency_source = sources[frequency_path]
     frequency_samples = []
     tts_samples = []
     selected_keys: set[tuple[str, int]] = set()
+    selected_frequency_rows: set[int] = set()
     for selection in selections:
         amount = float(selection["udc_wt_percent"])
         if not math.isfinite(amount) or amount < 0:
             raise ValueError("UDC content must be finite and nonnegative.")
+        interval = selection.get("frequency_interval")
         fs = [
             b
             for b in frequency_source["blocks"]
             if b["test"] == selection["frequency_test"]
+            and (interval is None or b["header_row"] == interval["header_row"])
         ]
         if len(fs) != 1:
             raise ValueError(
-                f"Frequency Test {selection['frequency_test']!r} must identify exactly one original interval."
+                f"Frequency Test {selection['frequency_test']!r} must identify exactly one original interval. "
+                "For repeated Test names, supply the original header_row and source_sha256 in frequency_interval."
             )
         block = fs[0]
+        if block["header_row"] in selected_frequency_rows:
+            raise ValueError("One original frequency interval cannot represent multiple sample identities.")
+        selected_frequency_rows.add(block["header_row"])
         selected_keys.add((block["source"], block["header_row"]))
         target = [
             p

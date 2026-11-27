@@ -30,6 +30,16 @@ def creation_request_schema() -> dict:
                 "required": ["sample_id", "polymer", "udc_wt_percent", "frequency_test"],
                 "properties": {"sample_id": text, "polymer": {"enum": ["HDPE", "LDPE"]},
                     "udc_wt_percent": {"type": "number", "minimum": 0}, "frequency_test": text,
+                    "frequency_interval": {
+                        "type": "object", "additionalProperties": False,
+                        "description": "Exact original frequency interval when a Test label repeats.",
+                        "required": ["header_row", "source_sha256"],
+                        "properties": {
+                            "header_row": {"type": "integer", "minimum": 0,
+                                           "description": "Zero-based original Interval data header row."},
+                            "source_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+                        },
+                    },
                     "tts_source": text, "tts_test": text},
                 "dependentRequired": {"tts_source": ["tts_test"], "tts_test": ["tts_source"]},
             }},

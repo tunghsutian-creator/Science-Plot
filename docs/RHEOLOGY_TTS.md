@@ -150,7 +150,13 @@ delivered master coordinates; separate FS210 measurements are never spliced in.
 The older `rheology tts --request REQUEST.json --json` command remains a combined
 analysis-and-plot compatibility utility. It is not the primary route for new
 AI-processed work. Its request uses raw sources, sample/Test mappings and explicit
-analysis options. Absent `analysis_options` and `figure_layout`, it retains the
+analysis options. When a `frequency_test` name repeats, select its exact physical
+interval by adding `"frequency_interval": {"header_row": 42, "source_sha256": "<original file SHA256>"}`
+to that sample. Count original rows from zero, including metadata and blank
+rows, and use the row headed `Interval data:`. The row must belong to the
+named Test; a different file digest requires a new selection. With no
+`frequency_interval`, the Test name must continue to identify one interval.
+Absent `analysis_options` and `figure_layout`, it retains the
 legacy nominal-temperature, unreduced-modulus/interpolated-reference analysis
 and combined figure plan for exact reproduction. Selecting the revised combined
 calculation requires `temperature_basis=measured_mean`,
