@@ -39,7 +39,8 @@ def project_receipt(payload: dict[str, Any], returncode: int) -> dict[str, Any]:
                 # not from a later inspection of the same paths.
                 **{name: item[name] for name in ("document_sha256", "spec_sha256") if item.get(name)},
                 "exports": [
-                    {"format": artifact.get("format"), "path": artifact.get("path")}
+                    {"format": artifact.get("format"), "path": artifact.get("path"),
+                     **({"sha256": artifact["delivery_sha256"]} if artifact.get("delivery_sha256") else {})}
                     for artifact in artifacts
                     if isinstance(artifact, dict)
                     and artifact.get("figure_id") == item.get("figure_id")

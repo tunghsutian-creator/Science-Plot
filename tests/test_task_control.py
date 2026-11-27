@@ -458,10 +458,11 @@ def test_current_handoff_reviews_exports_without_rewriting_old_deliveries(
     if has_launcher:
         launcher.write_text("existing launcher")
     before = {p.name: p.read_bytes() for p in delivery.iterdir()}
-    image = {"format": "tiff", "path": str(delivery / "secondary.tiff")}
+    image = {"format": "tiff", "path": str(delivery / "secondary.tiff"), "sha256": "e" * 64}
     past = {"figure_id": "secondary", "document_sha256": "d" * 64, "exports": [image]}
+    current_image = dict(image)
     witness = {"manifest": str(project / "runs/studio_001/manifest.json"),
-               "figures": [{**past, "exports": [{**image, "sha256": "e" * 64}]}]}
+               "figures": [{**past, "exports": [current_image]}]}
     current = {"project": str(project), "figures": [{"figure_id": "secondary"}], "source": {"current": True},
                "qa": {"current": True}, "delivery": {"current": True, "path": str(delivery), "publication": witness}}
     monkeypatch.setattr(control, "inspect_project", lambda _: current)
@@ -493,6 +494,15 @@ def test_current_handoff_reviews_exports_without_rewriting_old_deliveries(
     assert control._current_result(state)["next_step"]["evidence_gaps"] == ["task_publication"]
     past["spec_sha256"] = witness["figures"][0]["spec_sha256"]
     assert control._current_result(state)["next_step"]["action"] == "review_exports_and_deliver"
+    # Re-rendering can overwrite the same paths without changing the saved document.
+    current_image["sha256"] = "2" * 64
+    replaced = control._current_result(state)
+    assert replaced["next_step"]["evidence_gaps"] == ["task_publication"]
+    assert replaced["next_step"]["current_publication"] == witness
+    assert "images" not in replaced["next_step"]
+    current_image["sha256"] = image.pop("sha256")
+    assert control._current_result(state)["next_step"]["evidence_gaps"] == ["task_publication"]
+    image["sha256"] = current_image["sha256"]
     witness["manifest"] = str(project / "runs/studio_002/manifest.json")
     newer = control._current_result(state)
     assert newer["next_step"]["evidence_gaps"] == ["task_publication"]
@@ -501,6 +511,14 @@ def test_current_handoff_reviews_exports_without_rewriting_old_deliveries(
     assert newer["result"]["figures"] == [past]
     current["delivery"]["current"] = False
     assert "manual_edit" not in control._current_result(state)["next_step"]
+
+    def unavailable(_):
+        raise OSError("Project unavailable")
+
+    monkeypatch.setattr(control, "inspect_project", unavailable)
+    unavailable_result = control._current_result(state)
+    assert unavailable_result["next_step"]["evidence_gaps"] == ["current_project"]
+    assert "images" not in unavailable_result["next_step"]
 
 
 def test_malformed_edit_is_rejected_before_task_directory_or_project_query(tmp_path, monkeypatch):

@@ -29,7 +29,8 @@ def frequency_receipt(record: Path, output: Path, manifest: dict[str, Any]) -> d
     figures = [{"figure_id": item["figure_id"], "plot": by_id[item["figure_id"]]["plot"],
                 "title": item["title"], "status": "ready",
                 "document": docs[item["figure_id"]]["path"], "document_sha256": docs[item["figure_id"]]["delivery_sha256"],
-                "exports": [{key: entry[key] for key in ("format", "path")}
+                "exports": [{"format": entry["format"], "path": entry["path"],
+                             **({"sha256": entry["delivery_sha256"]} if entry.get("delivery_sha256") else {})}
                             for entry in package if entry["figure_id"] == item["figure_id"]]}
                for item in manifest["resolved_figure_plan"]["tasks"]]
     return {"kind": "sciplot_project_creation_result", "version": 1, "status": "created" if ready else "blocked",

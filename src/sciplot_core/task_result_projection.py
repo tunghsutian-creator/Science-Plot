@@ -88,15 +88,19 @@ def _selected_publication(
         return None, False
     publication = {**value, "figures": figures}
 
-    def export_keys(figure: dict[str, Any]) -> set[tuple[str, str]]:
-        return {(item["format"], item["path"]) for item in figure.get("exports", [])}
+    def export_identity(figure: dict[str, Any]) -> list[tuple[str, str, str]]:
+        return sorted(
+            (item["format"], item["path"], item.get("sha256") or "")
+            for item in figure.get("exports", [])
+        )
 
     matches = (
         receipt["studio_run"].get("manifest") == publication["manifest"]
         and all(
-            export_keys(figure) == export_keys(historical[figure["figure_id"]])
-            and all(historical[figure["figure_id"]].get(key) == figure[key]
-                    for key in ("document_sha256", "spec_sha256") if key in figure)
+            export_identity(figure) == export_identity(historical[figure["figure_id"]])
+            and figure.get("document_sha256")
+            and all(figure.get(key) == historical[figure["figure_id"]].get(key)
+                    for key in ("document_sha256", "spec_sha256"))
             for figure in figures
         )
     )
@@ -118,6 +122,8 @@ def current_task_result(state: dict[str, Any], *, inspect_project: Callable[[Pat
             summary.update(status="blocked", blocker={"reason_code": getattr(exc, "reason_code", "prepared_project_changed"),
                            "message": str(exc)}, next_step={"action": "resolve_prepared_conflict"})
         return summary
+    completed_publication = (state["status"] == "complete"
+                             and (state.get("result", {}).get("studio_run") or {}).get("ready_to_use") is True)
     if state.get("project"):
         try:
             current = inspect_project(Path(state["project"]))
@@ -125,8 +131,7 @@ def current_task_result(state: dict[str, Any], *, inspect_project: Callable[[Pat
                 "project", "primary_figure_id", "figures", "source", "qa", "delivery",
                 "ready_to_use", "readiness_evaluated", "document_authority", "live_gui_state_evaluated",
             ) if key in current}
-            if (state["status"] == "complete"
-                    and (state.get("result", {}).get("studio_run") or {}).get("ready_to_use") is True):
+            if completed_publication:
                 gaps = [key for key in ("source", "qa", "delivery") if (current.get(key) or {}).get("current") is not True]
                 publication, matches = (None, False) if gaps else _selected_publication(current, state)
                 if matches and publication is not None:
@@ -138,6 +143,7 @@ def current_task_result(state: dict[str, Any], *, inspect_project: Callable[[Pat
                         "message": "Review the verified exports for the saved revisions shown here, then deliver.",
                     }
                 else:
+                    summary["result_scope"] = "historical_task_receipt"
                     historical = not gaps
                     summary["next_step"] = {
                         "action": "resolve_current_evidence", "task": state["task_dir"],
@@ -155,4 +161,11 @@ def current_task_result(state: dict[str, Any], *, inspect_project: Callable[[Pat
                     }
         except (ValueError, OSError, RuntimeError, TimeoutExpired) as exc:
             summary["current_project"] = {"status": "unknown", "message": str(exc)}
+            if completed_publication:
+                summary["result_scope"] = "historical_task_receipt"
+                summary["next_step"] = {
+                    "action": "resolve_current_evidence", "task": state["task_dir"],
+                    "evidence_gaps": ["current_project"],
+                    "message": "Current publication could not be checked. The task's export paths are historical locators.",
+                }
     return summary
