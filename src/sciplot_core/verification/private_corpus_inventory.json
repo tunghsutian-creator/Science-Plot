@@ -9985,7 +9985,7 @@
       },
       {
         "nodeid": "tests/test_private_native_exit_port.py::test_real_metadata_history_precedes_native_registration",
-        "reason": "Read-only real os.scandir of the existing public tests/fixtures/performance_comparison directory checks its two exact filenames and immediate active-observer sequence growth until the same primary reaches at least 231000 frames; a full primary already at that boundary does no duplicate prefix loop. No file content is opened or fixture modified. This comprehensive public metadata-history composition control establishes neither a kernel actor binding nor private/scientific acceptance."
+        "reason": "One read-only real os.scandir of the existing public tests/fixtures/performance_comparison directory checks its two exact filenames and immediate active-observer sequence growth. Deterministic live-registration tests cover registration ordering; this control establishes neither a kernel actor binding nor private/scientific acceptance. No file content is opened or fixture modified."
       },
       {
         "nodeid": "tests/test_private_native_exit_port.py::test_request_cannot_select_an_external_stream",

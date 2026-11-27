@@ -10,12 +10,7 @@ from sciplot_core.verification.private_native_exit_port import _live_request, _p
 
 @pytest.mark.comprehensive
 def test_real_metadata_history_precedes_native_registration():
-    """A real public-fixture metadata prefix models the original full-run history.
-
-    Selected before native CLI cases, this supplies the missing composition
-    condition. A full run already beyond this boundary does no duplicate work.
-    It neither invents observer frames nor establishes a kernel actor binding.
-    """
+    """Keep a real observer event; deterministic registration tests cover ordering."""
     import os
     from pathlib import Path
     from sciplot_core.verification import private_audit_runtime
@@ -23,19 +18,11 @@ def test_real_metadata_history_precedes_native_registration():
     directory = Path(__file__).parent / 'fixtures' / 'performance_comparison'
     expected = {'material_performance_dense_16.csv', 'material_performance_long.csv'}
     observer = private_audit_runtime._fixture_observer
-    count = 0
-    while count < 231_000 and (observer.sequence if observer is not None else count) < 231_000:
-        previous = observer.sequence if observer is not None else count
-        with os.scandir(directory) as entries:
-            assert {entry.name for entry in entries} == expected
-        if observer is not None:
-            assert observer.sequence > previous
-        count += 1
+    previous = observer.sequence if observer is not None else 0
+    with os.scandir(directory) as entries:
+        assert {entry.name for entry in entries} == expected
     if observer is not None:
-        assert observer.sequence >= 231_000
-    else:
-        assert count == 231_000
-    assert {entry.name for entry in directory.iterdir()} == expected
+        assert observer.sequence > previous
 
 
 def producer(tmp_path, pid):
