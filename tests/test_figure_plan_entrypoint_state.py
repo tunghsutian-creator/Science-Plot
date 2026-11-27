@@ -130,6 +130,8 @@ def test_studio_publication_evidence_binds_completed_plan_to_study_model(
         figure_set={"version": 2, "primary_figure_id": plan.primary_figure_id},
         figure_set_spec_hashes=((str(tmp_path / "studio" / "spec.json"), "a" * 64),),
     )
+    snapshot_exports = [{"format": "pdf", "path": str(pdf), "document": str(document),
+                         "figure_id": plan.primary_figure_id}]
     publication_events: list[str] = []
     binding_calls: list[tuple[object, object]] = []
     snapshot_calls: list[dict[str, Any]] = []
@@ -185,11 +187,11 @@ def test_studio_publication_evidence_binds_completed_plan_to_study_model(
         "_write_studio_analysis_report",
         lambda *_args, **_kwargs: None,
     )
-    monkeypatch.setattr(
-        evidence_module,
-        "_run_studio_qa",
-        lambda *_args, **_kwargs: {"status": "passed", "publication": {}},
-    )
+    def record_qa(_output_dir, **kwargs):
+        assert kwargs["export_artifacts"] is snapshot_exports
+        return {"status": "passed", "publication": {}}
+
+    monkeypatch.setattr(evidence_module, "_run_studio_qa", record_qa)
     monkeypatch.setattr(
         evidence_module,
         "_verify_qa_artifact_hashes",
@@ -250,6 +252,7 @@ def test_studio_publication_evidence_binds_completed_plan_to_study_model(
         "build_studio_export_result",
         lambda **_kwargs: {
             "resolved_figure_plan": plan.to_payload(),
+            "exports": snapshot_exports,
         },
     )
     monkeypatch.setattr(

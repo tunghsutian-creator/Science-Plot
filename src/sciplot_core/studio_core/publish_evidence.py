@@ -122,6 +122,7 @@ def build_studio_publication_evidence(
         publication_profile=publication_profile,
         strict_publication=bool(request.get("publication_strict")),
         veusz_documents=veusz_documents,
+        export_artifacts=copied_exports,
     )
     if qa.get("status") == "passed":
         _verify_qa_artifact_hashes(

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections import Counter
+from pathlib import Path
 import re
 import unicodedata
 from typing import Any
@@ -71,33 +73,97 @@ def _flatten_label_values(value: object, *, source: str) -> list[dict[str, str]]
     return []
 
 
+def _verified_single_page_exports(
+    documents: list[dict[str, Any]],
+    pdfs: list[dict[str, Any]],
+    exports: list[dict[str, Any]],
+) -> dict[str, tuple[dict[str, Any], dict[str, Any]]]:
+    """Map a one-page VSZ to its PDF using the existing native export receipt."""
+    native = {str(Path(item["path"]).resolve()): item for item in documents if item.get("path")}
+    rendered = {str(Path(item["path"]).resolve()): item for item in pdfs}
+    matches: dict[str, list[tuple[dict[str, Any], dict[str, Any]]]] = {}
+    for record in exports:
+        if not isinstance(record, dict) or record.get("format") != "pdf":
+            continue
+        source, target = record.get("document"), record.get("path")
+        if not isinstance(source, str) or not isinstance(target, str):
+            continue
+        key = str(Path(source).resolve())
+        document = native.get(key)
+        pdf = rendered.get(str(Path(target).resolve()))
+        if (document is not None and pdf is not None
+                and document.get("sha256") and document["sha256"] == record.get("document_sha256")
+                and pdf["sha256"] == record.get("sha256")
+                and len(document.get("pages", [])) == pdf["page_count"] == 1
+                and document["pages"][0].get("page") == 1):
+            matches.setdefault(key, []).append((record, pdf))
+    pdf_owners = Counter(pdf["path"] for values in matches.values() for _, pdf in values)
+    return {key: values[0] for key, values in matches.items()
+            if len(values) == 1 and pdf_owners[values[0][1]["path"]] == 1}
+
+
 def _semantic_label_report(
     audit: dict[str, Any] | None,
     intent: dict[str, Any],
     pdfs: list[dict[str, Any]],
+    exports: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    expected: list[dict[str, str]] = []
-    documents = audit.get("documents", []) if isinstance(audit, dict) else []
+    documents = [item for item in (audit or {}).get("documents", []) if isinstance(item, dict)]
+    owned = _verified_single_page_exports(documents, pdfs, exports)
+    observed_owned = {
+        pdf["path"]: {_normalized_label(line)
+                      for line in pdf["text_objects"]["plain_text_by_page"][0].get("visible_lines", [])}
+        for pdf in pdfs if pdf["page_count"] == 1
+    }
+    observed_lines = [
+        line for pdf in pdfs for page in pdf["text_objects"]["plain_text_by_page"]
+        for line in page.get("visible_lines", [])
+    ]
+    observed_everywhere = {_normalized_label(line) for line in observed_lines}
+    expected: list[dict[str, Any]] = []
+    matched: list[dict[str, Any]] = []
+    missing: list[dict[str, Any]] = []
+    unverified: list[dict[str, Any]] = []
+    seen: set[tuple[str | None, str]] = set()
+
+    def compare(item: dict[str, Any], *, document_path: str | None = None,
+                observed: set[str] | None) -> None:
+        normalized = _normalized_label(item["text"])
+        identity = document_path, normalized
+        if not normalized or identity in seen:
+            return
+        seen.add(identity)
+        item = {**item, "normalized": normalized}
+        expected.append(item)
+        if observed is None:
+            unverified.append(item)
+        elif normalized in observed:
+            matched.append(item)
+        else:
+            missing.append(item)
+
     for document in documents:
-        if not isinstance(document, dict):
-            continue
+        document_path = str(document.get("path") or "")
+        scope = owned.get(str(Path(document_path).resolve()))
+        page_root = document["pages"][0]["path"].rstrip("/") + "/" if scope else None
         for item in document.get("semantic_labels", []):
-            if (
-                isinstance(item, dict)
-                and isinstance(item.get("text"), str)
-                and item["text"].strip()
-            ):
-                expected.append(
-                    {
-                        "source": f"current_vsz:{document.get('path')}:{item.get('role')}:{item.get('path')}",
-                        "text": item["text"].strip(),
-                    }
-                )
-    expected.extend(
-        _flatten_label_values(
-            intent.get("exact_labels"), source="publication_intent.exact_labels"
-        )
-    )
+            if not isinstance(item, dict) or not isinstance(item.get("text"), str) or not item["text"].strip():
+                continue
+            expectation = {
+                "source": f"current_vsz:{document_path}:{item.get('role')}:{item.get('path')}",
+                "text": item["text"].strip(),
+            }
+            owner = str(item.get("path") or "")
+            if scope is None or page_root is None or not owner.startswith(page_root):
+                compare(expectation, document_path=document_path, observed=None)
+            else:
+                record, pdf = scope
+                compare({**expectation, "figure_id": record.get("figure_id"), "pdf_path": pdf["path"], "page": 1},
+                        document_path=document_path, observed=observed_owned[pdf["path"]])
+
+    for item in _flatten_label_values(intent.get("exact_labels"), source="publication_intent.exact_labels"):
+        compare(item, observed=observed_everywhere)
+
     panel_labels: list[str] = []
     if str(intent.get("layout_status") or "").casefold() == "confirmed":
         for index, panel in enumerate(intent.get("panels", [])):
@@ -108,41 +174,23 @@ def _semantic_label_report(
             label = str(panel.get("panel_label") or "").strip()
             if label:
                 panel_labels.append(label)
-                expected.append(
-                    {
-                        "source": f"publication_intent.panels[{index}].panel_label",
-                        "text": label,
-                    }
-                )
-    deduplicated: list[dict[str, str]] = []
-    seen: set[str] = set()
-    for item in expected:
-        normalized = _normalized_label(item["text"])
-        if normalized and normalized not in seen:
-            seen.add(normalized)
-            deduplicated.append({**item, "normalized": normalized})
-    observed_lines = [
-        str(line)
-        for pdf in pdfs
-        for page in pdf["text_objects"].get("plain_text_by_page", [])
-        for line in page.get("lines", [])
-    ]
-    normalized_lines = [_normalized_label(line) for line in observed_lines]
-    missing: list[dict[str, str]] = []
-    matched: list[dict[str, str]] = []
-    for item in deduplicated:
-        target = item["normalized"]
-        found = target in normalized_lines
-        (matched if found else missing).append(item)
+                compare({"source": f"publication_intent.panels[{index}].panel_label", "text": label},
+                        observed=observed_everywhere)
     return {
         "available": bool(documents) or bool(intent.get("exact_labels")),
-        "coverage_complete": bool(documents) and bool(deduplicated),
-        "passed": not missing and bool(deduplicated),
-        "expected": deduplicated,
+        "coverage_complete": bool(documents) and bool(expected) and not unverified,
+        "passed": not missing and not unverified and bool(expected),
+        "expected": expected,
         "matched": matched,
         "missing": missing,
+        "unverified": unverified,
         "observed_lines": observed_lines,
         "panel_labels": panel_labels,
+        "evidence_model": (
+            "Native labels are compared on the identified single-page figure. "
+            "Unbound native labels cannot be verified. This report checks text "
+            "presence, not the widget role of a PDF span."
+        ),
     }
 
 

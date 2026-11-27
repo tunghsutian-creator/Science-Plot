@@ -115,6 +115,7 @@ def _text_object_info(document: fitz.Document) -> dict[str, Any]:
     plain_text_by_page: list[dict[str, Any]] = []
     for page_index, page in enumerate(document):
         page_text = page.get_text("text")
+        visible_lines: list[str] = []
         plain_text_by_page.append(
             {
                 "page": page_index + 1,
@@ -122,6 +123,7 @@ def _text_object_info(document: fitz.Document) -> dict[str, Any]:
                 "lines": [
                     line.strip() for line in page_text.splitlines() if line.strip()
                 ],
+                "visible_lines": visible_lines,
             }
         )
         text = page.get_text("dict")
@@ -132,6 +134,7 @@ def _text_object_info(document: fitz.Document) -> dict[str, Any]:
                 line_spans = [
                     span for span in line.get("spans", []) if isinstance(span, dict)
                 ]
+                visible_line: list[str] = []
                 for span in line_spans:
                     if str(span.get("text") or "").strip():
                         span_record = {
@@ -151,6 +154,9 @@ def _text_object_info(document: fitz.Document) -> dict[str, Any]:
                         extracted_spans.append(span_record)
                         if _span_is_visible(span, page.rect):
                             visible_spans.append(span_record)
+                            visible_line.append(span_record["text"])
+                if visible_line:
+                    visible_lines.append("".join(visible_line).strip())
     sizes = [
         float(span.get("size") or 0.0)
         for span in visible_spans

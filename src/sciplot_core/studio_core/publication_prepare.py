@@ -139,7 +139,7 @@ def prepare_studio_export_run(
         document_path=snapshot_primary_document,
         output_dir=inventory.output_dir,
         figures=figures,
-        copied_exports=copied_exports,
+        copied_exports=result["exports"],
         veusz_documents=snapshot_documents,
         figure_set_export_scope=inventory.figure_set_export_scope,
         sources=sources,

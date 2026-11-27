@@ -83,7 +83,11 @@ def build_typography_checks(
                     "Axis, key, direct, exact, and confirmed panel labels must "
                     "survive into the final PDF."
                 ),
-                severity="error" if semantic_labels["available"] else "warning",
+                severity=(
+                    "error" if semantic_labels["available"]
+                    and (semantic_labels["missing"] or not semantic_labels["unverified"])
+                    else "warning"
+                ),
             ),
             _check(
                 "scientific_unit_expression",

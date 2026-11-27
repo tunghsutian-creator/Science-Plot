@@ -29,6 +29,7 @@ def _publication_qa(
     required_formats: dict[str, Any],
     veusz_audit: dict[str, Any] | None,
     publication_intent: dict[str, Any],
+    exports: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """Evaluate implemented constraints without claiming journal compliance."""
 
@@ -37,6 +38,7 @@ def _publication_qa(
         veusz_audit,
         publication_intent,
         pdfs,
+        exports,
     )
     scientific_units = _scientific_unit_expression_report(veusz_audit)
     panel_typography = _panel_typography_report(semantic_labels, pdfs, profile)

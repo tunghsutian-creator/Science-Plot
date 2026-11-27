@@ -163,3 +163,51 @@ def test_qa_cli_strict_without_profile_is_not_evaluated_but_keeps_artifact_evide
     assert strict["publication"]["reason_code"] == "publication_profile_missing"
     assert strict["publication"]["checked_constraints_passed"] is None
     assert strict["pdfs"] == ordinary["pdfs"] and strict["tiffs"] == ordinary["tiffs"]
+
+
+
+def test_semantic_inventory_reports_missing_label_on_its_own_exported_figure(tmp_path, monkeypatch):
+    from sciplot_core.publication import get_publication_profile, list_publication_profiles
+    from sciplot_core.qa import run as qa_run
+
+    records, audited = [], []
+    for figure_id, printed_text in (("first", "Stress (MPa)"), ("second", "Temperature (K)")):
+        native = tmp_path / f"{figure_id}.vsz"
+        native.write_text(f"# isolated native-audit fixture for {figure_id}")
+        native_digest = sha256(native.read_bytes()).hexdigest()
+        pdf = tmp_path / f"{figure_id}.pdf"
+        with fitz.open() as document:
+            page = document.new_page(width=170.079, height=142)
+            page.insert_text((15, 20), printed_text, fontsize=8)
+            document.save(pdf)
+        records.append({"format": "pdf", "figure_id": figure_id, "path": str(pdf),
+                        "sha256": sha256(pdf.read_bytes()).hexdigest(), "document": str(native),
+                        "document_sha256": native_digest})
+        audited.append({"path": str(native), "sha256": native_digest,
+                        "pages": [{"page": 1, "path": "/page1", "size_mm": [60, 50]}],
+                        "semantic_labels": [{"path": "/page1/graph1/x", "role": "axis_label",
+                                             "text": "Stress (MPa)"}]})
+    (tmp_path / "manifest.json").write_text(json.dumps({"result": {"exports": records}}))
+    monkeypatch.setattr(qa_run, "_run_veusz_audit", lambda _: ({"documents": audited}, None))
+    profile = get_publication_profile(list_publication_profiles()[0]["id"])
+
+    plain = run_qa(tmp_path)
+    assert plain["status"] == "passed" and plain["pdf_count"] == 2
+    evaluated = run_qa(tmp_path, publication_profile=profile)
+    check = next(item for item in evaluated["publication"]["checks"] if item["id"] == "semantic_label_inventory")
+    assert check["status"] == "failed" and check["severity"] == "error"
+    missing, = check["actual"]["missing"]
+    assert missing["text"] == "Stress (MPa)" and missing["figure_id"] == "second"
+    assert missing["pdf_path"] == str(tmp_path / "second.pdf") and missing["page"] == 1
+    matched, = check["actual"]["matched"]
+    assert matched["figure_id"] == "first" and matched["page"] == 1
+
+    # A current producer supplies its own records; a stale target digest forfeits
+    # that scope rather than borrowing text from the first PDF or the manifest.
+    records[1]["sha256"] = "0" * 64
+    evaluated = run_qa(tmp_path, publication_profile=profile, _export_artifacts=records)
+    check = next(item for item in evaluated["publication"]["checks"] if item["id"] == "semantic_label_inventory")
+    assert check["severity"] == "warning"
+    assert check["actual"]["missing"] == [] and not check["actual"]["coverage_complete"]
+    unverified, = check["actual"]["unverified"]
+    assert ":" + str(tmp_path / "second.vsz") + ":" in unverified["source"]

@@ -78,6 +78,7 @@ def _run_studio_qa(
     publication_profile: dict[str, Any] | None = None,
     strict_publication: bool = False,
     veusz_documents: list[Path] | None = None,
+    export_artifacts: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     try:
         qa = run_qa(
@@ -85,6 +86,7 @@ def _run_studio_qa(
             publication_profile=publication_profile,
             strict_publication=strict_publication,
             veusz_documents=veusz_documents,
+            _export_artifacts=export_artifacts,
         )
         layout_documents: list[dict[str, Any]] = []
         critical_issues: list[dict[str, Any]] = []

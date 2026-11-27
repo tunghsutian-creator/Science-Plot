@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 from sciplot_core.publication import resolve_publication_profile
+from sciplot_core.foundation.json_io import read_json_object
 
 from sciplot_core.qa.artifacts import (
     _canonical_artifacts,
@@ -39,6 +40,7 @@ def run_qa(
     strict_publication: bool = False,
     veusz_documents: list[Path] | None = None,
     _managed_native: list[dict[str, Any]] | None = None,
+    _export_artifacts: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     if publication_profile is None:
         discovered_profile = output_dir / "journal_profile.json"
@@ -92,6 +94,12 @@ def run_qa(
         _run_veusz_audit(discovered_veusz_documents) if profile else (None, None)
     )
     intent = _publication_intent(output_dir)
+    exports = _export_artifacts
+    if profile and exports is None:
+        manifest = read_json_object(output_dir / "manifest.json") or {}
+        result = manifest.get("result")
+        value = result.get("exports") if isinstance(result, dict) else None
+        exports = value if isinstance(value, list) else []
     publication = (
         _publication_qa(
             profile=profile,
@@ -100,6 +108,7 @@ def run_qa(
             required_formats=required_formats,
             veusz_audit=veusz_audit,
             publication_intent=intent,
+            exports=exports or [],
         )
         if profile and required_formats
         else None

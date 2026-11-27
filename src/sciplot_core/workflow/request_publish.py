@@ -104,9 +104,11 @@ def publish_request_result(
         transform_ledger=transform_ledger,
         publication_profile=publication_profile,
     )
+    exports = result.get("exports")
     qa = run_qa(
         output_dir,
         publication_profile=publication_profile,
+        _export_artifacts=exports if isinstance(exports, list) else [],
         strict_publication=rendered.managed_frequency or bool(request.get("publication_strict")),
         **({"_managed_native": result["managed_frequency"]["figures"]} if rendered.managed_frequency else {}),
         veusz_documents=[
