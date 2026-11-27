@@ -93,7 +93,17 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
     snapshot = store.snapshot()
     if snapshot["generation"] != baseline["generation"]:
         raise ValueError("The selected project changed before private preparation.")
-    with studio_preparation_candidate(store, snapshot=snapshot) as candidate, ExitStack() as mapping_scope:
+    with ExitStack() as mapping_scope:
+        verify_sources = None
+        if not new_creation and observed_plan is None and "studio/spec.json" in snapshot["files"]:
+            canonical = json.loads(store.read_bytes(request_path.name, generation=snapshot["generation"]))
+            if all(canonical.get(field) == request.get(field) for field in ("input", "data_mapping_execution")):
+                # Use the same exact source authority as reopening the current
+                # Studio document; the candidate does not infer a live version.
+                from sciplot_core.studio_core.preparation_source_runtime import current_preparation_runtime
+
+                verify_sources = mapping_scope.enter_context(current_preparation_runtime(store, snapshot))
+        candidate = mapping_scope.enter_context(studio_preparation_candidate(store, snapshot=snapshot))
         private_request = candidate.project_dir / request_path.name
         candidate.write_request(deepcopy(request))
         from sciplot_core.data_mapping.execution_inputs import mapping_input_reads
@@ -167,6 +177,8 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
         command = command_for_binding(store, baseline, kind="publish", key=key, writes=list(writes), request=intent)
         command = replace(command, source_trees=original_tree_reads(candidate.original_inputs.values(),
             mapping_tree_reads(candidate.mapping_inputs.values(), candidate.mapping_baseline_trees)))
+        if verify_sources is not None:
+            verify_sources()
         record = app.execute(command, lambda: ProjectMutation(writes, manifest, prepared_sources=checked_original_sources(candidate.original_inputs.values(), sources),
             input_reads=mapping_immutable_reads(candidate.snapshot, candidate.mapping_inputs.values(), candidate.mapping_baseline_roles),
             artifacts={"native-audits.json": json.dumps(audits, ensure_ascii=False, allow_nan=False).encode()}))
