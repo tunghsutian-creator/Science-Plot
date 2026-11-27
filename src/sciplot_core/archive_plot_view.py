@@ -15,8 +15,8 @@ from sciplot_core.plot_ir.figure_document import figure_spec
 from sciplot_core.project_lifecycle.contracts import RevisionToken
 from sciplot_core.project_lifecycle.errors import EngineError
 from sciplot_core.project_lifecycle.project_file_handoff import project_file_handoff
-from sciplot_core.project_lifecycle.project_file_intent import project_file_axis_intent
-from sciplot_core.project_lifecycle.project_file_summary import project_file_figure
+from sciplot_core.project_lifecycle.project_file_intent import project_file_intent
+from sciplot_core.project_lifecycle.project_file_summary import _summarize, project_file_figure
 from sciplot_core.project_store.runtime import project_runtime
 
 
@@ -77,16 +77,16 @@ def archive_plot_view(path: Path, figure_id: str | None, *,
                  for view in spec["views"] for axis in view["axes"]}
         yield ({"project_id": session.project_id, "project_file": str(session.path),
                 **{key: document[key] for key in ("plot_id", "revision", "scientific_hash", "presentation_hash")},
-                "revision_token": RevisionToken.of(document), "edit_targets": summary["edit_targets"],
+                "revision_token": RevisionToken.of(document), "edit_targets": _summarize(session, document)["edit_targets"],
                 "axis_ticks": ticks, "domain_semantics": spec.get("domain_semantics")}, native, build["document_sha256"])
 
 
-def archive_axis_intent(path: Path, request: dict[str, Any], *, expected_project_id: str,
-                        expected_revision: RevisionToken) -> dict[str, Any]:
+def archive_intent(path: Path, request: dict[str, Any], *, expected_project_id: str,
+                   expected_revision: RevisionToken) -> dict[str, Any]:
     """Route a plan or save to the existing typed archive owner."""
     with closing(public_plot_service()) as service:
-        return project_file_axis_intent(service, path, request, expected_project_id=expected_project_id,
-                                        expected_revision=expected_revision)
+        return project_file_intent(service, path, request, expected_project_id=expected_project_id,
+                                   expected_revision=expected_revision)
 
 
 def export_archive_pdf(path: Path, output: Path, *, project_id: str, revision: RevisionToken) -> None:

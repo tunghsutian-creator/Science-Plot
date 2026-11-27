@@ -418,10 +418,13 @@ def test_standalone_editor_and_cli_save_major_ticks_in_the_same_relocated_archiv
 
 @pytest.mark.comprehensive
 def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_path, monkeypatch):
+    from copy import deepcopy
+
     import pymupdf
     from PyQt6 import QtCore, QtTest, QtWidgets
     from test_figure_document import request_for_figure
 
+    from sciplot_core.plot_backends.figure_marks import mark_path
     from sciplot_core.plot_editor import PlotEditor
     from sciplot_core.project_lifecycle.project_file_summary import project_file_summary
 
@@ -432,13 +435,38 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
     store = FileProjectStore(project)
     store.snapshot(import_legacy=True)
     plots = {}
+    two_series_raw = b"Frequency,Modulus,Reference\nHz,Pa,Pa\n0,1,9\n5,5,12\n10,15,4\n"
+    selected_curve, other_curve = "layer:modulus", "layer:reference"
+    old_colors = ("#204060", "#506070")
     with closing(PlotService()) as service:
         for figure in ("A", "B"):
             folder = original / figure
             folder.mkdir()
             request = request_for_figure(folder)
             request["idempotency_key"] = figure
-            request["template_definition"]["figure_spec"]["views"][0]["axes"][0]["label"] = f"Frequency {figure} (Hz)"
+            spec = request["template_definition"]["figure_spec"]
+            view = spec["views"][0]
+            view["axes"][0]["label"] = f"Frequency {figure} (Hz)"
+            if figure == "B":
+                request["rule_id"] = "ordinary_xy"
+                source = folder / "figure.csv"
+                source.write_bytes(two_series_raw)
+                binding = request["data_binding"]
+                binding["data_sources"][0]["sha256"] = file_sha256(source)
+                reference = deepcopy(binding["slots"]["modulus"])
+                reference.update(series_id=other_curve, sample="Reference")
+                reference["y"].update(column="Reference", column_index=2)
+                binding["slots"]["reference"] = reference
+                first = view["layers"][0]
+                first["marks"][0]["style"]["line_color"] = old_colors[0]
+                second = deepcopy(first)
+                second.update(id=other_curve, label="Reference", legend={"visible": True, "label": "Reference"},
+                              z_order=1, marks=[{"id": "mark:reference", "type": "line",
+                                                "style": {"line_color": old_colors[1]}}])
+                second["mappings"]["y"] = "column:2"
+                view["layers"].append(second)
+                spec["guides"][0]["layer_ids"].append(other_curve)
+                spec["guides"][0]["order"].append(other_curve)
             saved = service.create(request, project=project)
             assert saved["ready_to_use"], saved
             plots[figure] = saved["plot_id"]
@@ -455,6 +483,12 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
     def click(widget):
         QtTest.QTest.mouseClick(widget, QtCore.Qt.MouseButton.LeftButton)
 
+    def native_curve_state(window):
+        native = window.viewer.document
+        colors = tuple(native.resolveSettingPath(None, mark_path("view:A", layer, mark) + "/PlotLine/color").get()
+                       for layer, mark in ((selected_curve, "mark:line"), (other_curve, "mark:reference")))
+        return colors, {name: item.data.tolist() for name, item in native.data.items()}
+
     windows = []
     try:
         # Finder dispatches this exact constructor without a figure argument.
@@ -465,12 +499,18 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
         assert not window.axes.isEnabled() and not window.review.isEnabled()
         assert not window.summary and window.viewer is None
         assert not window.export_pdf.isEnabled()
+        assert not window.curve_colors.isVisible()
         assert {window.figures.itemData(i) for i in range(window.figures.count())} == set(plots.values())
         assert file_sha256(moved) == initial.sha256
 
         window.figures.setCurrentIndex(window.figures.findData(plots["B"]))
         assert window.summary["plot_id"] == plots["B"] and window.summary["revision"] == 0
         assert window.viewer.__class__.__module__ == "veusz.windows.plotwindow"
+        assert window.curve_colors.isVisible() and not window.review_color.isEnabled()
+        assert {window.curves.itemData(i) for i in range(1, window.curves.count())} == {selected_curve, other_curve}
+        before_colors, before_data = native_curve_state(window)
+        assert before_colors == old_colors
+        before_b_science = window.summary["scientific_hash"]
         window.axes.setCurrentIndex(window.axes.findData("axis:xb"))
         assert window.label.text() == "Frequency B (Hz)"
         window.label.setText("Edited B (Hz)")
@@ -511,6 +551,7 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
         window.figures.setCurrentIndex(window.figures.findData(plots["A"]))
         assert window.summary["plot_id"] == plots["A"] and window.summary["revision"] == 0
         assert window.axes.currentData() is None and not window.review.isEnabled()
+        assert not window.curve_colors.isVisible()
         window.axes.setCurrentIndex(window.axes.findData("axis:xb"))
         assert window.label.text() == "Frequency A (Hz)"
 
@@ -532,11 +573,58 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
         direct.export_pdf.trigger()
         assert "项目或图已更新" in direct.status.text() and not direct.export_pdf.isEnabled()
         assert file_sha256(moved) == latest and set(delivery.iterdir()) == {moved, target}
+
+        direct.curves.setCurrentIndex(direct.curves.findData(selected_curve))
+        direct.color.setText("#ab147c")
+        click(direct.review_color)
+        assert "未保存" in direct.status.text() and not direct.review_color.isEnabled()
+        assert file_sha256(moved) == latest
+
         click(direct.refresh)
         assert direct.summary["plot_id"] == plots["B"] and direct.summary["revision"] == 2
         assert direct.axes.currentData() == "axis:xb" and direct.label.text() == "Newest B (Hz)"
         assert direct.review.isEnabled() and direct.export_pdf.isEnabled()
         assert project_file_summary(moved, plots["A"]) == before_a and file_sha256(moved) == latest
+        assert direct.curves.currentData() == selected_curve and not direct.review_color.isEnabled()
+        direct.color.setText("#ab147")
+        assert not direct.review_color.isEnabled()
+        new_color = "#ab147c"
+        direct.color.setText(new_color)
+        assert direct.review_color.isEnabled()
+
+        def edit_color(button):
+            reviewed = []
+
+            def decide():
+                dialog = app.activeModalWidget()
+                reviewed.append((dialog.windowTitle(), file_sha256(moved), [
+                    label.text() for label in dialog.findChildren(QtWidgets.QLabel)]))
+                [swatches] = [label.pixmap().toImage() for label in dialog.findChildren(QtWidgets.QLabel)
+                              if label.pixmap() is not None and not label.pixmap().isNull()]
+                assert swatches.pixelColor(swatches.width() // 4, swatches.height() // 2).name() == old_colors[0]
+                assert swatches.pixelColor(swatches.width() * 3 // 4, swatches.height() // 2).name() == new_color
+                buttons = dialog.findChild(QtWidgets.QDialogButtonBox)
+                click(buttons.button(button))
+
+            QtCore.QTimer.singleShot(0, decide)
+            click(direct.review_color)
+            [(heading, before_save, text)] = reviewed
+            assert heading == "核对曲线颜色" and before_save == latest
+            assert any("Gprime" in line and selected_curve in line and old_colors[0] in line and new_color in line
+                       for line in text)
+
+        edit_color(QtWidgets.QDialogButtonBox.StandardButton.Cancel)
+        assert direct.summary["revision"] == 2 and file_sha256(moved) == latest
+        edit_color(QtWidgets.QDialogButtonBox.StandardButton.Save)
+        assert direct.summary["revision"] == 3 and direct.summary["scientific_hash"] == before_b_science
+        assert native_curve_state(direct) == ((new_color, old_colors[1]), before_data)
+        assert file_sha256(moved) != latest and project_file_summary(moved, plots["A"]) == before_a
+        window.figures.setCurrentIndex(window.figures.findData(plots["B"]))
+        assert window.summary["revision"] == 3 and native_curve_state(window) == native_curve_state(direct)
+        with open_project_file(moved) as session:
+            assert two_series_raw in [session.store.resolve_source(source_id, version).read_bytes()
+                                      for source_id, versions in session.store.snapshot()["sources"].items()
+                                      for version in versions]
     finally:
         for window in windows:
             window.close()

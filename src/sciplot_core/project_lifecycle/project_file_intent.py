@@ -15,7 +15,7 @@ from .errors import EngineError
 from .head_observation import observe_plot_head
 from .journal_identity import saved_command
 from .project_file import ProjectFileSaveUnconfirmed
-from .project_file_summary import PROJECT_FILE_AXIS_PROPERTIES, PROJECT_FILE_EDIT_PROPERTIES, project_file_figure
+from .project_file_summary import PROJECT_FILE_EDIT_PROPERTIES, project_file_figure
 
 if TYPE_CHECKING:
     from .application import ProjectApplication
@@ -53,30 +53,15 @@ def _receipt(status: str, locator: dict[str, Any], document: dict[str, Any], *,
             **{key: document[key] for key in ("revision", "scientific_hash", "presentation_hash")}, **details}
 
 
-def project_file_axis_intent(service: "ProjectApplication", path: Path, request: dict[str, Any], *,
-                             expected_project_id: str | None = None,
-                             expected_revision: RevisionToken | None = None) -> dict[str, Any]:
-    request = validate_intent(request)
-    if request["property"] not in PROJECT_FILE_AXIS_PROPERTIES:
-        raise EngineError("project_file_intent_unsupported", "Choose an axis title or major tick edit.",
-                          action="choose_axis_property")
-    return _project_file_intent(service, path, request, expected_project_id=expected_project_id,
-                                expected_revision=expected_revision)
-
-
-def project_file_intent(service: "ProjectApplication", path: Path, request: dict[str, Any]) -> dict[str, Any]:
+def project_file_intent(service: "ProjectApplication", path: Path, request: dict[str, Any], *,
+                        expected_project_id: str | None = None,
+                        expected_revision: RevisionToken | None = None) -> dict[str, Any]:
+    """Only the archive owner may acknowledge a saved edit, not its disposable Store."""
     request = validate_intent(request)
     if request["property"] not in PROJECT_FILE_EDIT_PROPERTIES:
         raise EngineError("project_file_intent_unsupported",
                           "Choose an advertised axis title, major tick list, or ordinary XY line color.",
                           action="inspect_project_file")
-    return _project_file_intent(service, path, request)
-
-
-def _project_file_intent(service: "ProjectApplication", path: Path, request: dict[str, Any], *,
-                         expected_project_id: str | None = None,
-                         expected_revision: RevisionToken | None = None) -> dict[str, Any]:
-    """Only the archive owner may acknowledge a saved edit, not its disposable Store."""
     with project_file_figure(path, request["plot_id"]) as (session, owner, before):
         if expected_project_id is not None and session.project_id != expected_project_id:
             raise EngineError("project_file_identity_conflict", "This path no longer contains the original project file.",

@@ -31,6 +31,17 @@ def confirm(parent: QtWidgets.QWidget, title: str, text: str, *, preview: QtGui.
     return dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted
 
 
+def confirm_line_color(parent: QtWidgets.QWidget, *, label: str, before: str, after: str) -> bool:
+    swatches = QtGui.QPixmap(240, 26)
+    swatches.fill(QtCore.Qt.GlobalColor.transparent)
+    with QtGui.QPainter(swatches) as painter:
+        for x, color in ((0, before), (126, after)):
+            painter.setPen(QtGui.QColor("#777777"))
+            painter.setBrush(QtGui.QColor(color))
+            painter.drawRect(x, 0, 113, 25)
+    return confirm(parent, "核对曲线颜色", f"曲线：{label}\n现在：{before}\n改为：{after}", preview=swatches)
+
+
 def archive_pdf_action(window: QtWidgets.QMainWindow, plot: Path, status: QtWidgets.QLabel,
                        current: Callable[[], dict[str, Any]]) -> QtGui.QAction:
     action = QtGui.QAction("导出当前图 PDF…", window)
