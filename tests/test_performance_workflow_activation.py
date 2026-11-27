@@ -169,21 +169,13 @@ def test_second_performance_task_failure_restores_existing_managed_output(
     (output / "manifest.json").write_text('{"state":"ready"}', encoding="utf-8")
     (output / "notes.txt").write_text("keep", encoding="utf-8")
     before = _snapshot(output)
-    real_renderer = performance_bundle.render_to_dir
-    calls = 0
+    def reject_render(*_args: object, **_kwargs: object) -> dict[str, Any]:
+        pytest.fail("An unverified run directory reached a performance task renderer.")
 
-    def fail_second(*args: object, **kwargs: object) -> dict[str, Any]:
-        nonlocal calls
-        calls += 1
-        if calls == 2:
-            raise RuntimeError("synthetic performance second task failure")
-        return real_renderer(*args, **kwargs)
+    monkeypatch.setattr(performance_bundle, "render_to_dir", reject_render)
 
-    monkeypatch.setattr(performance_bundle, "render_to_dir", fail_second)
-
-    with pytest.raises(RuntimeError, match="second task failure"):
+    with pytest.raises(ValueError, match="Output already contains unverified files"):
         workflow.run_request(request_path)
 
-    assert calls == 2
     assert _snapshot(output) == before
     assert not list(output.parent.glob(f".{output.name}.sciplot-managed-backup-*"))

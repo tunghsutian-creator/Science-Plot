@@ -207,12 +207,14 @@ def test_dsc_workflow_render_failure_restores_existing_managed_output(
     (output_dir / "manifest.json").write_text('{"state":"ready"}', encoding="utf-8")
     (output_dir / "notes.txt").write_text("keep", encoding="utf-8")
     before = _snapshot(output_dir)
+    source = tmp_path / "dsc.csv"
+    source.write_text("Temperature (°C),Heat Flow (W/g)\n40,0.2\n", encoding="utf-8")
     request_path = tmp_path / "workflow_request.json"
     request_path.write_text(
         json.dumps(
             {
                 "recipe": "auto",
-                "input": str(_fixture()),
+                "input": str(source),
                 "output": str(output_dir),
                 "rule_id": RULE_ID,
                 "exports": ["pdf", "tiff_300"],
@@ -222,11 +224,11 @@ def test_dsc_workflow_render_failure_restores_existing_managed_output(
     )
 
     def reject_render(*_args: object, **_kwargs: object) -> dict[str, object]:
-        raise RuntimeError("synthetic DSC Workflow render failure")
+        pytest.fail("An unverified run directory reached the DSC renderer.")
 
     monkeypatch.setattr(single_task_bundle_module, "render_to_dir", reject_render)
 
-    with pytest.raises(RuntimeError, match="DSC Workflow render failure"):
+    with pytest.raises(ValueError, match="Output already contains unverified files"):
         workflow.run_request(request_path)
 
     assert _snapshot(output_dir) == before

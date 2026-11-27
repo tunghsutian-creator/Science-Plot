@@ -20,7 +20,7 @@ from sciplot_core.figure_plan import (
 )
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.foundation.source_locations import literal_source_path
+from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.materials_rules.catalog import resolve_rule_template
 from sciplot_core.one_step import build_one_step_project
@@ -99,8 +99,17 @@ def run_request(
     from sciplot_core.foundation.research_destination import require_data_destination
     require_data_destination(output_dir)
     from sciplot_core.output_contract import requested_delivery_root
-    require_data_destination(requested_delivery_root({"request": source_request}, run_output=output_dir))
-    from .frequency_managed_workflow import check_visible_frequency_documents, managed_frequency_session
+    delivery = require_data_destination(requested_delivery_root({"request": source_request}, run_output=output_dir))
+    from .frequency_managed_workflow import managed_frequency_session, reuse_completed_frequency_run
+
+    source_path = resolve_source_path(_resolve_request_path(
+        source_request.get("input"), base_dir=base_dir, field="input",
+    )).resolve()
+    if source_path.is_dir():
+        for destination in (output_dir.resolve(), delivery):
+            if any(ancestor.is_dir() and ancestor.samefile(source_path)
+                   for ancestor in (destination, *destination.parents)):
+                raise ValueError(f"Output would write inside the original source: {destination}. Choose a new directory.")
 
     session, authority = managed_frequency_session(output_dir, source_request, new_creation=_new_creation)
     reference = _resolve_request_path(source_request["data_mapping_execution"], base_dir=base_dir,
@@ -109,7 +118,14 @@ def run_request(
                 if reference is not None and _observed_plan is not None else None)
     with session, mapping_input_reads(str(reference) if reference is not None else None, expected_source=original):
         if authority is not None:
-            check_visible_frequency_documents(authority, source_request, output_dir)
+            prior = reuse_completed_frequency_run(authority, source_request, output_dir, request_path=request_path)
+            if prior is not None:
+                return prior
+        from sciplot_core.delivery.filesystem_metadata import is_delivery_finder_metadata
+        from sciplot_core.policy import DELIVERY_DIR
+        if delivery != (output_dir / DELIVERY_DIR).resolve() and delivery.exists():
+            if not delivery.is_dir() or any(not is_delivery_finder_metadata(p) for p in delivery.iterdir()):
+                raise ValueError(f"Delivery output is already occupied: {delivery}. Choose a new directory.")
         with _managed_output_transaction(output_dir):
             return _run_request_in_managed_output(
                 request_path=request_path,

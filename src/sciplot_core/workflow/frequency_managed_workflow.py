@@ -77,6 +77,43 @@ def check_visible_frequency_documents(authority: Path, request: dict[str, Any], 
                 raise ValueError(f"Saved Veusz copy has local edits; its bytes were kept: {path}")
 
 
+def reuse_completed_frequency_run(authority: Path, request: dict[str, Any], output: Path, *,
+                                  request_path: Path) -> dict[str, Any] | None:
+    """Retry a sealed direct frequency run by observing it, not replacing its folders."""
+    from sciplot_core.delivery.package_validation import verify_delivery_package
+    from sciplot_core.foundation.json_io import read_json_object
+    from sciplot_core.project_store.io import observe_existing_store
+
+    identity = canonical_json_sha256(request)
+    workspace = authority / identity
+    if not (workspace / ".sciplot_store/head.json").is_file():
+        return None
+    manifest = read_json_object(output / "manifest.json")
+    if (manifest is None or manifest.get("kind") != "sciplot_run"
+            or manifest.get("ready_to_use") is not True or manifest.get("source_request") != request
+            or manifest.get("request_path") != str(request_path)):
+        return None
+    with observe_existing_store():
+        store = FileProjectStore(workspace)
+        app = ProjectCommands(store)
+        receipt = app.query(_COMMAND + ":" + identity)
+        prepared = app.query(_COMMAND + ":" + identity + ":prepare")
+        if receipt is None or receipt["phase"] != "complete" or prepared is None:
+            return None
+        source = prepared["metadata"]["request"]["original"]
+        if source_tree_sha256(Path(source["locator"])) != source["tree_sha256"]:
+            raise ValueError("The original frequency data changed. Choose a new output directory.")
+        check_visible_frequency_documents(authority, request, output)
+        verified = _project(store, output=output, receipt=receipt, write=False)
+        if verified["managed_frequency"] != manifest.get("result", {}).get("managed_frequency"):
+            raise ValueError("The saved Managed frequency run no longer matches its sealed result.")
+        package = verify_delivery_package(manifest["delivery_package"], expected_root=output / DELIVERY_DIR,
+                                          expected_manifest=manifest)
+        if package["passed"] is not True:
+            raise ValueError("The saved frequency delivery changed. Choose a new output directory.")
+    return manifest
+
+
 def frequency_candidates(resolved: ResolvedScientificSource, *, authority: Path) -> PreparedFrequencyRequests | None:
     domain, plan = resolved.domain, resolved.figure_plan
     if (not isinstance(domain, ResolvedRheologySweepDomain) or plan is None
@@ -125,7 +162,8 @@ def render_managed_frequency(resolved: ResolvedScientificSource, *, authority: P
     return _project(store, output=output, receipt=receipt)
 
 
-def _project(store: FileProjectStore, *, output: Path, receipt: dict[str, Any]) -> dict[str, Any]:
+def _project(store: FileProjectStore, *, output: Path, receipt: dict[str, Any],
+             write: bool = True) -> dict[str, Any]:
     generation = receipt["generation"]
     result = receipt["result"]
     plan = resolved_figure_plan_from_payload(json.loads(store.read_bytes("figure-plan.json", generation=generation)))
@@ -134,6 +172,13 @@ def _project(store: FileProjectStore, *, output: Path, receipt: dict[str, Any]) 
     current = store.snapshot()
     if current["generation"] != generation or current["projection_status"] != "current":
         raise ValueError("The saved Managed frequency project has changed. Open its figures or choose a new run output.")
+    def project_file(target: Path, blob: bytes) -> None:
+        if write:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(blob)
+        elif not target.is_file() or file_sha256(target) != hashlib.sha256(blob).hexdigest():
+            raise ValueError(f"Saved frequency output changed and was not replaced: {target}")
+
     attachments = {entry["figure_id"]: Attachment(store, entry)
                    for entry in read_index(store, current)["attachments"].values()}
     exports, documents, outcomes, edits = [], [], [], []
@@ -160,14 +205,12 @@ def _project(store: FileProjectStore, *, output: Path, receipt: dict[str, Any]) 
                 exports.append({"format": "pdf" if suffix == ".pdf" else "tiff_300", "path": str(target),
                                 "source": str(target), "figure_id": task.figure_id, "exists": True,
                                 "size_bytes": len(blob), "dpi": None if suffix == ".pdf" else 300})
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(blob)
+            project_file(target, blob)
             delivered.append(str(target))
         outcomes.append(FigureOutcome(task.figure_id, "ready", tuple(delivered)))
     metrics = store.read_bytes("analysis/analysis_metrics.csv", generation=generation)
     table = output / "tables" / "analysis_metrics.csv"
-    table.parent.mkdir(parents=True, exist_ok=True)
-    table.write_bytes(metrics)
+    project_file(table, metrics)
     return {"kind": "sciplot_render_result", "template": "point_line", "sheet": 0,
             "render_engine": "veusz", "qa_target": "veusz_export", "export_formats": ["pdf", "tiff_300"],
             "outputs": [item["path"] for item in exports], "exports": exports, "veusz_documents": documents, "veusz_specs": [],

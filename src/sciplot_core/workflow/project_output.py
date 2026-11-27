@@ -15,7 +15,7 @@ def private_run_output(candidate: StudioPreparationCandidate, logical: str) -> I
     if previous:
         # Primary members were copied by the candidate. External members stay
         # untouched; the same managed-name replacement is captured below.
-        with _managed_output_transaction(directory):
+        with _managed_output_transaction(directory, private=True):
             yield directory
     else:
         directory.mkdir(parents=True, exist_ok=True)

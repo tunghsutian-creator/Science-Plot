@@ -69,7 +69,7 @@ def create_frequency_project(source: Path, verified: dict[str, Any], layout: Use
                 return frequency_receipt(canonical_request, output, prior_manifest)
             if not current["qa"]["current"]:
                 raise ValueError("The saved Managed frequency figures changed; open them rather than rerunning creation.")
-        with _managed_output_transaction(output):
+        with _managed_output_transaction(output, private=True):
             manifest = _run_request_in_managed_output(
                 request_path=canonical_request, source_request=request, base_dir=record.parent, output_dir=output,
                 classifier=classify_source, update_project=False, frequency_authority=authority,

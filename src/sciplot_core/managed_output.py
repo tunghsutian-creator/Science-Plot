@@ -31,33 +31,37 @@ def _remove_artifact(path: Path) -> None:
         shutil.rmtree(path)
 
 
+def _existing_entries(output_dir: Path, names: Sequence[str]) -> list[Path]:
+    return [path for name in names if (path := output_dir / name).exists() or path.is_symlink()]
+
+
+def require_clear_managed_output(output_dir: Path, managed_names: Sequence[str]) -> None:
+    """Names identify what the runner will write, not who owns existing bytes."""
+    if output_dir.is_symlink() or (output_dir.exists() and not output_dir.is_dir()):
+        raise ValueError(f"Choose a real output directory: {output_dir}.")
+    conflicts = _existing_entries(output_dir, managed_names)
+    if conflicts:
+        raise ValueError(
+            "Output already contains unverified files; nothing was replaced: "
+            + ", ".join(str(path) for path in conflicts)
+            + ". Choose a new output directory."
+        )
+
+
 @contextmanager
 def managed_output_transaction(
     output_dir: Path,
     *,
     managed_names: Sequence[str],
+    private: bool = False,
 ) -> Iterator[None]:
-    """Replace generator-owned top-level artifacts without losing the last run.
-
-    For an existing output directory, named entries move to a sibling backup
-    before generation.  A failed replacement removes only newly generated
-    named entries and restores the prior bytes.  Unrelated user files remain
-    in place.  New output directories intentionally retain partial diagnostics
-    after failure.
-    """
+    """Preserve unowned outputs; private images can regenerate owned entries."""
 
     names = _managed_names(managed_names)
-    output_preexisted = output_dir.exists()
+    if not private:
+        require_clear_managed_output(output_dir, names)
     output_dir.mkdir(parents=True, exist_ok=True)
-    if not output_preexisted:
-        yield
-        return
-
-    existing = [
-        output_dir / name
-        for name in names
-        if (output_dir / name).exists() or (output_dir / name).is_symlink()
-    ]
+    existing = _existing_entries(output_dir, names) if private else []
     if not existing:
         yield
         return

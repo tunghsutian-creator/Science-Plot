@@ -15,7 +15,7 @@ from sciplot_core.foundation.path_names import (
 from sciplot_core.assisted_cleanup import (
     CLEANUP_REQUEST_FILENAME,
 )
-from sciplot_core.managed_output import managed_output_transaction
+from sciplot_core.managed_output import managed_output_transaction, require_clear_managed_output
 from sciplot_core.policy import (
     DELIVERY_DIR,
 )
@@ -176,10 +176,17 @@ def _extend_runtime_transform_steps(
         )
 
 
-def _managed_output_transaction(output_dir: Path) -> AbstractContextManager[None]:
+def require_unclaimed_run_output(output_dir: Path) -> None:
+    require_clear_managed_output(output_dir, (*_MANAGED_OUTPUT_DIRECTORIES, *_MANAGED_OUTPUT_FILES))
+
+
+def _managed_output_transaction(
+    output_dir: Path, *, private: bool = False,
+) -> AbstractContextManager[None]:
     return managed_output_transaction(
         output_dir,
         managed_names=(*_MANAGED_OUTPUT_DIRECTORIES, *_MANAGED_OUTPUT_FILES),
+        private=private,
     )
 
 
