@@ -342,7 +342,9 @@ def test_mcp_semantic_schemas_and_dispatch_share_core(monkeypatch: pytest.Monkey
     export_params = {"plot": "/tmp/plot", "handoff": handoff}
     assert validator.is_valid(export_params)
     assert validator.is_valid({"plot": "/tmp/plot"})
-    for invalid in ({"formats": ["tiff_300"]}, {"formats": ["pdf", "pdf"]},
+    tiff_only = {**export_params, "handoff": {**handoff, "formats": ["tiff_300"]}}
+    assert validator.is_valid(tiff_only)
+    for invalid in ({"formats": []}, {"formats": ["pdf", "pdf"]},
                     {"formats": ["pdf", "vsz"]}, {"output_dir": "relative"},
                     {"revision": True}, {"extra": "unadmitted"}):
         assert not validator.is_valid({**export_params, "handoff": {**handoff, **invalid}})
