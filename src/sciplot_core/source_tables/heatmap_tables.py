@@ -46,7 +46,13 @@ def load_heatmap_table_from_frame(
     """Parse semantic X/Y/Z rows, falling back to a numeric matrix layout."""
 
     raw = drop_fully_empty_columns(raw)
-    if raw.shape[1] != 3:
+    if raw.empty or raw.shape[1] != 3:
+        return _load_heatmap_matrix(raw)
+
+    # A matrix with two X positions also has three columns. Its corner
+    # label is not a measurement, and the two X headers are numeric.
+    corner, *x_headers = raw.iloc[0].tolist()
+    if not looks_numeric(corner) and all(looks_numeric(value) for value in x_headers):
         return _load_heatmap_matrix(raw)
 
     ensure_minimum_rows(raw, start_row + 1, table_name="Heatmap table")

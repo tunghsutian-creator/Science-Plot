@@ -15,6 +15,7 @@ from sciplot_core.render.series_selection import (
 from sciplot_core.source_inspection import inspect_input_file
 from sciplot_core.source_tables import (
     load_curve_table,
+    load_heatmap_table,
     load_heatmap_table_from_frame,
     load_replicate_table_from_frame,
     normalize_unit,
@@ -152,7 +153,7 @@ def test_curve_table_parser_preserves_labels_units_and_numeric_pairs(
     assert precise_source.read_bytes() == original_bytes
 
 
-def test_replicate_and_heatmap_parsers_keep_their_distinct_models() -> None:
+def test_replicate_and_heatmap_parsers_keep_their_distinct_models(tmp_path: Path) -> None:
     groups = load_replicate_table_from_frame(
         pd.DataFrame(
             [
@@ -180,6 +181,25 @@ def test_replicate_and_heatmap_parsers_keep_their_distinct_models() -> None:
     assert groups[0].value_label == "Strength"
     assert heatmap.data.columns.tolist() == ["x", "y", "z"]
     assert heatmap.z_label == "Intensity"
+
+    source = _write_rows(tmp_path / "narrow_heatmap.csv", [
+        ["Distance", 0, 5],
+        [0, 0, None],
+        [3, 8, None],
+    ])
+    inspection = inspect_input_file(source)
+    assert inspection.model == "heatmap_table"
+    assert inspection.recommendations[0].template_id == "heatmap"
+    matrix = load_heatmap_table(source).data
+    assert matrix["x"].tolist() == [0, 5, 0, 5]
+    assert matrix["y"].tolist() == [0, 0, 3, 3]
+    assert matrix.loc[matrix["x"] == 5, "z"].isna().all()
+    assert matrix.loc[matrix["x"] == 0, "z"].tolist() == [0, 8]
+
+    unlabeled = _write_rows(tmp_path / "numeric_xyy.csv", [
+        [0, 1, 2], [1, 4, 5], [2, 6, 7], [3, 8, 9],
+    ])
+    assert inspect_input_file(unlabeled).model != "heatmap_table"
 
 
 @pytest.mark.parametrize(

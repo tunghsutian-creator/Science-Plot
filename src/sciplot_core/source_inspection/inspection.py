@@ -26,7 +26,7 @@ MODEL_LABELS = {
     "curve_table": "Paired curve table (curve_table)",
     "tensile_curve": "Tensile stress-strain curve (tensile_curve)",
     "replicate_table": "Replicate wide table (replicate_table)",
-    "heatmap_table": "Heatmap long table (xyz_long_table)",
+    "heatmap_table": "Heatmap table (X / Y / Z)",
     "frequency_sweep": "Frequency sweep export table",
     "frequency_metric_sheet": "Frequency sweep metric sheet",
     "temperature_sweep": "Temperature sweep export table",

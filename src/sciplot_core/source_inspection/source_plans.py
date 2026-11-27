@@ -137,13 +137,11 @@ def recommendation_plan(
             template="heatmap",
             score=90.0,
             reason=(
-                "Detected a heatmap long table with explicit X / Y / Z role columns."
+                "Detected a heatmap table with identifiable X and Y coordinates and Z values."
             ),
             overrides={"show_colorbar": True},
             signals=(
-                "Detected a 3-column input layout.",
-                "Row 1 explicitly defines the X, Y, and Z role columns.",
-                "This input is best converted directly into a heatmap matrix.",
+                "The table binds Z values to X and Y coordinates.",
             ),
             confidence=91.0,
         )
