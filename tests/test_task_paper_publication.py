@@ -76,13 +76,19 @@ def publication(tmp_path):
     return selected, run
 
 
-def test_capture_sealed_export_identity_and_full_original_inventory(publication):
+def test_capture_sealed_export_identity_and_full_original_inventory(publication, monkeypatch):
     selected, run = publication
     before = {str(path): path.read_bytes() for path in run.rglob("*") if path.is_file()}
     captured = capture_publication(selected)
     assert [record["format"] for record in captured["exports"]] == ["pdf", "tiff_300"]
     assert captured["qa"]["scope"] == "existing_current_sealed_publication"
+    from sciplot_core import task_paper_publication as owner
+    from unittest.mock import Mock
+
+    inventory = Mock(wraps=owner.file_inventory)
+    monkeypatch.setattr(owner, "file_inventory", inventory)
     assert_publication_current(captured, selected)
+    inventory.assert_called_once_with(run)
     assert before == {str(path): path.read_bytes() for path in run.rglob("*") if path.is_file()}
 
 

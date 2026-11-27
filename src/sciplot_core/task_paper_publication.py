@@ -81,8 +81,19 @@ def capture_publication(selection: dict[str, Any]) -> dict[str, Any]:
 
 def assert_publication_current(publication: dict[str, Any], selection: dict[str, Any]) -> None:
     manifest = canonical_path(Path(publication["manifest"]))
-    if file_inventory(manifest.parent) != publication["files"]:
+    failed: OSError | ValueError | None = None
+    try:
+        fresh = capture_publication(selection)
+    except (OSError, ValueError) as exc:
+        failed = exc
+        fresh = None
+    # Successful capture already inventories the selected run. Retain the
+    # separate old-run check only when capture did not inventory that path.
+    files = (fresh["files"] if fresh is not None and fresh["manifest"] == str(manifest)
+             else file_inventory(manifest.parent))
+    if files != publication["files"]:
         raise TaskControlError("paper_publication_changed", "The sealed publication inventory changed; no artifact was regenerated or overwritten.")
-    fresh = capture_publication(selection)
+    if failed is not None:
+        raise failed
     if fresh != publication:
         raise TaskControlError("paper_publication_changed", "The selected publication receipt changed. Preserve it and start a new ordered selection.")
