@@ -25,7 +25,9 @@ def is_standalone_export_target(document: Path, output: Path) -> bool:
         return False
     destination = canonical_path(output)
     source = document.parent
-    return not (destination.is_relative_to(source) or source.is_relative_to(destination))
+    if any(path.is_dir() and path.samefile(source) for path in (destination, *destination.parents)):
+        return False
+    return not (destination.is_dir() and any(path.samefile(destination) for path in source.parents))
 
 
 def saved_native_target(target: Path, figure_id: str | None) -> tuple[Path, Path]:

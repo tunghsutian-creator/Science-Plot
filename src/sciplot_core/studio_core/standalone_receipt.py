@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import shutil
 import json
+from collections.abc import Callable
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 from uuid import uuid4
 from sciplot_core.foundation.file_hashing import (
@@ -44,6 +46,53 @@ def has_standalone_binding(root: Path, document: Path) -> bool:
     if value.get("receipt_path") != str(path):
         raise ValueError("This standalone receipt belongs to another output root")
     return True
+
+
+def export_new_standalone(
+    document: Path,
+    *,
+    formats: list[str],
+    artifact_root: Path,
+    use_figures_directory: bool,
+    exporter: Callable[..., dict[str, Any]],
+) -> dict[str, Any]:
+    """Publish an unregistered native export only to a new destination."""
+    from sciplot_core.delivery.install import install_new_delivery
+    from sciplot_core.foundation.canonical_paths import canonical_path
+    from sciplot_core.foundation.research_destination import require_data_destination
+    from sciplot_core.policy.export_formats import export_suffix
+    from sciplot_core.studio_core.publication_candidates import _stage_tree, relocate_candidate
+
+    root = canonical_path(artifact_root)
+    if root.exists():
+        # Preserve the exact diagnostic for another document's receipt, but a
+        # receipt that only binds VSZ bytes does not grant replacement authority.
+        has_standalone_binding(root, document)
+        figures = root / "figures" if use_figures_directory else root
+        for fmt in formats:
+            suffix, _ = export_suffix(fmt)
+            target = figures / (document.stem + suffix)
+            if target.exists() or target.is_symlink():
+                raise ValueError(f"Standalone export target already exists: {target}. Choose a new output directory.")
+        raise ValueError(f"Standalone export needs a new output directory: {root}. Existing files were preserved.")
+    require_data_destination(root)
+    root.parent.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(prefix=".sciplot-standalone-", dir=root.parent) as staging:
+        private = Path(staging) / "export"
+        export_dir = private / "figures" if use_figures_directory else private
+        payload = exporter(document, formats=formats, output_dir=export_dir)
+        receipt = publish_standalone_export_receipt(
+            document_path=document, requested_formats=formats, exports=payload["exports"],
+            artifact_root=private, export_document_sha256=payload["document_sha256"],
+        )
+        locations = {private: root}
+        _stage_tree(private, "", {}, locations)
+        result = relocate_candidate({**payload, "standalone_export": receipt}, locations)
+        if existing_file_sha256(document) != payload["document_sha256"]:
+            raise ValueError("The saved VSZ changed before standalone export was installed.")
+        # Do not follow a pathname occupied while native rendering was in progress.
+        install_new_delivery(private, root)
+        return result
 
 
 def publish_standalone_export_receipt(

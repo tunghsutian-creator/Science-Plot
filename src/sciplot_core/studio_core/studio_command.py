@@ -22,6 +22,7 @@ from sciplot_core.studio_core.export_execution import (
 )
 
 from sciplot_core.studio_core.standalone_receipt import (
+    export_new_standalone,
     publish_standalone_export_receipt,
 )
 
@@ -156,12 +157,9 @@ def run_studio_command(
                     export_payload = export_saved_native(document_path, formats=requested_formats,
                         audit_spec_path=_veusz_spec_path(document_path), standalone_receipt=True)
             else:
-                from sciplot_core.studio_core.standalone_receipt import has_standalone_binding
-                if not has_standalone_binding(standalone_root, document_path):
-                    from sciplot_core.foundation.research_destination import require_data_destination
-                    require_data_destination(standalone_root)
-                export_payload = export_studio_document(
-                    document_path, formats=requested_formats, output_dir=export_dir)
+                export_payload = export_new_standalone(
+                    document_path, formats=requested_formats, artifact_root=standalone_root,
+                    use_figures_directory=export_dir is not None, exporter=export_studio_document)
             payload["exports"] = export_payload["exports"]
         if not payload.get("project_dir") and standalone_export:
             receipt = export_payload.get("standalone_export") or publish_standalone_export_receipt(
