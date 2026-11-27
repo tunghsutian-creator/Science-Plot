@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sciplot_core.studio_render.source_artifacts import literal_source_artifact
 
+from math import nan
 from pathlib import Path
 from typing import Any
 from sciplot_core.figure_plan import resolved_figure_plan_from_payload
@@ -173,7 +174,7 @@ def _impact_point_line_series_from_source(
         display_label = label_mapping.get(condition, condition)
         color = DEFAULT_PALETTE_COLORS[condition_index % len(DEFAULT_PALETTE_COLORS)]
         summaries = tuple(
-            _mean_and_sample_sd(values) if len(values) >= 2 else (values[0], None)
+            _mean_and_sample_sd(values) if len(values) >= 2 else (values[0], nan)
             for values in payload.values
         )
         means = tuple(summary[0] for summary in summaries)

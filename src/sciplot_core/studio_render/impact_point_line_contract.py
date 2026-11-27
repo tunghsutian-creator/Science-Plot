@@ -84,7 +84,7 @@ def _impact_point_line_contract(
             for sample_label, position, mean, error in zip(
                 sample_labels, item.x_values, item.y_values, item.error_values, strict=True,
             )
-            if error is not None
+            if not math.isnan(error)
         ]
         groups = [
             {

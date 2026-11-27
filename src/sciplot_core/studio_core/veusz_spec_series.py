@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from math import isnan
 from typing import Any
 
 from sciplot_core.studio_render.models import (
     IMPACT_POINT_LINE_MARKER_KIND,
     IMPACT_POINT_LINE_RAW_KIND,
+    IMPACT_POINT_LINE_SUMMARY_KIND,
     StudioSeries,
     _VeuszStyleContract,
 )
@@ -83,7 +85,13 @@ def _build_veusz_series_spec(
         "y_name": item.y_name,
         "x_values": list(item.x_values),
         "y_values": list(item.y_values),
-        "error_values": list(item.error_values),
+        # The in-memory float placeholder means undefined singleton SD,
+        # not a measured zero. Keep it as JSON null only for this overlay.
+        "error_values": (
+            [None if isnan(value) else value for value in item.error_values]
+            if item.presentation_kind == IMPACT_POINT_LINE_SUMMARY_KIND
+            else list(item.error_values)
+        ),
         "encoding": encoding,
         "color": line["color"],
         "line_width_pt": line["width_pt"],

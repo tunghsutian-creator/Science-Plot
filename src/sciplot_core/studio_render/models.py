@@ -94,7 +94,7 @@ class StudioSeries:
     x_values: tuple[float, ...]
     y_values: tuple[float, ...]
     color: str
-    error_values: tuple[float | None, ...] = ()
+    error_values: tuple[float, ...] = ()
     line_width: float | None = None
     marker: str | bool | None = None
     marker_size: float | None = None
