@@ -19,7 +19,7 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.verification.evidence import load_receipt
 from sciplot_core.verification.evidence_identity import (
     PUBLIC_GOLDEN_REASON, PUBLIC_INPUT_POLICY, PUBLIC_RAW_REASON,
-    capture_identity, digest, discover_files, public_test_members,
+    digest, discover_files, public_test_members,
 )
 from sciplot_core.verification.evidence_runtime import QT_MODULES, _StaticNativeInspections, native_dependencies, qt_import_bindings, runtime_inputs
 from sciplot_core.verification.input_scope import MANIFEST, PROFILES, load_manifest
@@ -335,9 +335,3 @@ def build_check_spec(plan: dict[str, Any], check: dict[str, Any], repo_root: Pat
             "corpus": {"mode": "synthetic" if "raw" in exclusions else "declared", "complete": True,
                        "policy": PUBLIC_INPUT_POLICY if public_profile else POLICY,
                        "fresh_access_audit": False, "scientific_acceptance": False}}
-
-
-def capture_check_identity(plan: dict[str, Any], check: dict[str, Any], repo_root: Path, *,
-                           environment: dict[str, str], finish_path: Path) -> dict[str, Any]:
-    spec = build_check_spec(plan, check, repo_root, environment=environment, finish_path=finish_path)
-    return capture_identity(**{**spec, "repo_root": Path(spec["repo_root"])})
