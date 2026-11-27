@@ -1,4 +1,4 @@
-"""Normalize export formats, names, and split-series labels."""
+"""Normalize export requests and resolve split-series labels."""
 
 from __future__ import annotations
 
@@ -16,15 +16,6 @@ from sciplot_core.render.series_selection import (
 from sciplot_core.source_tables import load_curve_table
 
 
-_EXPORT_FORMATS = {
-    "pdf": ("pdf", None, ""),
-    "svg": ("svg", None, ""),
-    "png_300": ("png", 300, "_300dpi"),
-    "png_600": ("png", 600, "_600dpi"),
-    "tiff_300": ("tiff", 300, "_300dpi"),
-}
-
-
 DEFAULT_EXPORT_FORMATS = DEFAULT_EXPORT_FORMATS_POLICY
 
 
@@ -35,15 +26,6 @@ def _normalize_export_formats(
     export_formats: list[str] | tuple[str, ...] | None,
 ) -> tuple[str, ...]:
     return normalize_export_formats(export_formats, default=DEFAULT_EXPORT_FORMATS)
-
-
-def _export_path(filename: str, output_dir: Path, export_format: str) -> Path:
-    target_format, _dpi, suffix = _EXPORT_FORMATS[export_format]
-    base = Path(filename).with_suffix("").name
-    if target_format == "pdf":
-        return output_dir / f"{base}.pdf"
-    extension = "tiff" if target_format == "tiff" else target_format
-    return output_dir / f"{base}{suffix}.{extension}"
 
 
 def _series_labels_for_split(

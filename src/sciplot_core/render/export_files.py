@@ -8,10 +8,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.render.formats import (
-    _EXPORT_FORMATS,
-    _export_path,
-)
+from sciplot_core.policy.export_formats import export_suffix
+from sciplot_core.policy.frame_export import CANONICAL_EXPORT_FORMATS
 
 
 def _copy_veusz_exports(
@@ -32,7 +30,7 @@ def _copy_veusz_exports(
         fmt = str(item.get("format") or "").strip().lower()
         if not isinstance(source_value, str) or not source_value.strip():
             raise RuntimeError(f"Veusz export record {index} has no artifact path.")
-        if fmt not in _EXPORT_FORMATS:
+        if fmt not in CANONICAL_EXPORT_FORMATS:
             raise RuntimeError(
                 f"Veusz export record {index} has unsupported format `{fmt or 'missing'}`."
             )
@@ -41,7 +39,8 @@ def _copy_veusz_exports(
             raise RuntimeError(
                 f"Veusz reported a missing or empty `{fmt}` export: {source}"
             )
-        destination = _export_path(f"{output_base}.pdf", output_dir, fmt)
+        suffix, _dpi = export_suffix(fmt)
+        destination = output_dir / (Path(f"{output_base}.pdf").stem + suffix)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, destination)
         record = {

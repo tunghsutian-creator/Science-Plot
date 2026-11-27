@@ -21,11 +21,9 @@ from sciplot_core.render.inspection import (  # noqa: F401
     inspect_payload as _inspect_payload,
 )
 from sciplot_core.render.formats import (  # noqa: F401
-    _EXPORT_FORMATS,
     DEFAULT_EXPORT_FORMATS,
     DEFAULT_RENDER_ENGINE,
     _normalize_export_formats,
-    _export_path,
     _series_labels_for_split,
 )
 from sciplot_core.render.worker_runtime import (  # noqa: F401
