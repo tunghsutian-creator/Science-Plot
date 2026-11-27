@@ -188,6 +188,7 @@ def _confirmed_rheology_sweep_sample(
             "source_unit_authority": unit_authority,
         }
     rows: list[dict[str, float]] = []
+    source_rows: list[int] = []
     for row_index in numeric_rows:
         x_value = _float(raw.iat[row_index, x_index], decimal_comma=block.decimal_comma)
         if x_value is None:
@@ -198,6 +199,7 @@ def _confirmed_rheology_sweep_sample(
             if y_value is not None:
                 row[key] = y_value * metric_factors[key]
         rows.append(row)
+        source_rows.append(int(raw.index[row_index]))
     empty_metrics = [
         key for key in metric_indexes if not any(key in row for row in rows)
     ]
@@ -215,6 +217,7 @@ def _confirmed_rheology_sweep_sample(
         x_unit=x_unit,
         metric_units=metric_units,
         rows=tuple(rows),
+        source_rows=tuple(source_rows),
         source_x_unit=source_x_unit,
         x_conversion={
             "source_unit": source_x_unit,

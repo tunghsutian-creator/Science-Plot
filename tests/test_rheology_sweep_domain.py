@@ -217,6 +217,7 @@ def test_frequency_domain_uses_confirmed_columns_in_the_same_snapshot(
 
     assert domain.selected_sources == (raw.resolve(),)
     assert domain.facts.available_metrics == ("storage_modulus",)
+    assert domain.raw_samples[0].source_rows == (2, 3)
     assert domain.prepared_samples[0].rows == (
         {"x": 1.0, "storage_modulus": 100.0},
         {"x": 10.0, "storage_modulus": 90.0},

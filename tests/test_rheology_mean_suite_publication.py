@@ -318,6 +318,35 @@ def test_frequency_group_binds_exact_files_and_metrics_even_if_local_ids_are_reo
     }
 
 
+def test_new_frequency_mean_rejects_duplicate_x_within_one_replicate(tmp_path, capsys):
+    import json
+
+    from sciplot_core.cli import main
+    from sciplot_core.semantic_sources.rheology_sweep_sources import _read_rheology_frequency_comparison_samples
+
+    raw, (first, _second) = _mean_input(tmp_path)
+    lines = first.read_text(encoding="utf-16").splitlines()
+    initial = lines[10].split("\t")
+    repeated = lines[11].split("\t")
+    assert (initial[1], repeated[1]) == ("1", "2")
+    repeated[3] = initial[3]
+    lines[11] = "\t".join(repeated)
+    first.write_text("\n".join(lines), encoding="utf-16")
+    originals = first.read_bytes()
+
+    sample = _read_rheology_frequency_comparison_samples(first)[0]
+    assert [row["x"] for row in sample.rows[:2]] == [100, 100]
+    assert sample.source_rows[:2] == (10, 11)
+
+    status = main(["plan", str(raw), "--rule", "rheology_frequency_sweep", "--json"])
+    result = json.loads(capsys.readouterr().out)
+    assert status != 0 and result["status"] == "blocked"
+    assert result["blocker"]["reason_code"] == "frequency_mean_duplicate_acquisition_frequency"
+    message = result["blocker"]["message"]
+    assert "A.csv" in message and "original rows 11 and 12" in message
+    assert first.read_bytes() == originals
+
+
 def _prepare_in_process(root, *, interrupt):
     """Exercise the production coordinator in each independent process."""
     import os

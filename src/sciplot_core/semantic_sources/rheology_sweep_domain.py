@@ -199,9 +199,13 @@ def _build_domain(
     ambiguous_message: str,
     lost_identity_message: str,
 ) -> ResolvedRheologySweepDomain:
+    mode = _normalized_replicate_mode(request.get("replicate_mode"))
+    raw_counts = Counter(_replicate_key(sample) for sample in raw_samples)
+    if rule_id == FREQUENCY_RULE_ID and mode == "mean":
+        _require_independent_frequency_contributions(raw_samples, raw_counts)
     prepared_samples = _coalesce_replicate_sweep_samples(
         raw_samples,
-        replicate_mode=request.get("replicate_mode"),
+        replicate_mode=mode,
     )
     prepared_samples = _ordered_sweep_samples(
         prepared_samples,
@@ -213,7 +217,6 @@ def _build_domain(
     if len(set(sample_order)) != len(sample_order):
         _fail(ambiguous_reason_code, ambiguous_message)
 
-    raw_counts = Counter(_replicate_key(sample) for sample in raw_samples)
     replicate_counts = tuple(
         (sample.sample, raw_counts[_replicate_key(sample)])
         for sample in prepared_samples
@@ -236,8 +239,28 @@ def _build_domain(
         raw_samples=tuple(raw_samples),
         prepared_samples=tuple(prepared_samples),
         facts=facts,
-        replicate_mode=_normalized_replicate_mode(request.get("replicate_mode")),
+        replicate_mode=mode,
     )
+
+
+def _require_independent_frequency_contributions(
+    samples: list[RheologySweepSample], raw_counts: Counter[str],
+) -> None:
+    for sample in samples:
+        if raw_counts[_replicate_key(sample)] < 2:
+            continue  # A lone trace is retained unchanged, including its repeat x.
+        original_rows: dict[float, int] = {}
+        for row, source_row in zip(sample.rows, sample.source_rows, strict=True):
+            frequency = row["x"]
+            if frequency in original_rows:
+                first = original_rows[frequency] + 1
+                _fail(
+                    "frequency_mean_duplicate_acquisition_frequency",
+                    f"{sample.source.name}, sample {sample.sample!r}: {frequency:g} {sample.x_unit} "
+                    f"occurs twice in one acquisition (original rows {first} and {source_row + 1}). "
+                    "Select and plot the original intervals separately; no replicate mean was taken.",
+                )
+            original_rows[frequency] = source_row
 
 
 def available_rheology_sweep_metrics(
