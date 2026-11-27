@@ -1,11 +1,11 @@
 """Explicit original column pairs for ordinary curves sharing one response axis."""
-from copy import deepcopy
+from collections import Counter
 from itertools import pairwise
 from typing import Any, NoReturn
 
 from sciplot_core.plot_document.errors import DocumentError
 from sciplot_core.plot_document.schema import closed
-from sciplot_core.task_semantic_coordinates import unit_path
+from sciplot_core.task_semantic_coordinates import block_columns, unit_path
 from sciplot_core.task_errors import TaskControlError
 
 
@@ -42,28 +42,22 @@ def bound_views(sources: list[dict[str, Any]], intent: dict[str, Any]) -> list[t
                     reject("Every selected original block requires exactly one explicit X/Y column pair for every declared quantity member; no curve is silently omitted.")
                 if len({item["y_column_id"] for item in matches}) != len(matches):
                     reject("An original response column cannot be duplicated as another quantity.")
+                column_counts = Counter(column["column_id"] for column in block_columns(candidate, block))
+                stages = [stage for stage in candidate["stages"] if stage["block_id"] == block["block_id"]]
+                by_quantity = {item["y_quantity"]: item for item in matches}
                 for quantity in members:
-                    binding = next(item for item in matches if item["y_quantity"] == quantity)
-                    if binding["x_column_id"] == binding["y_column_id"]:
+                    binding = by_quantity[quantity]
+                    x, y = binding["x_column_id"], binding["y_column_id"]
+                    if x == y:
                         reject("Bind distinct original X and Y columns.")
-                    coordinates = {}
-                    for role in ("x", "y"):
-                        coordinate = {key: value for key, value in intent[role].items() if key not in {"header", "headers", "column_id", "quantity_members"}}
-                        coordinate.update(column_id=binding[role + "_column_id"])
-                        if role == "y":
-                            coordinate["quantity"] = quantity
-                        columns = block.get("columns") or [column for column in candidate["columns"] if column["column_index"] in block["column_indices"]]
-                        exact = [column for column in columns if column["column_id"] == binding[role + "_column_id"]]
-                        if len(exact) != 1:
-                            reject("Each qualified curve binding must name one existing original column within its original block.")
-                        coordinates[role] = coordinate
-                    # The confirmed physical region owns missing positions.
-                    # Numeric extents describe observations, not source bounds.
-                    pair_block = deepcopy(block)
-                    stages = [deepcopy(stage) for stage in candidate["stages"] if stage["block_id"] == block["block_id"]]
-                    view = {**deepcopy(candidate), "blocks": [pair_block], "table_selection": pair_block["table_selection"],
-                            "sample_view": True, "curve_coordinates": coordinates,
-                            "stages": stages}
+                    if column_counts[x] != 1 or column_counts[y] != 1:
+                        reject("Each qualified curve binding must name one existing original column within its original block.")
+                    coordinates = {"x": {**intent["x"], "column_id": x},
+                                   "y": {**intent["y"], "quantity": quantity, "column_id": y}}
+                    coordinates["y"].pop("quantity_members")
+                    # Temporary views read the selected source. The plan owner freezes the result.
+                    view = {**candidate, "blocks": [block], "table_selection": block["table_selection"],
+                            "sample_view": True, "curve_coordinates": coordinates, "stages": stages}
                     views.append(({**source, "source_id": source["source_id"] + ":curve:" + str(len(views))}, view))
                     consumed.append(binding)
     if len(consumed) != len(bindings):
@@ -80,7 +74,7 @@ def _error(code: str, message: str, **facts: Any) -> NoReturn:
 
 def _select_column(candidate: dict[str, Any], block: dict[str, Any], coordinate: dict[str, Any], role: str) -> dict[str, Any]:
     """Validate a resolved literal column; lowering cannot reinterpret quantity."""
-    columns = block.get("columns") or [column for column in candidate["columns"] if column["column_index"] in block["column_indices"]]
+    columns = block_columns(candidate, block)
     exact = [column for column in columns if all(column[field] == coordinate[field] for field in ("column_id", "column_index", "header"))
              and column["quantity"] == coordinate["observed_quantity"] and column["unit"] == coordinate["observed_unit"]]
     if len(exact) != 1:

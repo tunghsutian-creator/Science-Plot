@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.task_errors import TaskControlError
-from sciplot_core.task_semantic_coordinates import coordinate_columns, resolved_binding, source_unit
+from sciplot_core.task_semantic_coordinates import block_columns, coordinate_columns, resolved_binding, source_unit
 from sciplot_core.task_semantic_stages import ordered_stages, stage_evidence
 
 
@@ -89,7 +89,7 @@ def _coordinate_decisions(sources: list[dict[str, Any]], intent: dict[str, Any],
             coordinate = {**candidate.get("curve_coordinates", {}).get(role, intent[role]),
                           **({"header": choices[role + "_header"]} if role + "_header" in choices else {})}
             for block in candidate["blocks"]:
-                    columns = block.get("columns") or [column for column in candidate["columns"] if column["column_index"] in block["column_indices"]]
+                    columns = block_columns(candidate, block)
                     if verified_pairs is None:
                         eligible = coordinate_columns(columns, block, coordinate, role)
                     else:

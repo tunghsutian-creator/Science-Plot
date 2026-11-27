@@ -5,6 +5,12 @@ from typing import Any
 from sciplot_core.task_errors import TaskControlError
 
 
+def block_columns(candidate: dict[str, Any], block: dict[str, Any]) -> list[dict[str, Any]]:
+    """Use the observed block columns, or project older plans by their original indices."""
+    return block.get("columns") or [column for column in candidate["columns"]
+                                    if column["column_index"] in block["column_indices"]]
+
+
 def coordinate_columns(columns: list[dict[str, Any]], block: dict[str, Any], coordinate: dict[str, Any], role: str) -> list[dict[str, Any]]:
     """Resolve literal selectors without replacing a known scientific identity."""
     has_selector = any(field in coordinate for field in ("header", "headers", "column_id"))

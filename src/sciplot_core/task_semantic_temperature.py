@@ -2,6 +2,7 @@
 from typing import Any, NoReturn
 
 from sciplot_core.task_errors import TaskControlError
+from sciplot_core.task_semantic_coordinates import block_columns
 
 
 def _reject(reason: str, message: str, **facts: Any) -> NoReturn:
@@ -27,8 +28,7 @@ def temperature_selector(intent: dict[str, Any], choices: dict[str, Any] | None 
 
 
 def temperature_columns(candidate: dict[str, Any], block: dict[str, Any], selector: dict[str, str]) -> list[dict[str, Any]]:
-    columns = block.get("columns") or [column for column in candidate["columns"]
-                                       if column["column_index"] in block["column_indices"]]
+    columns = block_columns(candidate, block)
     return [column for column in columns if column["quantity"] == "temperature"
             and all(column[field] == value for field, value in selector.items())]
 
