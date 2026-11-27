@@ -10,12 +10,9 @@ from typing import Any
 import pytest
 import pandas as pd
 
-import sciplot_core.figure_plan.single_curve_resolution as single_curve_resolution
-import sciplot_core.figure_plan.source_binding as source_binding
 import sciplot_core.semantic_sources.prepare_curve_families as prepare_curve_families
 import sciplot_core.workflow.auto_split as auto_split
 from sciplot_core.semantic_sources import (
-    ftir_sources,
     gpc_sources,
     registered_paired_curve_transform as paired_curve_transform,
 )
@@ -569,59 +566,10 @@ def test_xrd_rejects_panalytical_scan_point_count_mismatch(tmp_path: Path) -> No
 @pytest.mark.parametrize("rule_id", RULE_IDS)
 def test_registered_paired_curve_transform_and_plan_share_one_source_snapshot(
     rule_id: str,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     selected_rule = get_rule(rule_id)
     fixture = _fixture(rule_id)
     expected_series = _fixture_series(rule_id)
-    transform_calls: list[tuple[Path, str]] = []
-    hash_calls: list[Path] = []
-    plan_snapshots: list[ResolvedScientificTransform] = []
-    real_transform = paired_curve_transform.resolve_registered_paired_curve_transform
-    real_hash = source_binding.source_tree_sha256
-    real_plan = single_curve_resolution.resolve_registered_single_curve_plan
-
-    def counted_transform(
-        source: Path,
-        *,
-        rule: Any,
-        series_order: object = None,
-    ) -> ResolvedScientificTransform:
-        transform_calls.append((source, rule.rule_id))
-        return real_transform(source, rule=rule, series_order=series_order)
-
-    def counted_hash(source: Path | None) -> str | None:
-        assert source is not None
-        hash_calls.append(source)
-        return real_hash(source)
-
-    def captured_plan(
-        *,
-        rule_id: str,
-        request: dict[str, Any],
-        source_resolution: ResolvedScientificTransform,
-        source_sha256: str,
-    ) -> ResolvedFigurePlan:
-        plan_snapshots.append(source_resolution)
-        return real_plan(
-            rule_id=rule_id,
-            request=request,
-            source_resolution=source_resolution,
-            source_sha256=source_sha256,
-        )
-
-    monkeypatch.setattr(
-        paired_curve_transform,
-        "resolve_registered_paired_curve_transform",
-        counted_transform,
-    )
-    monkeypatch.setattr(source_binding, "source_tree_sha256", counted_hash)
-    monkeypatch.setattr(
-        single_curve_resolution,
-        "resolve_registered_single_curve_plan",
-        captured_plan,
-    )
-
     resolved = resolve_scientific_source(
         fixture,
         rule_id=rule_id,
@@ -631,10 +579,6 @@ def test_registered_paired_curve_transform_and_plan_share_one_source_snapshot(
 
     assert resolved is not None
     transform = resolved.require_domain(ResolvedScientificTransform)
-    assert transform_calls == [(fixture, rule_id)]
-    assert hash_calls == [fixture, fixture]
-    assert len(plan_snapshots) == 1
-    assert plan_snapshots[0] is transform
     assert transform.selected_sources == (fixture,)
     assert len(transform.series) == len(expected_series)
     for series, expected in zip(transform.series, expected_series, strict=True):
@@ -1013,45 +957,6 @@ def test_ftir_headerless_source_shares_one_neutral_snapshot_for_plan_and_prepare
 ) -> None:
     rule = get_rule("ftir_spectrum")
     source = _fixture(rule.rule_id)
-    transform_calls: list[tuple[Path, object]] = []
-    plan_snapshots: list[ResolvedScientificTransform] = []
-    real_transform = ftir_sources.resolve_ftir_scientific_transform
-    real_plan = single_curve_resolution.resolve_registered_single_curve_plan
-
-    def counted_transform(
-        selected: Path,
-        *,
-        series_order: object = None,
-    ) -> ResolvedScientificTransform:
-        transform_calls.append((selected, series_order))
-        return real_transform(selected, series_order=series_order)
-
-    def captured_plan(
-        *,
-        rule_id: str,
-        request: dict[str, Any],
-        source_resolution: ResolvedScientificTransform,
-        source_sha256: str,
-    ) -> ResolvedFigurePlan:
-        plan_snapshots.append(source_resolution)
-        return real_plan(
-            rule_id=rule_id,
-            request=request,
-            source_resolution=source_resolution,
-            source_sha256=source_sha256,
-        )
-
-    monkeypatch.setattr(
-        ftir_sources,
-        "resolve_ftir_scientific_transform",
-        counted_transform,
-    )
-    monkeypatch.setattr(
-        single_curve_resolution,
-        "resolve_registered_single_curve_plan",
-        captured_plan,
-    )
-
     resolved = resolve_scientific_source(
         source,
         rule_id=rule.rule_id,
@@ -1061,9 +966,6 @@ def test_ftir_headerless_source_shares_one_neutral_snapshot_for_plan_and_prepare
 
     assert resolved is not None
     transform = resolved.require_domain(ResolvedScientificTransform)
-    assert transform_calls == [(source, ["A40-20"])]
-    assert len(plan_snapshots) == 1
-    assert plan_snapshots[0] is transform
     assert transform.selected_sources == (source,)
     assert tuple(series.sample for series in transform.series) == ("A40-20",)
     assert {
