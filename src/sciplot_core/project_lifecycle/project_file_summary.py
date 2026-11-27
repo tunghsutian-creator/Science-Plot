@@ -35,13 +35,16 @@ def project_file_figure(path: Path, figure_id: str | None, *, exact_plot_id: boo
                               action="check_project_file") from exc
         matches = [entry for entry in entries if figure_id in (None, entry["plot_id"])
                    or (not exact_plot_id and figure_id == entry["figure_id"])]
-        if len(matches) > 1:
-            choices = [{key: entry[key] for key in ("figure_id", "plot_id")} for entry in matches]
-            raise EngineError("project_file_figure_ambiguous", "Choose one exact saved plot or figure ID.",
-                              action="select_figure", project_id=session.project_id, figures=choices)
-        if not matches:
-            raise EngineError("project_file_figure_not_found", "This .sciplot file has no saved figure matching the selection.",
-                              action="select_figure")
+        if len(matches) != 1:
+            if not matches:
+                code = "project_file_figure_not_found"
+                message = "This .sciplot file has no saved figure matching the selection."
+            else:
+                code = "project_file_figure_ambiguous"
+                message = "Choose one exact saved plot or figure ID."
+            choices = [{key: entry[key] for key in ("figure_id", "plot_id")} for entry in matches or entries]
+            raise EngineError(code, message, action="select_figure", project_id=session.project_id,
+                              project_file=str(session.path), figures=choices)
 
         attachment = Attachment(session.store, matches[0])
         owner = AttachedProjectRepository(attachment)
@@ -64,12 +67,24 @@ def project_file_figure(path: Path, figure_id: str | None, *, exact_plot_id: boo
 
 def project_file_summary(path: Path, figure_id: str | None) -> dict[str, Any]:
     """Report a sealed semantic record without rendering or exposing workspace paths."""
-    with project_file_figure(path, figure_id) as (session, _, document):
-        objects = document["presentation"]["objects"]
-        axes = {target: [prop for prop in properties if prop in PROJECT_FILE_EDIT_PROPERTIES]
-                for target, properties in figure_property_names(figure_spec(document)).items()
-                if "axis.label" in properties and objects[target]["kind"] == "axis"}
-        return {"kind": "sciplot_project_file_summary", "version": 1, "read_only": True,
-                "project_file": str(session.path), "project_id": session.project_id,
-                "edit_targets": edit_target_summary(objects, axes, {}),
-                **{key: document[key] for key in ("plot_id", "revision", "scientific_hash", "presentation_hash")}}
+    try:
+        with project_file_figure(path, figure_id) as (session, _, document):
+            return _summarize(session, document)
+    except EngineError as exc:
+        if exc.repair["action"] == "select_figure":
+            target = exc.repair["project_file"]
+            for choice in exc.repair["figures"]:
+                choice["open_arguments"] = {"target": target, "figure_id": choice["plot_id"],
+                                            "description": {"scope": "summary"}}
+        raise
+
+
+def _summarize(session: ProjectFileSession, document: dict[str, Any]) -> dict[str, Any]:
+    objects = document["presentation"]["objects"]
+    axes = {target: [prop for prop in properties if prop in PROJECT_FILE_EDIT_PROPERTIES]
+            for target, properties in figure_property_names(figure_spec(document)).items()
+            if "axis.label" in properties and objects[target]["kind"] == "axis"}
+    return {"kind": "sciplot_project_file_summary", "version": 1, "read_only": True,
+            "project_file": str(session.path), "project_id": session.project_id,
+            "edit_targets": edit_target_summary(objects, axes, {}),
+            **{key: document[key] for key in ("plot_id", "revision", "scientific_hash", "presentation_hash")}}

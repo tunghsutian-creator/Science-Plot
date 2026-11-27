@@ -83,7 +83,19 @@ def test_relocated_project_file_opens_read_only_in_cli_and_daily_mcp(tmp_path):
     summary = cli(moved.relative_to(root), "--scope", "summary", "--figure", selected["plot_id"])
     assert summary == expected
     assert cli(moved, "--figure", figures[0]["plot_id"])["edit_targets"]["axis:xb"]["label"] == "Frequency 甲 (Hz)"
-    assert cli(moved, returncode=1)["reason_code"] == "project_file_figure_ambiguous"
+    no_selection = cli(moved, returncode=1)
+    assert no_selection["reason_code"] == "project_file_figure_ambiguous"
+    bad_selection = cli(moved, "--figure", "plot:unknown", returncode=1)
+    assert bad_selection["reason_code"] == "project_file_figure_not_found"
+    repair = no_selection["repair"]
+    assert bad_selection["repair"] == repair
+    assert repair["action"] == "select_figure"
+    assert repair["project_file"] == str(moved) and repair["project_id"] == snapshot["project_id"]
+    choices = {item["plot_id"]: item for item in repair["figures"]}
+    assert set(choices) == {item["plot_id"] for item in figures}
+    selected_arguments = choices[selected["plot_id"]]["open_arguments"]
+    assert selected_arguments == {"target": str(moved), "figure_id": selected["plot_id"],
+                                  "description": {"scope": "summary"}}
     target, axis = next((target, axis) for target, axis in summary["edit_targets"].items()
                         if axis["label"] == "Frequency 乙 (Hz)")
     plan_request = {"mode": "plan", "plot_id": summary["plot_id"], "base_revision": summary["revision"],
@@ -110,7 +122,12 @@ def test_relocated_project_file_opens_read_only_in_cli_and_daily_mcp(tmp_path):
         async def check_mcp():
             async with Client(parameters, read_timeout_seconds=60) as client:
                 args = {"target": str(moved), "figure_id": selected["plot_id"]}
-                result = await client.call_tool("sciplot_project_open", args)
+                rejected = await client.call_tool("sciplot_project_open", {"target": str(moved),
+                                                                          "figure_id": "plot:unknown"})
+                assert rejected.is_error and rejected.structured_content["repair"] == repair
+                mcp_choice = next(choice for choice in rejected.structured_content["repair"]["figures"]
+                                  if choice["plot_id"] == selected["plot_id"])
+                result = await client.call_tool("sciplot_project_open", mcp_choice["open_arguments"])
                 assert not result.is_error, result.content
                 assert result.structured_content == expected
                 planned = await client.call_tool("sciplot_plot_intent",
