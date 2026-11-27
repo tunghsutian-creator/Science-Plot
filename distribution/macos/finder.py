@@ -10,7 +10,7 @@ from typing import cast
 
 from PyQt6.QtCore import QEvent, QTimer, Qt
 from PyQt6.QtGui import QFileOpenEvent
-from PyQt6.QtWidgets import QApplication, QMessageBox, QWidget
+from PyQt6.QtWidgets import QApplication, QDialog, QDialogButtonBox, QLabel, QMessageBox, QVBoxLayout, QWidget
 
 from sciplot_core.project_lifecycle.errors import EngineError
 
@@ -31,14 +31,13 @@ class FinderApplication(QApplication):
             for argument in arguments:
                 self._queue_document(argument)
         else:
-            # Give Launch Services' initial open event a turn before Welcome
-            # takes over a startup with no document.
+            # Avoid briefly showing Welcome when the initial open arrives promptly.
+            # Welcome itself keeps taking events if the document arrives later.
             QTimer.singleShot(400, lambda: self._welcome_if_empty(welcome))
 
     def _welcome_if_empty(self, welcome: Callable[[], None]) -> None:
         if not self._received_document_event:
             welcome()
-            self.quit()
 
     def _queue_document(self, local_path: str) -> None:
         self._received_document_event = True
@@ -64,6 +63,7 @@ def main() -> int:
     command = Path(__file__).resolve().parents[2] / "MacOS" / "sciplot"
     dialogs: list[QMessageBox] = []
     windows: dict[Path, QWidget] = {}
+    welcome_window: QDialog | None = None
 
     def message(title: str, detail: str, icon: QMessageBox.Icon) -> None:
         dialog = QMessageBox()
@@ -112,11 +112,31 @@ def main() -> int:
         window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         window.destroyed.connect(lambda: windows.pop(key, None))
         window.show()
+        if welcome_window is not None and welcome_window.isVisible():
+            welcome_window.close()
         window.raise_()
         window.activateWindow()
 
+    def open_guide() -> None:
+        try:
+            subprocess.Popen([str(command), "--welcome"])
+        except OSError:
+            message("无法打开", "无法启动 AI 连接指南。", QMessageBox.Icon.Warning)
+
     def show_welcome() -> None:
-        subprocess.Popen([str(command), "--welcome"])
+        nonlocal welcome_window
+        welcome_window = QDialog()
+        welcome_window.setWindowTitle("SciPlot · 开始使用")
+        layout = QVBoxLayout(welcome_window)
+        layout.addWidget(QLabel("在 Finder 双击 .sciplot 项目打开已有图，或查看 AI 连接指南。"))
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        guide = buttons.addButton("打开 AI 连接指南", QDialogButtonBox.ButtonRole.ActionRole)
+        guide.clicked.connect(open_guide)
+        buttons.rejected.connect(welcome_window.close)
+        layout.addWidget(buttons)
+        welcome_window.show()
+        welcome_window.raise_()
+        welcome_window.activateWindow()
 
     # Positional filenames belong to this launcher, not to Qt's own flags.
     app = FinderApplication(sys.argv[:1], open_document, rejected)

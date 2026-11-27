@@ -114,16 +114,23 @@ class OpenEvent(QEvent):
 mode, cold, warm = sys.argv[1:]
 opened = []
 app = FinderApplication(["sciplot"], lambda path: opened.append(str(path)), lambda: opened.append("rejected"))
-app.start([], lambda: opened.append("welcome"))
+def welcome():
+    opened.append("welcome")
+    if mode == "late":
+        QTimer.singleShot(10, lambda: QCoreApplication.postEvent(app, OpenEvent(QUrl.fromLocalFile(cold))))
+    QTimer.singleShot(50, app.quit)
+
+app.start([], welcome)
 if mode == "events":
     QCoreApplication.postEvent(app, OpenEvent(QUrl()))
     QTimer.singleShot(475, lambda: QCoreApplication.postEvent(app, OpenEvent(QUrl.fromLocalFile(warm))))
     QTimer.singleShot(515, lambda: QCoreApplication.postEvent(app, OpenEvent(QUrl("https://invalid.test/remote.sciplot"))))
     QTimer.singleShot(575, app.quit)
 app.exec()
-assert opened == ([cold, warm, "rejected"] if mode == "events" else ["welcome"]), opened
+expected = {"events": [cold, warm, "rejected"], "welcome": ["welcome"], "late": ["welcome", cold]}
+assert opened == expected[mode], opened
 """
-    for mode in ("events", "welcome"):
+    for mode in ("events", "welcome", "late"):
         result = subprocess.run(
             [sys.executable, "-c", driver, mode, str(cold), str(warm)],
             capture_output=True, text=True, timeout=10, env=os.environ | {"QT_QPA_PLATFORM": "offscreen"},

@@ -119,7 +119,7 @@ def render_page(command: Path, doctor: dict, mcp_available: bool, status_path: P
 <p>{'Python、Qt 和 Veusz 随应用提供，无需另外安装。' if ready else html.escape('；'.join(failures))}</p>
 <a href="{status_path.name}">查看本次环境检查</a></div>
 <h2>1. 放好应用，连接你的 AI</h2>
-<p>把整个 SciPlot.app 放在固定位置（例如“应用程序”），双击即可回到本页。移动应用后，重新打开本页，并用新路径更新客户端连接。</p>
+<p>把整个 SciPlot.app 放在固定位置（例如“应用程序”），双击后点击「打开 AI 连接指南」即可回到本页。移动应用后，重新打开本页，并用新路径更新客户端连接。</p>
 <div class="card"><code id="command">{command_text}</code><p><button onclick="copyCommand()">复制命令路径</button> <span id="copyStatus" role="status"></span></p></div>
 {mcp_setup}
 <h2>2. 先用安全示例画第一张图</h2>

@@ -83,7 +83,7 @@ verify_root=$(mktemp -d "$HOME/SciPlot-verify.XXXXXX")
   --out '/新位置/SciPlot.app' --verify "$verify_root/moved"
 ```
 
-首次放置应用后双击它；或以 `Contents/MacOS/sciplot --welcome --no-open --out DIR`
+首次放置应用后双击它，再点「打开 AI 连接指南」；或以 `Contents/MacOS/sciplot --welcome --no-open --out DIR`
 生成可审阅的中文说明、环境检查和两种 MCP 配置片段。移动应用后应重新生成配置路径。
 欢迎页默认只写入临时目录；不会安装配置、登录账户或调用付费模型。
 
