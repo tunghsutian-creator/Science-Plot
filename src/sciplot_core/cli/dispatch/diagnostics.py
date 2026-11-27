@@ -36,6 +36,9 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
             _print_json(payload)
         else:
             print(f"SciPlot plan: {payload['status']}")
+            blocker = payload.get("blocker")
+            if blocker is not None:
+                print(blocker["message"])
             transform = payload.get("scientific_transform")
             if isinstance(transform, dict):
                 output = transform.get("output")

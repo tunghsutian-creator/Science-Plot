@@ -140,6 +140,20 @@ def resolve_frequency_plan(
     )
     if primary is None:
         return None
+    # The default study queue is not evidence of a bound workbook table.
+    if (
+        not directory_source
+        and not available_metrics
+        and input_path is not None
+        and input_path.is_file()
+        and input_path.suffix.casefold() in {".xlsx", ".xls"}
+    ):
+        raise FigurePlanResolutionError(
+            "frequency_workbook_selection_required",
+            "No frequency data were bound from this workbook. To select an instrument "
+            "Test/Result/Interval, use sciplot task create with --test-name and "
+            "--source-block for the exact inspected block.",
+        )
     return ResolvedFigurePlan.planned(
         rule_id=FREQUENCY_RULE_ID,
         selection_policy=(
