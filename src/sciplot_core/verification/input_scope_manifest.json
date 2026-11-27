@@ -10320,7 +10320,9 @@
       "tests/test_project_file_append.py::test_ordinary_delimited_coordinates_resolve_only_valid_separator_evidence",
       "tests/test_project_file_append.py::test_task_create_appends_from_original_without_a_request_file",
       "tests/test_project_file_append.py::test_task_create_saves_first_figure_directly_from_selected_workbook_sheet",
-      "tests/test_resolved_figure_plan.py::test_studio_package_requires_decoded_exports_bound_to_the_selected_outcome"
+      "tests/test_resolved_figure_plan.py::test_studio_package_requires_decoded_exports_bound_to_the_selected_outcome",
+      "tests/test_project_file_save_as.py::test_save_as_rejects_stale_occupied_and_opaque_archive",
+      "tests/test_project_file_save_as.py::test_whole_file_save_as_copies_all_current_figures_and_sealed_versions"
     ],
     "private": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
@@ -20430,7 +20432,9 @@
       "tests/test_project_file_append.py::test_ordinary_delimited_coordinates_resolve_only_valid_separator_evidence",
       "tests/test_project_file_append.py::test_task_create_appends_from_original_without_a_request_file",
       "tests/test_project_file_append.py::test_task_create_saves_first_figure_directly_from_selected_workbook_sheet",
-      "tests/test_resolved_figure_plan.py::test_studio_package_requires_decoded_exports_bound_to_the_selected_outcome"
+      "tests/test_resolved_figure_plan.py::test_studio_package_requires_decoded_exports_bound_to_the_selected_outcome",
+      "tests/test_project_file_save_as.py::test_save_as_rejects_stale_occupied_and_opaque_archive",
+      "tests/test_project_file_save_as.py::test_whole_file_save_as_copies_all_current_figures_and_sealed_versions"
     ],
     "comprehensive": [
       "tests/test_annotation_operations_native.py::test_initial_crop_can_be_reviewed_and_exported_without_regeneration",
