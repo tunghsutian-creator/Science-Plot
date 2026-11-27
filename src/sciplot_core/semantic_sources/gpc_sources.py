@@ -11,6 +11,7 @@ from sciplot_core.materials_rules.models import SemanticRule
 from sciplot_core.materials_rules.unit_formatting import format_unit_label
 from sciplot_core.semantic_sources.gpc_agilent_distribution import (
     read_agilent_gpc_distribution,
+    reject_percentage_distribution,
 )
 from sciplot_core.semantic_sources.gpc_transform_contract import (
     build_gpc_transform_contract,
@@ -84,6 +85,7 @@ def _scan_gpc_tables(
     sample_prefix: str,
 ) -> list[CurveSeriesPayload]:
     best: list[CurveSeriesPayload] = []
+    best_table: tuple[str, Any] | None = None
     for table_name, raw in tables:
         series = _scan_curve_series_table(
             raw,
@@ -99,22 +101,32 @@ def _scan_gpc_tables(
             len(item.points) for item in best
         ):
             continue
-        best = [
-            CurveSeriesPayload(
-                sample=item.sample,
-                x_label=item.x_label,
-                x_unit=item.x_unit,
-                y_label=item.y_label,
-                y_unit=item.y_unit,
-                points=item.points,
-                diagnostics=_canonical_gpc_diagnostics(
-                    item.diagnostics or {},
-                    source_table=table_name,
-                ),
-            )
-            for item in series
-        ]
-    return best
+        best = series
+        best_table = (table_name, raw)
+    if best_table is None:
+        return []
+    table_name, raw = best_table
+    for item in best:
+        diagnostics = item.diagnostics or {}
+        reject_percentage_distribution(
+            raw, table_name, diagnostics["source_header_row_index"],
+            diagnostics["source_y_column_index"],
+        )
+    return [
+        CurveSeriesPayload(
+            sample=item.sample,
+            x_label=item.x_label,
+            x_unit=item.x_unit,
+            y_label=item.y_label,
+            y_unit=item.y_unit,
+            points=item.points,
+            diagnostics=_canonical_gpc_diagnostics(
+                item.diagnostics or {},
+                source_table=table_name,
+            ),
+        )
+        for item in best
+    ]
 
 
 def resolve_gpc_scientific_transform(
@@ -236,7 +248,9 @@ def _canonical_gpc_diagnostics(
     source_table: str,
 ) -> dict[str, Any]:
     updated = {**diagnostics, "source_table": source_table}
-    if _token(updated.get("source_y_header")) in {
+    if not updated.get("source_y_unit_detection_value") and _token(
+        updated.get("source_y_header")
+    ) in {
         "dwdlogm",
         "dwdlogmolarmass",
     }:

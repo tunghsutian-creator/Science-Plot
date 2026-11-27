@@ -3,12 +3,32 @@
 from __future__ import annotations
 
 import math
+import re
 from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.text_values import clean_text, token
 from sciplot_core.semantic_sources.models import CurveSeriesPayload
 from sciplot_core.semantic_sources.table_scanning import _float
+
+
+_PERCENT_UNIT = re.compile(r"(?:wt\.?\s*|mass\s*)?[%％]|\bpercent(?:age)?\b|百分比", re.IGNORECASE)
+
+
+def reject_percentage_distribution(
+    raw: Any, table_name: str, header_index: int, y_index: int,
+) -> None:
+    """The calibrated fraction path cannot interpret percent-valued data."""
+    header = clean_text(raw.iat[header_index, y_index])
+    for row_index in range(header_index, min(header_index + 3, raw.shape[0])):
+        evidence = clean_text(raw.iat[row_index, y_index])
+        if not _PERCENT_UNIT.search(evidence):
+            continue
+        raise ValueError(
+            f"Unsupported percentage GPC distribution in {table_name}, row "
+            f"{raw.index[row_index] + 1}, column {raw.columns[y_index] + 1}: "
+            f"{evidence!r} for header {header!r}. This GPC plot requires a fraction."
+        )
 
 
 def read_agilent_gpc_distribution(
@@ -23,14 +43,19 @@ def read_agilent_gpc_distribution(
     )
     best_points: list[tuple[float, float]] = []
     best_diagnostics: dict[str, Any] = {}
+    best_table: Any = None
     for table_name, raw in tables:
         for header_index in range(max(0, raw.shape[0] - 1)):
-            headers = [token(value) for value in raw.iloc[header_index].tolist()]
+            raw_headers = [clean_text(value) for value in raw.iloc[header_index]]
+            headers = [token(value) for value in raw_headers]
             x_index = _first_index(
                 headers,
                 {"mwgmol", "molarmassgmol", "molecularweightgmol"},
             )
-            y_index = _first_index(headers, {"dwdlogm", "dwdlogmolarmass"})
+            y_index = _first_index(
+                [token(_PERCENT_UNIT.sub("", value)) for value in raw_headers],
+                {"dwdlogm", "dwdlogmolarmass"},
+            )
             logm_index = _first_index(headers, {"logm"})
             outside_index = _first_index(headers, {"outsidecalib"})
             if x_index is None or y_index is None or logm_index is None:
@@ -47,6 +72,7 @@ def read_agilent_gpc_distribution(
             if len(points) <= len(best_points):
                 continue
             best_points = points
+            best_table = raw
             best_diagnostics = {
                 "source_table": table_name,
                 "source_header_row_index": header_index,
@@ -76,6 +102,11 @@ def read_agilent_gpc_distribution(
             }
     if not best_points:
         return None
+    reject_percentage_distribution(
+        best_table, best_diagnostics["source_table"],
+        best_diagnostics["source_header_row_index"],
+        best_diagnostics["source_y_column_index"],
+    )
     return CurveSeriesPayload(
         sample=sample,
         x_label="Molar mass",
@@ -211,4 +242,4 @@ def _first_index(values: list[str], accepted: set[str]) -> int | None:
     return next((index for index, value in enumerate(values) if value in accepted), None)
 
 
-__all__ = ["read_agilent_gpc_distribution"]
+__all__ = ["read_agilent_gpc_distribution", "reject_percentage_distribution"]
