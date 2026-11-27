@@ -103,6 +103,8 @@ PLOT_TEST_PATHS = (
     "tests/test_plot_protocol_native.py",
     "tests/test_plot_creation.py",
     "tests/test_project_file_append.py",
+    "tests/test_project_file_intent.py",
+    "tests/test_project_file_summary.py",
     "tests/test_plot_template_creation.py",
     "tests/test_plot_template_native.py",
     "tests/test_legacy_conversion.py",
