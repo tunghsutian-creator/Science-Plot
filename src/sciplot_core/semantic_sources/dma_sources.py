@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Callable
 from pathlib import Path
+from typing import TypeVar
+
 import pandas as pd
+
 from sciplot_core.dma_temperature_contract import (
     DMA_TEMPERATURE_CANONICAL_MODULUS_UNIT,
     DMA_TEMPERATURE_CANONICAL_TEMPERATURE_UNIT,
@@ -37,16 +41,12 @@ from sciplot_core.semantic_sources.rheology_sweep_sources import (
 
 def _dma_modulus_unit(
     value: object,
-    *,
     exact: bool = False,
 ) -> tuple[str, float] | None:
-    pattern = r"^\s*[\[(]?\s*(?P<unit>[gmk]?pa)\s*[\])]?\s*$"
     for candidate in _dma_unit_candidates(value, exact=exact):
-        match = re.fullmatch(pattern, candidate, flags=re.IGNORECASE)
-        if match is None:
-            continue
-        normalized = match.group("unit").casefold()
-        return DMA_TEMPERATURE_MODULUS_TO_PA[normalized]
+        unit = candidate.strip(" []()")
+        if unit in DMA_TEMPERATURE_MODULUS_TO_PA:
+            return unit, DMA_TEMPERATURE_MODULUS_TO_PA[unit]
     return None
 
 
@@ -83,7 +83,6 @@ def _dma_unit_candidates(value: object, *, exact: bool) -> tuple[str, ...]:
 
 def _dma_temperature_unit(
     value: object,
-    *,
     exact: bool = False,
 ) -> tuple[str, float, float, str] | None:
     celsius_pattern = (
@@ -122,6 +121,54 @@ def _dma_explicit_unknown_unit(value: object) -> str | None:
         if cleaned and _float(cleaned) is None:
             return cleaned
     return None
+
+
+_DmaUnit = TypeVar("_DmaUnit")
+
+
+def _dma_unit_evidence(
+    raw: pd.DataFrame,
+    *,
+    source: Path,
+    header_index: int,
+    column: int,
+    match: Callable[[object, bool], _DmaUnit | None],
+    quantity: str,
+    expected: str,
+) -> tuple[_DmaUnit, str, int, str]:
+    header = _clean_text(raw.iat[header_index, column])
+    detected = match(header, False)
+    method = "detected_from_header"
+    evidence_row, evidence_text = header_index, header
+    if detected is None:
+        unknown = _dma_explicit_unknown_unit(header)
+        if unknown is not None:
+            raise ValueError(
+                f"Unsupported DMA {quantity} unit `{unknown}` in {source}; "
+                f"expected {expected}."
+            )
+    for index in range(header_index + 1, min(raw.shape[0], header_index + 4)):
+        text = _clean_text(raw.iat[index, column])
+        if _float(text) is not None:
+            break
+        adjacent = match(text, True)
+        if adjacent is None:
+            continue
+        if detected is not None and detected != adjacent:
+            raise ValueError(
+                f"Conflicting DMA {quantity} units in {source}, column {column + 1}: "
+                f"row {evidence_row + 1} {evidence_text!r} and row {index + 1} {text!r}."
+            )
+        if detected is None:
+            detected = adjacent
+            method = "detected_from_adjacent_unit_row"
+            evidence_row, evidence_text = index, text
+    if detected is None:
+        raise ValueError(
+            f"Missing DMA {quantity} unit in {source}; expected {expected} "
+            "in the header or an adjacent unit row."
+        )
+    return detected, method, evidence_row, evidence_text
 
 
 def _dma_temperature_sample_label(
@@ -173,36 +220,13 @@ def _read_dma_temperature_series(source: Path) -> list[CurveSeriesPayload]:
     for pair_index, (x_index, y_index) in enumerate(pairs, start=1):
         x_header = _clean_text(raw.iat[header_index, x_index])
         y_header = _clean_text(raw.iat[header_index, y_index])
-        x_unit_match = _dma_temperature_unit(x_header)
-        x_unit_detection = "detected_from_header"
-        x_unit_detection_row_index = header_index
-        x_unit_detection_value = x_header
-        if x_unit_match is None:
-            for row_index in range(
-                header_index + 1, min(raw.shape[0], header_index + 4)
-            ):
-                candidate = raw.iat[row_index, x_index]
-                x_unit_match = _dma_temperature_unit(
-                    candidate,
-                    exact=True,
-                )
-                if x_unit_match is not None:
-                    x_unit_detection = "detected_from_adjacent_unit_row"
-                    x_unit_detection_row_index = row_index
-                    x_unit_detection_value = _clean_text(candidate)
-                    break
-        if x_unit_match is None:
-            unknown_x_unit = _dma_explicit_unknown_unit(x_header)
-            if unknown_x_unit is not None:
-                raise ValueError(
-                    "Unsupported DMA temperature unit "
-                    f"`{unknown_x_unit}` in {source}; expected °C/C or K."
-                )
-            raise ValueError(
-                f"Missing DMA temperature unit in {source}; "
-                "expected °C/C or K in the temperature header or an "
-                "adjacent unit row."
-            )
+        (
+            x_unit_match, x_unit_detection, x_unit_detection_row_index,
+            x_unit_detection_value,
+        ) = _dma_unit_evidence(
+            raw, source=source, header_index=header_index, column=x_index,
+            match=_dma_temperature_unit, quantity="temperature", expected="°C/C or K",
+        )
         (
             source_x_unit,
             x_factor_to_display,
@@ -210,38 +234,14 @@ def _read_dma_temperature_series(source: Path) -> list[CurveSeriesPayload]:
             x_conversion_method,
         ) = x_unit_match
 
-        y_unit_match = _dma_modulus_unit(y_header)
-        y_unit_detection = "detected_from_header"
-        y_unit_detection_row_index = header_index
-        y_unit_detection_value = y_header
-        if y_unit_match is None:
-            for row_index in range(
-                header_index + 1,
-                min(raw.shape[0], header_index + 4),
-            ):
-                candidate = raw.iat[row_index, y_index]
-                y_unit_match = _dma_modulus_unit(
-                    candidate,
-                    exact=True,
-                )
-                if y_unit_match is not None:
-                    y_unit_detection = "detected_from_adjacent_unit_row"
-                    y_unit_detection_row_index = row_index
-                    y_unit_detection_value = _clean_text(candidate)
-                    break
-        if y_unit_match is None:
-            unknown_y_unit = _dma_explicit_unknown_unit(y_header)
-            if unknown_y_unit is not None:
-                raise ValueError(
-                    "Unsupported DMA storage-modulus unit "
-                    f"`{unknown_y_unit}` in {source}; "
-                    "expected Pa, kPa, MPa, or GPa."
-                )
-            raise ValueError(
-                f"Missing DMA storage-modulus unit in {source}; "
-                "expected Pa, kPa, MPa, or GPa in the storage-modulus "
-                "header or an adjacent unit row."
-            )
+        (
+            y_unit_match, y_unit_detection, y_unit_detection_row_index,
+            y_unit_detection_value,
+        ) = _dma_unit_evidence(
+            raw, source=source, header_index=header_index, column=y_index,
+            match=_dma_modulus_unit, quantity="storage-modulus",
+            expected="Pa, mPa, kPa, MPa, or GPa",
+        )
         source_unit, factor_to_pa = y_unit_match
         sample = _dma_temperature_sample_label(
             raw,

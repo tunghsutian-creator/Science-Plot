@@ -22,10 +22,11 @@ DMA_TEMPERATURE_DEFAULT_Y_MIN: Final = 0.0
 DMA_TEMPERATURE_X_LABEL: Final = "Temperature (°C)"
 DMA_TEMPERATURE_Y_LABEL: Final = "Storage modulus, E′ (MPa)"
 DMA_TEMPERATURE_MODULUS_TO_PA: Final = {
-    "gpa": ("GPa", 1.0e9),
-    "mpa": ("MPa", 1.0e6),
-    "kpa": ("kPa", 1.0e3),
-    "pa": ("Pa", 1.0),
+    "GPa": 1.0e9,
+    "MPa": 1.0e6,
+    "kPa": 1.0e3,
+    "Pa": 1.0,
+    "mPa": 1.0e-3,
 }
 
 
