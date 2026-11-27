@@ -77,7 +77,7 @@ def test_official_stdio_client_discovery_and_error_recovery():
             tools = await client.list_tools()
             assert len(tools.tools) == 56
             discovered = {tool.name: tool for tool in tools.tools}
-            assert len(discovered) == 55
+            assert len(discovered) == 56
             assert {"sciplot_project_bundle_export", "sciplot_project_bundle_import"} <= discovered.keys()
             assert {"sciplot_intake_prepare", "sciplot_intake_table", "sciplot_intake_create"} <= discovered.keys()
             assert "sciplot_plot_intent" in discovered
