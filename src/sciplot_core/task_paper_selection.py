@@ -1,7 +1,6 @@
 """Freeze an explicit current experiment-group selection through paper owners."""
 
 from pathlib import Path
-import re
 from typing import Any
 
 from sciplot_core.foundation.canonical_paths import canonical_path
@@ -19,19 +18,14 @@ from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot, _a
 
 
 def _label(item: dict[str, Any], figure: dict[str, Any], figures: list[dict[str, Any]]) -> str:
-    def safe(value: str) -> str:
-        return re.sub(r"[^A-Za-z0-9_-]+", "_", value).strip("_-")
-
-    label = safe(item["label"])
-    if len(figures) > 1:
-        titles = [safe(str(entry.get("title") or entry["figure_id"])) for entry in figures]
-        title = safe(str(figure.get("title") or figure["figure_id"]))
-        suffix = title if title and titles.count(title) == 1 else safe(figure["figure_id"])
-        suffix = suffix[:48]
-        label = label[:max(1, 63 - len(suffix))] + "_" + suffix
-    if not label:
-        raise TaskControlError("paper_group_label_invalid", "Give the selected group item a nonempty safe display label.")
-    return label[:64]
+    label = item["label"]
+    if not label.strip():
+        raise TaskControlError("paper_group_label_invalid", "Give the selected group item a nonempty display label.")
+    if len(figures) == 1:
+        return label
+    titles = [entry.get("title") or entry["figure_id"] for entry in figures]
+    title = figure.get("title") or figure["figure_id"]
+    return f"{label} · {title if titles.count(title) == 1 else figure['figure_id']}"
 
 
 @managed_task_call
@@ -124,12 +118,12 @@ def start_group_paper(group: Path, *, paper_dir: Path, out: Path, title: str | N
             current = head["document"]
             if current.get("plot_type") != "ManagedPlot" or current.get("plot_id") != figure["plot_id"]:
                 raise TaskControlError("paper_group_figure_changed", f"The registered figure no longer identifies its saved ManagedPlot: {figure['plot']}")
-            selected.append({"plot": figure["plot"], **{key: current[key] for key in ("plot_id", "revision")}, "label": item["label"]})
+            selected.append({"plot": figure["plot"], **{key: current[key] for key in ("plot_id", "revision")}, "label": item["label"], "group_item_id": item["item_id"]})
         else:
             if figure["status"] != "ready":
                 raise TaskControlError("paper_group_figure_pending", "Every selected registered figure must have a saved native document.")
             selected.append({"project": item["project"], "figure_id": figure["figure_id"], "label": item["label"],
-                             "expected_version": {key: figure[key] for key in ("document_sha256", "spec_sha256")}})
+                             "group_item_id": item["item_id"], "expected_version": {key: figure[key] for key in ("document_sha256", "spec_sha256")}})
     resolved_title = title if title is not None else state["request"]["title"]
     selection_origin = {"request": origin, "group_state_sha256": state["state_sha256"],
                         "scope": "Frozen ordered registered figures, not a cross-plot edit."}

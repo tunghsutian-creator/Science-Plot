@@ -50,7 +50,8 @@ def _load(root: Path) -> dict[str, Any]:
     if state["kind"] == _MANAGED_SELECTION:
         normalize_managed_delivery(state["request"])
         return dict(state)
-    normalize_paper_request(state["request"])
+    request = state["request"]
+    normalize_paper_request(request, stored_group=any("group_item_id" in item for item in request["items"]))
     for item in state["items"]:
         if item.get("attempt"):
             attempt = canonical_path(Path(item["attempt"]))
@@ -230,7 +231,7 @@ def start_paper(request: object, *, paper_dir: Path, base_dir: Path | None = Non
             root.mkdir(mode=0o700)
             state = {"kind": "sciplot_task_paper", "version": 1, "paper_dir": str(root), "request": normalized,
                      "status": "pending", "selections": selections, "selection_origin": selection_origin,
-                     "items": [{"stem": paper_stem(index, item["label"]), "status": "pending"}
+                     "items": [{"stem": paper_stem(index, item), "status": "pending"}
                                for index, item in enumerate(normalized["items"], 1)]}
             _save(root, state)
             _run(root, state)

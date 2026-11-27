@@ -10,6 +10,7 @@ from jsonschema import Draft202012Validator
 
 from sciplot_core.studio_core.annotation_schema import object_schema
 from sciplot_core.foundation.canonical_paths import canonical_path
+from sciplot_core.delivery.paper_stem import group_paper_stem
 from sciplot_core.task_contract import TaskControlError
 
 
@@ -17,28 +18,32 @@ def paper_request_schema() -> dict[str, Any]:
     return _paper_request_schema(current_group=False)
 
 
-def _paper_request_schema(*, current_group: bool) -> dict[str, Any]:
+def _paper_request_schema(*, current_group: bool, stored_group: bool = False) -> dict[str, Any]:
     text = {"type": "string", "minLength": 1, "maxLength": 200}
     digest = {"type": "string", "pattern": "^[a-f0-9]{64}$"}
     fields = (["document_sha256", "spec_sha256"] if current_group else
               ["request_sha256", "document_sha256", "spec_sha256", "source_sha256"])
     version = object_schema(dict.fromkeys(fields, digest), fields)
+    group_labels = current_group or stored_group
     return object_schema({
         "version": {"type": "integer", "const": 1}, "title": text,
         "out": {"type": "string", "minLength": 1},
         "items": {"type": "array", "minItems": 1, "maxItems": 32, "items": object_schema({
             "project": {"type": "string", "minLength": 1}, "figure_id": text,
-            "label": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"},
+            "label": {"type": "string", "minLength": 1} if group_labels else {
+                "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$",
+            },
+            **({"group_item_id": text} if group_labels else {}),
             "expected_version": version,
-        }, ["project", "figure_id", "label", "expected_version"])},
+        }, ["project", "figure_id", "label", "expected_version"] + (["group_item_id"] if group_labels else []))},
     }, ["version", "title", "out", "items"])
 
 
 def normalize_paper_request(value: object, *, base_dir: Path | None = None,
-                            current_group: bool = False) -> dict[str, Any]:
+                            current_group: bool = False, stored_group: bool = False) -> dict[str, Any]:
     try:
         json.dumps(value, allow_nan=False)
-        error = next(Draft202012Validator(_paper_request_schema(current_group=current_group)).iter_errors(value), None)
+        error = next(Draft202012Validator(_paper_request_schema(current_group=current_group, stored_group=stored_group)).iter_errors(value), None)
         if error is not None:
             raise ValueError(f"{'/'.join(map(str, error.absolute_path))}: {error.message[:400]}")
     except (ValueError, TypeError) as exc:
@@ -50,7 +55,7 @@ def normalize_paper_request(value: object, *, base_dir: Path | None = None,
         path = Path(entry[key]).expanduser()
         entry[key] = str(canonical_path(path if path.is_absolute() else base / path))
     labels = [item["label"].casefold() for item in request["items"]]
-    if len(labels) != len(set(labels)):
+    if not (current_group or stored_group) and len(labels) != len(set(labels)):
         raise TaskControlError("duplicate_paper_label", "Paper labels must be unique, including case.")
     identities = [(item["project"], item["figure_id"]) for item in request["items"]]
     if len(identities) != len(set(identities)):
@@ -58,6 +63,8 @@ def normalize_paper_request(value: object, *, base_dir: Path | None = None,
     return dict(request)
 
 
-def paper_stem(index: int, label: str) -> str:
+def paper_stem(index: int, item: dict[str, Any]) -> str:
     """Order is the request array, never inferred from project or file names."""
-    return f"{index:03d}_{label}"
+    if "group_item_id" in item:
+        return group_paper_stem(index, item["group_item_id"], item["figure_id"])
+    return f"{index:03d}_{item['label']}"

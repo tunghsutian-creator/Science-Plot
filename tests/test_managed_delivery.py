@@ -5,6 +5,7 @@ from test_managed_backend import managed_ir
 from sciplot_core.plot_ir import seal_ir
 from pathlib import Path
 import json
+import re
 import shutil
 import zipfile
 
@@ -128,6 +129,21 @@ def test_product_generates_index_originals_and_archive_without_manual_launcher(c
         assert "Figures.zip" not in archive.namelist()
         assert all(archive.read(name) == (out / name).read_bytes() for name in archive.namelist())
     assert len(calls) == len(heads) == 2
+
+
+def test_group_delivery_names_files_by_registered_identity_not_labels(case):
+    service, request, _, _, _ = case
+    request["items"].reverse()
+    for item, label, item_id in zip(request["items"], ("回收组 / E_0", "回收组 / E/0"), ("B", "A"), strict=True):
+        item.update(label=label, group_item_id=item_id)
+    result = service.deliver(request)
+    assert result["status"] == "complete", result
+    out = Path(request["out"])
+    entries = json.loads((out / "index.json").read_text())["items"]
+    assert [entry["label"] for entry in entries] == ["回收组 / E_0", "回收组 / E/0"]
+    for order, entry in enumerate(entries, 1):
+        assert re.fullmatch(rf"{order:03d}_[0-9a-f]{{24}}", entry["id"])
+        assert (out / entry["files"]["editable"]).is_file()
 
 
 def test_bound_export_audit_and_shared_originals_are_reused(case, monkeypatch):

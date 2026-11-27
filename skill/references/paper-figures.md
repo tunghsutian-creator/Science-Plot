@@ -12,8 +12,11 @@ To select only specific figures across the group, repeat
 `--figure ITEM_ID FIGURE_ID` in manuscript order instead. Read the group
 item and registered figure IDs with `sciplot task group inspect GROUP_DIRECTORY --json`.
 For a standalone Managed figure, use the item's `plot_objects[].plot_id`
-as its figure ID. A multi-figure item adds the registered figure title or ID
-to its filename. Use `--title TITLE` to override the group title.
+as its figure ID. Display labels preserve the original group text, including
+Chinese and punctuation. A multi-figure item adds its registered figure title
+or ID to the display label. New group filenames use the explicit order and
+registered item/figure IDs, not label text. Use `--title TITLE` to override the
+group title.
 
 - A Managed selection binds each figure's canonical `plot`, `plot_id` and
   current `revision`, including each registered frequency figure in order. It

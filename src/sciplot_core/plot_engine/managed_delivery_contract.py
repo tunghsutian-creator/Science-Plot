@@ -13,14 +13,17 @@ from sciplot_core.foundation.canonical_paths import canonical_path
 def managed_delivery_schema() -> dict[str, Any]:
     text = {"type": "string", "minLength": 1, "maxLength": 200}
     path = {"type": "string", "minLength": 1, "pattern": "^/"}
+    item = closed({
+        "plot": path, "plot_id": IDENTIFIER,
+        "revision": {"type": "integer", "minimum": 0}, "label": {"type": "string", "minLength": 1},
+        "group_item_id": text,
+    }, ["plot", "plot_id", "revision", "label"])
+    item.update({"if": {"not": {"required": ["group_item_id"]}}, "then": {"properties": {"label": text}}})
     return closed({
         "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 128},
         "out": path, "title": text,
         "mode": {"const": "native_snapshot"},
-        "items": {"type": "array", "minItems": 1, "maxItems": 32, "items": closed({
-            "plot": path, "plot_id": IDENTIFIER,
-            "revision": {"type": "integer", "minimum": 0}, "label": text,
-        })},
+        "items": {"type": "array", "minItems": 1, "maxItems": 32, "items": item},
     })
 
 

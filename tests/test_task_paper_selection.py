@@ -11,6 +11,7 @@ from sciplot_core.cli.parsers import build_parser
 from sciplot_core.cli.task_paper import dispatch_paper
 from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_group_storage import save_group
+from sciplot_core.task_paper_contract import normalize_paper_request, paper_stem
 
 
 _REGISTERED_VERSION = {"document_sha256": "a" * 64, "spec_sha256": "b" * 64}
@@ -25,7 +26,7 @@ def group(tmp_path, monkeypatch):
         task_dir = root / "tasks" / name
         source = tmp_path / (name + ".csv")
         source.write_text("x,y\n1,2\n")
-        sources.append({"id": name, "label": {"A": "P0.3/0.7 log", "B": "P0.5/0.5 linear"}[name], "request": {"version": 1, "action": "create", "source": str(source)}})
+        sources.append({"id": name, "label": {"A": "回收组 / E/0", "B": "回收组 / E_0"}[name], "request": {"version": 1, "action": "create", "source": str(source)}})
         children[str(task_dir)] = {"status": "complete", "project": str(tmp_path / ("project-" + name))}
     state = {"kind": "sciplot_task_group", "version": 1, "group_dir": str(root),
              "request": {"version": 1, "title": "Current ordered group", "items": sources},
@@ -46,10 +47,26 @@ def test_default_order_and_explicit_item_order_capture_versions_once(group, tmp_
     assert selection.start_group_paper(root, out=tmp_path / "out", paper_dir=tmp_path / "paper")["status"] == "complete"
     assert [Path(item["project"]).name for item in saved[0][0]["items"]] == ["project-A", "project-B"]
     assert all(item["expected_version"] == _REGISTERED_VERSION for item in saved[0][0]["items"])
-    assert [item["label"] for item in saved[0][0]["items"]] == ["P0_3_0_7_log", "P0_5_0_5_linear"]
+    assert [item["label"] for item in saved[0][0]["items"]] == ["回收组 / E/0", "回收组 / E_0"]
     selection.start_group_paper(root, out=tmp_path / "out2", paper_dir=tmp_path / "paper2", item_ids=["B", "A"])
     assert [Path(item["project"]).name for item in saved[-1][0]["items"]] == ["project-B", "project-A"]
-    assert [item["label"] for item in saved[-1][0]["items"]] == ["P0_5_0_5_linear", "P0_3_0_7_log"]
+    assert [item["label"] for item in saved[-1][0]["items"]] == ["回收组 / E_0", "回收组 / E/0"]
+    items = normalize_paper_request(saved[-1][0], current_group=True)["items"]
+    assert [item["group_item_id"] for item in items] == ["B", "A"]
+    stems = [paper_stem(i, item) for i, item in enumerate(items, 1)]
+    assert [stem.split("_")[0] for stem in stems] == ["001", "002"]
+    assert all(stem.isascii() and all(ch.isalnum() or ch == "_" for ch in stem) for stem in stems)
+    assert paper_stem(1, items[0]) == paper_stem(1, {**items[0], "label": "不同标题"})
+    assert paper_stem(1, items[0]) != paper_stem(1, items[1])
+    # Group capture seals full versions before writing the paper checkpoint.
+    checkpoint = tmp_path / "paper-frozen"
+    checkpoint.mkdir()
+    for item in items:
+        item["expected_version"].update(request_sha256="c" * 64, source_sha256="d" * 64)
+    paper._save(checkpoint, {"kind": "sciplot_task_paper", "version": 1,
+                            "paper_dir": str(checkpoint), "request": {**saved[-1][0], "items": items},
+                            "items": [{"stem": stem} for stem in stems]})
+    assert paper._load(checkpoint)["request"]["items"] == items
     with pytest.raises(TaskControlError, match="distinct existing group item IDs"):
         selection.start_group_paper(root, out=tmp_path / "out3", paper_dir=tmp_path / "paper3", item_ids=[])
     assert len(saved) == 2
@@ -139,15 +156,15 @@ def test_group_change_during_capture_blocks_before_start(group, tmp_path, monkey
 
 def test_only_multi_figure_projects_add_titles_or_necessary_stable_identity(group, tmp_path, monkeypatch):
     root, _, _, saved = group
-    figures = [{"figure_id": "internal-A", "title": "Observed curve", "status": "ready", **_REGISTERED_VERSION},
-               {"figure_id": "internal-B", "title": "Reference", "status": "ready", **_REGISTERED_VERSION}]
+    figures = [{"figure_id": "internal-A", "title": "实测曲线", "status": "ready", **_REGISTERED_VERSION},
+               {"figure_id": "internal-B", "title": "参照", "status": "ready", **_REGISTERED_VERSION}]
     monkeypatch.setattr(selection, "observe_legacy_project",
                         lambda _: SimpleNamespace(figures=figures, require_current=lambda: None))
     selection.start_group_paper(root, out=tmp_path / "out", paper_dir=tmp_path / "paper", item_ids=["A"])
-    assert [item["label"] for item in saved[-1][0]["items"]] == ["P0_3_0_7_log_Observed_curve", "P0_3_0_7_log_Reference"]
-    figures[1]["title"] = "Observed curve"
+    assert [item["label"] for item in saved[-1][0]["items"]] == ["回收组 / E/0 · 实测曲线", "回收组 / E/0 · 参照"]
+    figures[1]["title"] = "实测曲线"
     selection.start_group_paper(root, out=tmp_path / "out2", paper_dir=tmp_path / "paper2", item_ids=["A"])
-    assert [item["label"] for item in saved[-1][0]["items"]] == ["P0_3_0_7_log_internal-A", "P0_3_0_7_log_internal-B"]
+    assert [item["label"] for item in saved[-1][0]["items"]] == ["回收组 / E/0 · internal-A", "回收组 / E/0 · internal-B"]
     refs = [["B", "internal-B"], ["A", "internal-A"], ["B", "internal-A"]]
     selection.start_group_paper(root, out=tmp_path / "out3", paper_dir=tmp_path / "paper3", figure_refs=refs)
     assert [(Path(item["project"]).name, item["figure_id"]) for item in saved[-1][0]["items"]] == [

@@ -7,6 +7,7 @@ from typing import Any, Protocol
 from uuid import uuid4
 
 from sciplot_core.delivery import native_snapshot
+from sciplot_core.delivery.paper_stem import group_paper_stem
 from sciplot_core.plot_engine.managed_delivery_contract import normalize_request
 from sciplot_core.plot_engine.managed_delivery_data import capture_plot_data, project_data
 from sciplot_core.plot_engine.managed_delivery_continuation import delivery_inventory, require_native_seal
@@ -279,7 +280,8 @@ def deliver(service: DeliveryService, value: Any) -> dict[str, Any]:
                     raise
             create_namespace(root)
             state = {"kind": "sciplot_managed_delivery_state", "version": 1, "request": request, "status": "running",
-                     "items": [{"status": "pending", "stem": f"{index:03d}_" + (re.sub(r"[^A-Za-z0-9_-]+", "_", item["label"]).strip("_")[:64] or "Figure")}
+                     "items": [{"status": "pending", "stem": group_paper_stem(index, item["group_item_id"], item["plot_id"])
+                                if "group_item_id" in item else f"{index:03d}_" + (re.sub(r"[^A-Za-z0-9_-]+", "_", item["label"]).strip("_")[:64] or "Figure")}
                                for index, item in enumerate(request["items"], 1)]}
             _save(root, state)
         selected_failure: dict[str, Any] | None = None
