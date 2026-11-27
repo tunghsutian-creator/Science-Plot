@@ -1489,3 +1489,53 @@ def test_v6_delivery_migrates_to_inert_v7_without_losing_recorded_browser_histor
     assert record["legacy_veusz_launcher"]["sha256"] == existing_file_sha256(root / "Open_in_Veusz.command")
     assert record["verification"]["checks"]["legacy_veusz_launcher_current"]
     assert record["verification"]["passed"]
+
+
+@pytest.mark.parametrize("member", ["figures/notes.txt", "figures/extra.pdf", "data/raw.csv"])
+def test_delivery_repeat_never_discards_an_unregistered_member(tmp_path: Path, member: str) -> None:
+    run, manifest, _ = _builder_manifest(tmp_path)
+    previous = build_delivery_package(run, manifest=manifest)
+    root = Path(previous["path"])
+    (root / member).write_bytes(b"only copy of this user's work")
+    before = _package_bytes(root)
+
+    with pytest.raises(ValueError, match="edited or unregistered") as raised:
+        build_delivery_package(run, manifest=manifest, previous_delivery=previous)
+
+    assert str(root / member) in str(raised.value)
+    assert _package_bytes(root) == before
+
+
+@pytest.mark.parametrize("section", ["data_csvs", "figures"])
+def test_registered_delivery_repeat_preserves_an_edited_artifact(tmp_path: Path, section: str) -> None:
+    run, manifest, _ = _builder_manifest(tmp_path)
+    previous = build_delivery_package(run, manifest=manifest)
+    root = Path(previous["path"])
+    edited = Path(previous[section][0]["path"])
+    edited.write_bytes(b"revised outside SciPlot")
+    before = _package_bytes(root)
+
+    with pytest.raises(ValueError, match="edited or unregistered") as raised:
+        build_delivery_package(run, manifest=manifest, previous_delivery=previous)
+
+    assert str(edited) in str(raised.value)
+    assert _package_bytes(root) == before
+
+
+def test_registered_delivery_repeat_can_replace_only_its_unchanged_artifact(tmp_path: Path) -> None:
+    run, manifest, _ = _builder_manifest(tmp_path)
+    previous = build_delivery_package(run, manifest=manifest)
+    old_pdf = next(item for item in previous["figures"] if item["format"] == "pdf")
+    source = Path(old_pdf["source"])
+    source.write_bytes(b"new canonical PDF content")
+    for row in manifest["qa"]["pdfs"]:
+        if row["path"] == str(source):
+            row["sha256"] = existing_file_sha256(source)
+
+    with pytest.raises(ValueError, match="edited or unregistered"):
+        build_delivery_package(run, manifest=manifest)
+
+    assert Path(old_pdf["path"]).read_bytes() != source.read_bytes()
+    current = build_delivery_package(run, manifest=manifest, previous_delivery=previous)
+    assert current["verification"]["passed"] is True
+    assert Path(old_pdf["path"]).read_bytes() == source.read_bytes()

@@ -174,7 +174,7 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
     delivery_namespace = (delivery_root if repository.locations.get("delivery") == delivery_root
                           else project if delivery_root.is_relative_to(project) else None)
     from sciplot_core.delivery.package_transaction import (
-        _package_snapshot, _preserve_finder_metadata, _protect_editable_documents,
+        _package_snapshot, _preserve_finder_metadata, protect_delivery_replacement,
     )
 
     delivery_before = _package_snapshot(delivery_root)
@@ -223,7 +223,14 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
         payload["figure_set"] = {"primary_figure_id": primary_figure_id, "figures": selected_figures}
         delivery_complete = payload["delivery_package"].get("complete") is True
         if delivery_complete:
-            _protect_editable_documents(delivery_root, delivery)
+            if repository.locations.get("delivery") == delivery_root and "delivery" in before["locators"]:
+                original = Path(before["locators"]["delivery"])
+            elif delivery_root.is_relative_to(project):
+                original = Path(before["locators"][""]) / delivery_root.relative_to(project)
+            else:
+                original = delivery_root
+            protect_delivery_replacement(delivery_root, delivery,
+                before=delivery_before, previous_record=previous_delivery, recorded_root=original)
             if delivery_root.exists():
                 _preserve_finder_metadata(delivery_root, delivery)
         else:

@@ -75,6 +75,7 @@ def build_delivery_package(
         root=root,
         output_dir=output_dir,
         manifest=manifest,
+        previous_record=previous_delivery if previous_delivery is not None else manifest.get("delivery_package"),
         build=lambda stage: _build_staged_delivery(
             output_dir,
             manifest=manifest,

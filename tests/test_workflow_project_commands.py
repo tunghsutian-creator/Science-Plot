@@ -1,5 +1,6 @@
 """The real workflow/store composition publishes once after private preparation."""
 
+from hashlib import sha256
 import json
 from pathlib import Path
 
@@ -38,10 +39,14 @@ def execution(events, project, original):
         (output / "run-evidence.txt").write_bytes(b"prepared analysis")
         private, _logical = kwargs["staged_delivery"]
         private.mkdir(parents=True, exist_ok=True)
-        (private / "incomplete.txt").write_bytes(b"not a usable delivery")
+        (private / "data").mkdir(exist_ok=True)
+        diagnostic = private / "data/incomplete.csv"
+        diagnostic.write_bytes(b"this is an admitted but incomplete diagnostic")
+        (private / "unrecorded.txt").write_bytes(b"this is not an admitted diagnostic")
         events.append("analysis")
         package = {"complete": False, "path": str(private), "data_dir": str(private / "data"),
-                   "verification": {"recorded_root": str(private)}}
+                   "verification": {"recorded_root": str(private)},
+                   "data_csvs": [{"path": str(diagnostic)}]}
         status = {"delivery_package": dict(package)}
         (output / "one_step_status.json").write_text(json.dumps(status))
         return {"created_at": "2026-10-25T20:00:00Z", "figures": [], "result": {},
@@ -79,7 +84,9 @@ def test_complete_workflow_generation_contains_native_run_manifest_and_matching_
     status = json.loads((installed / "one_step_status.json").read_text())
     assert status == manifest["one_step"]
     assert status["delivery_package"] == manifest["delivery_package"]
-    assert (Path(status["delivery_package"]["path"]) / "incomplete.txt").is_file()
+    diagnostics = Path(status["delivery_package"]["path"])
+    assert (diagnostics / "data/incomplete.csv").read_bytes() == b"this is an admitted but incomplete diagnostic"
+    assert not (diagnostics / "unrecorded.txt").exists()
     assert "sciplot-studio-candidate-" not in json.dumps(status)
     assert (project / "source.csv").read_bytes() == b"x,y\n1,2\n"
     import zipfile
@@ -127,12 +134,21 @@ def test_request_preparation_forwards_committed_delivery_evidence(tmp_path, monk
     assert not list((tmp_path / "delivery").iterdir())
 
 
-def test_complete_workflow_publishes_the_capture_delta_without_deleting_unchanged_members(tmp_path, monkeypatch):
+@pytest.mark.parametrize("unregistered", [False, True])
+def test_complete_workflow_installs_only_the_registered_delivery_delta(tmp_path, monkeypatch, unregistered):
     from sciplot_core.policy import DELIVERY_DATA_DIR, DELIVERY_PDF_DIR, DELIVERY_TIFF_DIR
 
     initial = {f"{DELIVERY_DATA_DIR}/stable.csv": b"unchanged generated table", f"{DELIVERY_TIFF_DIR}/stable.tiff": b"unchanged generated image",
                f"{DELIVERY_PDF_DIR}/replaced.pdf": b"old export", f"{DELIVERY_DATA_DIR}/retired.csv": b"old output no longer produced"}
-    project, request, store, before = prepared(tmp_path, delivery_files=initial)
+    root = tmp_path / "delivery"
+    previous = {"kind": "sciplot_user_delivery_package", "version": 7, "path": str(root), "complete": True,
+                "data_csvs": [], "figures": []}
+    for name, content in initial.items():
+        section, field = ("data_csvs", "sha256") if name.endswith(".csv") else ("figures", "delivery_sha256")
+        previous[section].append({"path": str(root / name), field: sha256(content).hexdigest()})
+    if unregistered:
+        initial[f"{DELIVERY_PDF_DIR}/only_copy.pdf"] = b"not registered, must survive"
+    project, request, store, before = prepared(tmp_path, delivery_files=initial, previous_delivery=previous)
     current = {f"{DELIVERY_DATA_DIR}/stable.csv": initial[f"{DELIVERY_DATA_DIR}/stable.csv"], f"{DELIVERY_TIFF_DIR}/stable.tiff": initial[f"{DELIVERY_TIFF_DIR}/stable.tiff"],
                f"{DELIVERY_PDF_DIR}/replaced.pdf": b"new export", f"{DELIVERY_PDF_DIR}/added.pdf": b"additional export"}
 
@@ -153,8 +169,18 @@ def test_complete_workflow_publishes_the_capture_delta_without_deleting_unchange
 
     monkeypatch.setattr(preparation_commands, "prepare_studio_candidate", lambda *_a, **_k: {})
     monkeypatch.setattr(preparation_commands, "audit_studio_candidate", lambda *_a: ([], []))
-    result = run_project_request(project / "plot_request.json", request, execute=execute,
-        classifier=lambda *a, **k: {}, new_creation=False, previous_request=None)
+    def run():
+        return run_project_request(project / "plot_request.json", request, execute=execute,
+            classifier=lambda *a, **k: {}, new_creation=False, previous_request=None)
+
+    if unregistered:
+        with pytest.raises(ValueError, match="only_copy.pdf"):
+            run()
+        assert store.snapshot()["generation"] == before["generation"]
+        assert {p.relative_to(root).as_posix(): p.read_bytes()
+                for p in root.rglob("*") if p.is_file()} == initial
+        return
+    result = run()
     assert result["delivery_package"]["complete"] is True
     assert {p.relative_to(tmp_path / "delivery").as_posix(): p.read_bytes()
             for p in (tmp_path / "delivery").rglob("*") if p.is_file()} == current

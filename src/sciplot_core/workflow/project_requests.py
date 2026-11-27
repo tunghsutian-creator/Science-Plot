@@ -70,7 +70,7 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
     from sciplot_core.workflow.errors import WorkflowIntervention
     from sciplot_core.workflow.project_failures import publish_intervention
     from sciplot_core.workflow.project_output import archive_failed_delivery, private_run_output
-    from sciplot_core.delivery.package_transaction import _package_snapshot, _preserve_finder_metadata, _protect_editable_documents
+    from sciplot_core.delivery.package_transaction import _package_snapshot, _preserve_finder_metadata, protect_delivery_replacement
 
     project = request_path.parent
     store = _publication_store(project)
@@ -124,7 +124,12 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
             raise
         delivery_record = manifest.get("delivery_package", {})
         if delivery_record.get("complete") is True:
-            _protect_editable_documents(delivery, private_delivery)
+            namespace, _, relative = delivery_name.partition("/")
+            key = namespace[1:] if namespace.startswith("@") else ""
+            locator = snapshot["locators"].get(key)
+            original = Path(locator) / (relative if key else delivery_name) if locator is not None else None
+            protect_delivery_replacement(delivery, private_delivery,
+                before=delivery_before, previous_record=previous_delivery, recorded_root=original)
             if delivery.exists():
                 _preserve_finder_metadata(delivery, private_delivery)
         else:

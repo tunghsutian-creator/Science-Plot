@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import shutil
-from stat import S_IMODE
+from stat import S_IMODE, S_ISDIR, S_ISREG
 from collections.abc import Callable
 from pathlib import Path
 from tempfile import mkdtemp
@@ -11,6 +11,8 @@ from typing import Any
 from uuid import uuid4
 
 from sciplot_core.foundation.file_hashing import existing_file_sha256
+from sciplot_core.foundation.source_locations import source_location_scope
+from sciplot_core.delivery_binding import DeliveryBinding
 from sciplot_core.delivery_identity import DELIVERY_IDENTITY, read_delivery_binding
 from sciplot_core.launchers.delivery_editor_launcher import inspect_delivery_editor_launcher_contract
 from sciplot_core.launchers.delivery_inspection import inspect_delivery_launcher_contract
@@ -58,7 +60,12 @@ def _package_snapshot(root: Path) -> dict[str, tuple[str, int | None]]:
             f"unexpected entries: {', '.join(sorted(unknown))}."
         )
     snapshot = {}
-    for path in sorted(root.rglob("*")):
+    paths = sorted(root.rglob("*"))
+    finder_parents = {
+        parent for path in paths if is_delivery_finder_metadata(path)
+        for parent in path.parents if parent.is_relative_to(root)
+    }
+    for path in paths:
         if path.is_symlink():
             raise ValueError(
                 f"Refusing to replace a delivery containing a symbolic link: {path}"
@@ -69,21 +76,27 @@ def _package_snapshot(root: Path) -> dict[str, tuple[str, int | None]]:
                     f"Refusing to replace a non-regular or linked Finder metadata entry: {path}"
                 )
             continue
-        if path.is_file():
+        status = path.lstat()
+        if S_ISDIR(status.st_mode):
+            if path.parent != root and path not in finder_parents:
+                raise ValueError(f"Delivery contains an edited or unverified directory; all files were preserved: {path}. Choose a new output directory.")
+        elif S_ISREG(status.st_mode):
             digest = existing_file_sha256(path)
             if not digest:
                 raise RuntimeError(
                     f"Cannot establish the existing delivery snapshot: {path}"
                 )
             relative = str(path.relative_to(root))
-            mode = S_IMODE(path.stat().st_mode) if relative in {DELIVERY_EDITOR_LAUNCHER, DELIVERY_LAUNCHER} else None
+            mode = S_IMODE(status.st_mode) if relative in {DELIVERY_EDITOR_LAUNCHER, DELIVERY_LAUNCHER} else None
             snapshot[relative] = (digest, mode)
+        else:
+            raise ValueError(f"Refusing to replace a non-regular delivery member: {path}")
     return snapshot
 
 
-def _protect_editable_documents(root: Path, candidate: Path) -> None:
+def _protect_editable_documents(root: Path, candidate: Path) -> DeliveryBinding | None:
     if not root.exists():
-        return
+        return None
     existing = sorted(
         path for path in (root / DELIVERY_PROJECT_DIR).rglob("*")
         if path.is_file() and not is_delivery_finder_metadata(path)
@@ -130,6 +143,80 @@ def _protect_editable_documents(root: Path, candidate: Path) -> None:
             + ". Keep these edits by saving the visible package under another name, "
             "or incorporate them into the managed project before exporting again."
         )
+    return binding
+
+
+def _prior_delivery(
+    previous_record: object, root: Path, *, recorded_root: Path | None = None,
+) -> dict[str, Any]:
+    prior = previous_record if isinstance(previous_record, dict) else {}
+    location = prior.get("path")
+    if (
+        prior.get("kind") == "sciplot_user_delivery_package"
+        and type(prior.get("version")) is int
+        and prior.get("version") in {DELIVERY_PACKAGE_CONTRACT_VERSION, LEGACY_DELIVERY_PACKAGE_CONTRACT_VERSION}
+        and prior.get("complete") is True
+        and isinstance(location, str) and location.strip()
+        and (Path(location).expanduser().resolve() in {root.resolve(), recorded_root.resolve()}
+             if recorded_root is not None else path_identity(Path(location).expanduser()) == path_identity(root))
+    ):
+        return prior
+    return {}
+
+
+def protect_delivery_replacement(
+    root: Path, candidate: Path, *,
+    before: dict[str, tuple[str, int | None]], previous_record: object,
+    recorded_root: Path | None = None,
+) -> None:
+    """Compare the physical preimage to the previously registered artifact paths and bytes."""
+    if not before:
+        return
+    with source_location_scope(None):
+        binding = _protect_editable_documents(root, candidate)
+    prior = _prior_delivery(previous_record, root, recorded_root=recorded_root or root)
+    prior_root = Path(prior["path"]).expanduser().resolve() if prior else root.resolve()
+    recorded = {}
+    for field, directory, hash_field in (
+        ("data_csvs", DELIVERY_DATA_DIR, "sha256"),
+        ("figures", DELIVERY_PDF_DIR, "delivery_sha256"),
+    ):
+        rows = prior.get(field)
+        for row in rows if isinstance(rows, list) else ():
+            location = row.get("path") if isinstance(row, dict) else None
+            if isinstance(location, str) and location.strip():
+                member = Path(location).expanduser().resolve()
+                if member.parent == prior_root / directory:
+                    recorded[f"{directory}/{member.name}"] = row.get(hash_field)
+    conflicts = []
+    for name, (digest, _mode) in before.items():
+        if name.startswith(DELIVERY_PROJECT_DIR + "/"):
+            continue  # The document gate also handles exact reconciled edits.
+        if name in {DELIVERY_EDITOR_LAUNCHER, DELIVERY_LAUNCHER}:
+            continue  # The staged builder checks and copies recorded launchers.
+        if name == DELIVERY_IDENTITY:
+            if prior:
+                unchanged = prior.get("identity_sha256") == digest
+            else:
+                # Legacy callers supplied no full record. A parsed binding plus
+                # known existing editable documents can still govern its update.
+                unchanged = binding is not None and any(
+                    f"{DELIVERY_PROJECT_DIR}/{document}" in before
+                    for document, _ in binding.documents
+                )
+        elif prior:
+            unchanged = recorded.get(name) == digest
+        else:
+            # A repeat can retain exact bytes at their exact old path even when
+            # no registry was persisted; it cannot claim a renamed/edited file.
+            unchanged = existing_file_sha256(candidate / name) == digest
+        if not unchanged:
+            conflicts.append(str(root / name))
+    if conflicts:
+        raise ValueError(
+            "Delivery contains edited or unregistered files; all files were preserved: "
+            + ", ".join(conflicts) + ". Choose a new output directory."
+        )
 
 
 def _preserve_finder_metadata(previous: Path, candidate: Path) -> None:
@@ -153,13 +240,6 @@ def _preserve_recorded_launchers(
 ) -> None:
     """Preserve only the two registered historical members; never adopt files."""
     prior = previous_record if isinstance(previous_record, dict) else {}
-    root = prior.get("path")
-    prior_current = bool(
-        prior.get("kind") == "sciplot_user_delivery_package"
-        and type(prior.get("version")) is int
-        and prior.get("version") in {DELIVERY_PACKAGE_CONTRACT_VERSION, LEGACY_DELIVERY_PACKAGE_CONTRACT_VERSION}
-        and prior.get("complete") is True and isinstance(root, str) and root.strip()
-        and path_identity(Path(root).expanduser()) == path_identity(previous))
     for name in (DELIVERY_EDITOR_LAUNCHER, DELIVERY_LAUNCHER):
         source = previous / name
         browser = name == DELIVERY_EDITOR_LAUNCHER
@@ -171,7 +251,7 @@ def _preserve_recorded_launchers(
         contract = inspect(previous)
         current = recorded_editor_launcher_current if browser else recorded_legacy_veusz_current
         label = "browser" if browser else "native"
-        if not (prior_current and current(prior, expected_root=previous, contract=contract)
+        if not (_prior_delivery(prior, previous) and current(prior, expected_root=previous, contract=contract)
                 and snapshot.get(name) == (contract.get("content_sha256"), S_IMODE(source.stat().st_mode))):
             raise ValueError(f"The prior {label} launcher is unregistered or changed; all files were preserved. "
                              "Use a new output directory or provide its original delivery record.")
@@ -221,6 +301,7 @@ def publish_delivery_transaction(
     root: Path,
     output_dir: Path,
     manifest: dict[str, Any],
+    previous_record: object,
     build: Callable[[Path], dict[str, Any]],
 ) -> dict[str, Any]:
     """Retain failed diagnostics and install only a complete verified package."""
@@ -245,11 +326,11 @@ def publish_delivery_transaction(
                 expected_manifest=manifest,
             )
             return record
-        _protect_editable_documents(root, stage)
         if _package_snapshot(root) != before:
             raise RuntimeError(
                 "The visible delivery changed during export; no files were replaced."
             )
+        protect_delivery_replacement(root, stage, before=before, previous_record=previous_record)
         final_record = _relocate_record(record, stage, root)
         if root.exists():
             root.replace(backup)
