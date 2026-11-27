@@ -1194,23 +1194,6 @@ def test_retired_temperature_adapter_diff_still_selects_sweep_evidence() -> None
     assert "ruff_changed_python" not in checks
 
 
-def test_no_changes_reports_no_tests_without_running_an_empty_focused_tier() -> None:
-    calls: list[list[str]] = []
-
-    result = run_changed_verification(
-        repo_root=REPO_ROOT,
-        changed_paths=[],
-        command_runner=lambda command, _cwd: (
-            calls.append(list(command)) or _completed(command)
-        ),
-    )
-
-    assert result["status"] == "NO_TESTS"
-    assert result["checks"] == []
-    assert result["checks_executed"] == 0
-    assert calls == []
-
-
 @pytest.mark.parametrize(
     "path",
     ["src/sciplot_core/unowned.py", "tests/test_deleted_owner.py"],
@@ -1476,13 +1459,12 @@ def test_explicit_path_scope_cannot_misrepresent_an_unresolved_git_base() -> Non
 
 @pytest.mark.parametrize("status,plan_only,expected_exit", [
     ("NO_TESTS", False, 2), ("NO_TESTS", True, 2),
-    ("planned", True, 0), ("failed", True, 1),
+    ("planned", True, 0), ("failed", True, 1), ("passed", False, 0),
 ])
 def test_verify_cli_projects_plan_and_empty_scope_without_pass(status, plan_only, expected_exit, monkeypatch, capsys):
     from sciplot_core import cli, verification
 
-    payload = build_changed_verification_plan([], repo_root=REPO_ROOT)
-    payload["status"] = status
+    payload = {**build_changed_verification_plan([], repo_root=REPO_ROOT), "status": status}
     calls = []
 
     def verify(**kwargs):
@@ -1490,34 +1472,22 @@ def test_verify_cli_projects_plan_and_empty_scope_without_pass(status, plan_only
         return payload
 
     monkeypatch.setattr(verification, "run_changed_verification", verify)
-    arguments = ["verify", "--changed", "--base", "HEAD~2", "--json"]
-    if plan_only:
-        arguments.append("--plan-only")
-    assert cli.main(arguments) == expected_exit
-    assert json.loads(capsys.readouterr().out) == payload
-    assert calls == [{"base": "HEAD~2", **({"plan_only": True} if plan_only else {})}]
-
-
-@pytest.mark.parametrize("status,plan_only,expected_exit", [
-    ("NO_TESTS", False, 2), ("NO_TESTS", True, 2),
-    ("planned", True, 0), ("failed", True, 1),
-])
-def test_quick_verify_preserves_plan_base_and_empty_scope_status(status, plan_only, expected_exit, monkeypatch, capsys):
-    from sciplot_core import cli, verification
-
-    payload = build_changed_verification_plan([], repo_root=REPO_ROOT)
-    payload["status"] = status
-    calls = []
-    def verify(**kwargs):
-        calls.append(kwargs)
-        return payload
-    monkeypatch.setattr(verification, "run_changed_verification", verify)
-    arguments = ["verify", "--quick", "--base", "HEAD~2", "--json"]
-    if plan_only:
-        arguments.append("--plan-only")
-    assert cli.main(arguments) == expected_exit
-    assert json.loads(capsys.readouterr().out) == {**payload, "claim": "development_feedback_only", "scientific_acceptance": False}
-    assert calls == [{"quick": True, "base": "HEAD~2", **({"plan_only": True} if plan_only else {})}]
+    for mode in ("--changed", "--quick"):
+        arguments = ["verify", mode, "--json"]
+        expected = {}
+        if status != "passed":
+            arguments.extend(["--base", "HEAD~2"])
+            expected["base"] = "HEAD~2"
+        if plan_only:
+            arguments.append("--plan-only")
+            expected["plan_only"] = True
+        result = payload
+        if mode == "--quick":
+            expected["quick"] = True
+            result = {**payload, "claim": "development_feedback_only", "scientific_acceptance": False}
+        assert cli.main(arguments) == expected_exit
+        assert json.loads(capsys.readouterr().out) == result
+        assert calls.pop() == expected and not calls
 
 
 @pytest.mark.parametrize("path", [

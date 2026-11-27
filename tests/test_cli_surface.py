@@ -287,43 +287,6 @@ def test_readiness_merge_cli_writes_the_same_registry_and_reports_selection(
 
 @pytest.mark.parametrize(
     ("status", "expected_exit"),
-    [("passed", 0), ("failed", 1)],
-)
-def test_verify_cli_emits_owner_payload_and_status_exit_code(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-    status: str,
-    expected_exit: int,
-) -> None:
-    payload = {
-        "kind": "sciplot_changed_verification",
-        "version": 1,
-        "status": status,
-        "comparison": {"base": "HEAD"},
-        "changed_paths": [],
-        "owners": [],
-        "unowned_paths": [],
-        "checks": [],
-        "required_later": {
-            "handoff": [],
-            "final_milestone": [],
-            "release": [],
-        },
-    }
-    import sciplot_core.verification as verification
-
-    monkeypatch.setattr(
-        verification,
-        "run_changed_verification",
-        lambda: payload,
-    )
-
-    assert cli.main(["verify", "--changed", "--json"]) == expected_exit
-    assert json.loads(capsys.readouterr().out) == payload
-
-
-@pytest.mark.parametrize(
-    ("status", "expected_exit"),
     [("planned", 0), ("not_applicable", 0), ("blocked", 1)],
 )
 def test_plan_cli_emits_owner_payload_and_status_exit_code(
