@@ -487,6 +487,7 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
         assert prompts == [initial.sha256]
         assert window.summary["plot_id"] == plots["B"] and window.summary["revision"] == 1
         assert window.summary["edit_targets"]["axis:xb"]["label"] == "Edited B (Hz)"
+        assert window.axes.currentData() == "axis:xb" and window.label.text() == "Edited B (Hz)"
         after_b = file_sha256(moved)
         assert after_b != initial.sha256
         assert project_file_summary(moved, plots["A"]) == before_a
@@ -509,6 +510,7 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
 
         window.figures.setCurrentIndex(window.figures.findData(plots["A"]))
         assert window.summary["plot_id"] == plots["A"] and window.summary["revision"] == 0
+        assert window.axes.currentData() is None and not window.review.isEnabled()
         window.axes.setCurrentIndex(window.axes.findData("axis:xb"))
         assert window.label.text() == "Frequency A (Hz)"
 
@@ -518,6 +520,8 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
         direct.show()
         assert direct.figures.isHidden() and direct.summary["plot_id"] == plots["B"]
         assert direct.summary["revision"] == 1 and direct.viewer is not None
+        direct.axes.setCurrentIndex(direct.axes.findData("axis:xb"))
+        assert direct.label.text() == "Edited B (Hz)"
         assert file_sha256(moved) == after_b and set(delivery.iterdir()) == {moved, target}
 
         with closing(PlotService()) as service:
@@ -528,6 +532,11 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
         direct.export_pdf.trigger()
         assert "项目或图已更新" in direct.status.text() and not direct.export_pdf.isEnabled()
         assert file_sha256(moved) == latest and set(delivery.iterdir()) == {moved, target}
+        click(direct.refresh)
+        assert direct.summary["plot_id"] == plots["B"] and direct.summary["revision"] == 2
+        assert direct.axes.currentData() == "axis:xb" and direct.label.text() == "Newest B (Hz)"
+        assert direct.review.isEnabled() and direct.export_pdf.isEnabled()
+        assert project_file_summary(moved, plots["A"]) == before_a and file_sha256(moved) == latest
     finally:
         for window in windows:
             window.close()

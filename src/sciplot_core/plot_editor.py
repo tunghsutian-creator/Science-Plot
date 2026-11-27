@@ -151,15 +151,18 @@ class PlotEditor(QtWidgets.QMainWindow):
         self._show_summary(summary)
 
     def _show_summary(self, summary: dict[str, Any]) -> None:
+        selected = self.axes.currentData() if self.summary.get("plot_id") == summary["plot_id"] else None
         self.summary = summary
         if self.export_pdf is not None:
             self.export_pdf.setEnabled(self.archive_request is None)
         self.axes.setEnabled(self.archive_request is None)
-        self.axes.clear()
-        self.axes.addItem("选择坐标轴", None)
-        for target, edit in summary["edit_targets"].items():
-            if "axis.label" in edit["properties"]:
-                self.axes.addItem(f"{edit['label']}  ({target})", target)
+        with QtCore.QSignalBlocker(self.axes):
+            self.axes.clear()
+            self.axes.addItem("选择坐标轴", None)
+            for target, edit in summary["edit_targets"].items():
+                if "axis.label" in edit["properties"]:
+                    self.axes.addItem(f"{edit['label']}  ({target})", target)
+            self.axes.setCurrentIndex(max(0, self.axes.findData(selected)))
         self.status.setText(f"修订 {summary['revision']} · {summary['plot_id']}。可修改坐标轴标题和主刻度。")
         self._selected_axis()
         if self.archive_request is not None:
