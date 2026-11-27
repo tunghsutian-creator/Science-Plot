@@ -49,8 +49,18 @@ def _recovery(request: dict[str, Any], *, request_sent: bool) -> dict[str, Any]:
               "preserve": "Keep the original request and idempotency_key; do not create a new operation.",
               **{key: original[key] for key in ("plot_id", "base_revision", "idempotency_key") if key in original}}
     if "plot" in params:
-        repair.update(plot=params["plot"], next_step={"action": "plot.describe", "plot": params["plot"],
-                                                     "description": {"scope": "summary"}})
+        plot = params["plot"]
+        if (request["method"] == "plot.intent" and original.get("mode") == "apply"
+                and isinstance(plot, str) and Path(plot).suffix == ".sciplot"
+                and isinstance(original.get("plot_id"), str)):
+            repair.update(plot=plot, next_step={
+                "action": "project.open", "target": plot, "figure_id": original["plot_id"],
+                "description": {"scope": "summary"},
+            }, preserve="Verify the original project identity, then retry only the exact request and idempotency_key. "
+                        "The current revision alone does not confirm whether this edit was saved.")
+        else:
+            repair.update(plot=plot, next_step={"action": "plot.describe", "plot": plot,
+                                               "description": {"scope": "summary"}})
     return repair
 
 
