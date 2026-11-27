@@ -56,7 +56,10 @@ def test_shared_dedup_never_subtracts_module_coverage_or_similarly_named_leaves(
         mypy_required=False, has_changes=True,
     )
     owner = next(c for c in checks if c["check_id"] == "pytest_changed_owners")
-    assert owner["command"][6:] == [module, parameter]
+    assert owner["command"][6:] == [
+        "-p", "sciplot_core.verification.public_stage_selection", "--sciplot-omit-shared-contracts",
+        module, parameter,
+    ]
     # The module still selects its neighbor and the shared leaf. Do not infer
     # its collected contents or introduce a prefix deselection exemption.
     other_checks = _planned_checks(

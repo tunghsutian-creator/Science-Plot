@@ -795,7 +795,14 @@ def test_future_categorical_neighbors_remain_unowned_and_fail_closed(path):
 
 def test_project_core_domains_retain_all_owned_inputs_and_real_native_consumers():
     for owner in PROJECT_CORE_OWNERS:
-        assert owner.mypy_required and "full_pytest" in owner.release_gates
+        assert "full_pytest" in owner.release_gates
+        if owner.owner_id == "managed_native_plot_editor":
+            # The Qt adapter is qualified by its runtime tests, not the
+            # strict typed-core gate used by the remaining project owners.
+            assert owner.final_milestone_gates == ("smoke",)
+            assert "tests/test_project_file_editor.py" in owner.pytest_targets
+        else:
+            assert owner.mypy_required
         assert owner.owned_test_paths <= set(owner.pytest_targets)
         for target in owner.pytest_targets:
             assert (ROOT / target.split("::", 1)[0]).is_file(), target
