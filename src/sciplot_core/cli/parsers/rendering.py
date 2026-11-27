@@ -29,7 +29,10 @@ def register_rendering_commands(subparsers: Any) -> None:
         help="Use the recognized scientific rule and existing production workflow, including its figure plan and family defaults. Explicit --options still win.",
     )
 
-    render_parser.add_argument("--out", type=Path, required=True)
+    render_parser.add_argument(
+        "--out", type=Path, required=True,
+        help="Output directory. For a plain --template render, use a fresh directory.",
+    )
     render_parser.add_argument("--json", action="store_true", help="Include structured JSON for preparation failures.")
 
     recipe_parser = subparsers.add_parser(

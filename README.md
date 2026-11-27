@@ -427,7 +427,10 @@ transport failure does not start a Legacy creation; follow the returned
 recovery. See the [ordinary creation guide](skill/references/ordinary-create.md)
 for scope, commands and how to inspect existing results. `render --auto` also
 uses the production planner; plain `render --template` remains a low-level
-plot-ready operation.
+plot-ready operation. Use a fresh output directory for each plain render.
+SciPlot does not overwrite existing target files or reuse a previous render's
+`_veusz` directory. If an export stops after writing a file, the JSON error
+lists the files that were written; keep them or retry in a fresh directory.
 
 Frequency instrument exports preserve explicitly labelled temperature Results as
 separate traces. Complex-viscosity magnitude is distinct from a recorded real or
