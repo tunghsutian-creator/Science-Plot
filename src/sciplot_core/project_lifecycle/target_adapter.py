@@ -3,6 +3,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.project_store.io import observe_existing_store
 from .contracts import RevisionToken
 from .errors import EngineError
 from .head_observation import observe_plot_head, require_matching_figure
@@ -16,6 +17,7 @@ from .targets import (DecisionKind, DecisionTarget, ImportTarget, ManagedCreatio
 
 class FilesystemProjectTargets:
     publish_fresh_managed_output = False
+    migrate_saved_on_open = True
 
     def __init__(self, repository: ProjectRepository, *,
                  resolve_figure: Callable[..., dict[str, Any]] | None = None) -> None:
@@ -27,7 +29,8 @@ class FilesystemProjectTargets:
         if isinstance(self.repository, ComposedProjectRepository):
             from .attachment_targets import resolve_attached_open
 
-            attached = resolve_attached_open(self.repository, target, figure_id, self.resolve_figure)
+            attached = resolve_attached_open(self.repository, target, figure_id, self.resolve_figure,
+                                             migrate_saved=self.migrate_saved_on_open)
             if attached is not None:
                 return attached
         from sciplot_core.plot_engine.managed_delivery_continuation import local_managed_target, managed_delivery_location
@@ -59,7 +62,7 @@ class FilesystemProjectTargets:
         from sciplot_core.plot_engine.managed_delivery_continuation import managed_delivery_location
         from .attachment_index import read_index
         from .repository_router import ComposedProjectRepository
-        from .store_composition import existing_store
+        from .store_composition import existing_store, namespace_root
         from sciplot_core.project_store.io import STORE
         from sciplot_core.project_lifecycle.legacy_saved_target import saved_native_target
 
@@ -106,7 +109,8 @@ class FilesystemProjectTargets:
 
             root = native_file_root(target)
         else:
-            root = target.parent if target.name == "plot_request.json" else target
+            exact_old_head = target.name == "head.json" and target.parent == namespace_root(target)
+            root = target.parent if target.name == "plot_request.json" or exact_old_head else target
         with self.repository.query_scope(root):
             if not explicit_vsz and self.repository.has_head(root):
                 return stored(root)
@@ -168,9 +172,14 @@ def observe_saved_legacy_target(target: Path, figure_id: str | None = None) -> t
 
 
 class PublicFilesystemProjectTargets(FilesystemProjectTargets):
-    """New public expert plots publish to their admitted output."""
+    """Public open observes saved state; newly created plots publish explicitly."""
 
     publish_fresh_managed_output = True
+    migrate_saved_on_open = False
+
+    @observe_existing_store()
+    def resolve_open(self, target: Path, figure_id: str | None = None) -> OpenTarget:
+        return super().resolve_open(target, figure_id)
 
 
 def _prepared_native_figure(store: Any, document: Path) -> bool:

@@ -13,7 +13,7 @@ from .targets import ImportTarget, ManagedCreationLocation, OpenTarget, StoredTa
 from .errors import EngineError
 from .head_observation import observe_plot_head, require_matching_figure
 from .legacy_namespace import known_head
-from .store_composition import existing_store, tracked_namespace_store
+from .store_composition import existing_store, namespace_root, tracked_namespace_store
 from .paths import canonical_path
 
 
@@ -41,7 +41,7 @@ def _stored(repository: ComposedProjectRepository, attachment: Attachment, figur
 
 
 def resolve_attached_open(repository: ComposedProjectRepository, target: Path, figure_id: str | None,
-                          resolve_figure: Any) -> OpenTarget | None:
+                          resolve_figure: Any, *, migrate_saved: bool) -> OpenTarget | None:
     store = _store(repository, target)
     marker = owned_marker(target)
     if marker is not None:
@@ -55,6 +55,11 @@ def resolve_attached_open(repository: ComposedProjectRepository, target: Path, f
         except (EngineError, ProjectRecoveryRequired) as exc:
             if isinstance(exc, EngineError) and exc.reason_code != "semantic_attachment_import_pending":
                 raise
+            if not migrate_saved:
+                raise EngineError(
+                    "semantic_attachment_recovery_required",
+                    "A saved namespace transfer is pending. Recover the original project explicitly; opening did not change it.",
+                ) from exc
             if (store is None or marker[0] != Path(owner["origin_root"])
                     or figure_id not in {None, owner.get("figure_id")}):
                 raise EngineError("semantic_attachment_owner_conflict", "The pending transfer requires its exact original namespace and figure.") from exc
@@ -65,7 +70,12 @@ def resolve_attached_open(repository: ComposedProjectRepository, target: Path, f
         return None
     try:
         index = read_index(store)
-    except ProjectRecoveryRequired:
+    except ProjectRecoveryRequired as exc:
+        if not migrate_saved:
+            raise EngineError(
+                "semantic_attachment_recovery_required",
+                "The committed project needs explicit recovery before it can be opened.",
+            ) from exc
         # An explicit selected project may finish only already accepted physical
         # projection; recover never runs/accepts a semantic or native callback.
         store.recover()
@@ -74,16 +84,21 @@ def resolve_attached_open(repository: ComposedProjectRepository, target: Path, f
         attachment = Attachment(store, entry)
         if attachment.relative(target) is not None:
             return _stored(repository, attachment, figure_id)
-    if target != store.root and (known_head(store, target) or FileProjectRepository().has_head(target)):
+    namespace = namespace_root(target)
+    old_target = (namespace if not migrate_saved and namespace is not None
+                  and target == namespace / "head.json" else target)
+    if old_target != store.root and (known_head(store, old_target) or FileProjectRepository().has_head(old_target)):
         # An exact old head takes precedence over a project-wide search by ID.
-        # Validate before attaching this namespace, never a sibling's match.
+        # Validate this namespace, never a sibling's match.
         selected_id = None
         if figure_id is not None:
-            head = observe_plot_head(target, owner=repository)
+            head = observe_plot_head(old_target, owner=repository)
             assert head is not None
             selected_id = head["binding"].get("figure_id")
             require_matching_figure(figure_id, plot_id=head["document"]["plot_id"], saved_figure_id=selected_id)
-        attachment = attach_existing(store, target, figure_id=selected_id, validate=repository.validate_attachment)
+        if not migrate_saved:
+            return StoredTarget(old_target)
+        attachment = attach_existing(store, old_target, figure_id=selected_id, validate=repository.validate_attachment)
         repository.select(attachment)
         return StoredTarget(attachment.root)
     matches = [item for item in index["attachments"].values()
@@ -108,6 +123,8 @@ def resolve_attached_open(repository: ComposedProjectRepository, target: Path, f
     old = document_root(original, selected_id)
     local = FileProjectRepository()
     if local.has_head(old) or known_head(store, old):
+        if not migrate_saved:
+            return StoredTarget(old)
         attachment = attach_existing(store, old, figure_id=selected_id, validate=repository.validate_attachment)
         repository.select(attachment)
         return StoredTarget(attachment.root)
