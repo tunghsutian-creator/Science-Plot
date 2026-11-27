@@ -12,15 +12,17 @@ from uuid import uuid4
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-from sciplot_core.archive_plot_view import archive_intent, archive_plot_view, editor_target_path, is_archive_target
+from sciplot_core.archive_plot_view import archive_plot_view, editor_target_path, is_archive_target
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_editor_dialogs import CurveColorEdit, approve_edit, archive_export_actions, confirm
+from sciplot_core.plot_engine.service import public_plot_service
 from sciplot_core.plot_engine.typed_intent import LINE_COLOR
 from sciplot_core.plot_protocol.client import call
 from sciplot_core.plot_protocol.paths import TransportError
 from sciplot_core.project_lifecycle.contracts import RevisionToken
 from sciplot_core.project_lifecycle.errors import EngineError
 from sciplot_core.project_lifecycle.project_file import ProjectFileSession
+from sciplot_core.project_lifecycle.project_file_intent import project_file_intent
 from sciplot_core.project_lifecycle.project_file_summary import project_file_read_session
 from sciplot_core.studio_core.qt_compat import ensure_veusz_qsettings_compat
 from sciplot_core.studio_core.runtime import ensure_veusz_runtime_path
@@ -86,7 +88,17 @@ class PlotEditor(QtWidgets.QMainWindow):
         self.refresh.clicked.connect(self._refresh)
         ensure_veusz_runtime_path()
         ensure_veusz_qsettings_compat()
-        self._refresh(initial=True)
+        # A window owns its renderer, not a reusable project write session.
+        # Every view/edit below still admits its own archive revision.
+        self._archive_service = public_plot_service() if self.archive else None
+        if self._archive_service is not None:
+            self.destroyed.connect(self._archive_service.close)
+        try:
+            self._refresh(initial=True)
+        except Exception:
+            if self._archive_service is not None:
+                self._archive_service.close()
+            raise
 
     def _call(self, method: str, **params: Any) -> dict[str, Any]:
         return call(method, {"plot": str(self.plot), **params},
@@ -222,7 +234,9 @@ class PlotEditor(QtWidgets.QMainWindow):
         self._show_summary(summary)
 
     def _show_archive_view(self, session: ProjectFileSession, target: str | None) -> tuple[dict[str, Any], bool]:
-        summary, native, seal = archive_plot_view(session, target, expected_project_id=self.archive_project_id)
+        assert self._archive_service is not None
+        summary, native, seal = archive_plot_view(
+            self._archive_service, session, target, expected_project_id=self.archive_project_id)
         if native is not None:
             assert seal is not None
             self._view(native, seal)
@@ -264,6 +278,8 @@ class PlotEditor(QtWidgets.QMainWindow):
 
     def closeEvent(self, event: QtGui.QCloseEvent | None) -> None:
         self._close_viewer()
+        if self._archive_service is not None:
+            self._archive_service.close()
         self._archive_lifetime.close()
         self._archive_session = None
         super().closeEvent(event)
@@ -337,9 +353,10 @@ class PlotEditor(QtWidgets.QMainWindow):
 
     def _edit_archive(self, request: dict[str, Any]) -> None:
         expected = self.summary["revision_token"]
+        assert self._archive_service is not None
         try:
-            plan = archive_intent(self.plot, {**request, "mode": "plan"},
-                                  expected_project_id=self.summary["project_id"], expected_revision=expected)
+            plan = project_file_intent(self._archive_service, self.plot, {**request, "mode": "plan"},
+                                       expected_project_id=self.summary["project_id"], expected_revision=expected)
         except (OSError, ValueError, RuntimeError, KeyError) as exc:
             self._disable_editing()
             self.status.setText(f"未保存：{exc} 请读取最新版本。")
@@ -360,9 +377,10 @@ class PlotEditor(QtWidgets.QMainWindow):
                             f"操作编号：{self.archive_request[1]['idempotency_key']}")
 
     def _save_archive(self, expected: RevisionToken, request: dict[str, Any]) -> None:
+        assert self._archive_service is not None
         try:
-            receipt = archive_intent(self.plot, request, expected_project_id=self.summary["project_id"],
-                                     expected_revision=expected)
+            receipt = project_file_intent(self._archive_service, self.plot, request,
+                                          expected_project_id=self.summary["project_id"], expected_revision=expected)
         except EngineError as exc:
             if exc.reason_code == "project_file_save_unconfirmed" or self.archive_request is not None:
                 self.archive_request = expected, request

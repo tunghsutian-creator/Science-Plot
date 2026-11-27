@@ -16,6 +16,59 @@ from sciplot_core.project_lifecycle.project_file import ProjectFileSaveUnconfirm
 from sciplot_core.project_store.repository import FileProjectStore
 
 
+def test_archive_window_owns_only_its_native_service(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from PyQt6 import QtWidgets
+    from sciplot_core import plot_editor
+
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    calls, closed = [], []
+
+    def service():
+        value = SimpleNamespace()
+        value.close = lambda: closed.append(value)
+        return value
+
+    monkeypatch.setattr(plot_editor, "public_plot_service", service)
+    monkeypatch.setattr(plot_editor, "ensure_veusz_runtime_path", lambda: None)
+    monkeypatch.setattr(plot_editor, "ensure_veusz_qsettings_compat", lambda: None)
+    monkeypatch.setattr(plot_editor.PlotEditor, "_refresh", lambda self, **_: None)
+    monkeypatch.setattr(plot_editor.PlotEditor, "_load_current", lambda self: None)
+
+    def view(worker, session, figure, *, expected_project_id):
+        calls.append(("view", worker, session, figure, expected_project_id))
+        return {}, None, None
+
+    def intent(worker, path, request, *, expected_project_id, expected_revision):
+        calls.append((request["mode"], worker, path, expected_project_id, expected_revision))
+        return {"saved": True, "idempotency_key": request["idempotency_key"], "revision": 4}
+
+    monkeypatch.setattr(plot_editor, "archive_plot_view", view)
+    monkeypatch.setattr(plot_editor, "project_file_intent", intent)
+    monkeypatch.setattr(plot_editor, "approve_edit", lambda *_: True)
+    first_path, second_path = tmp_path / "one.sciplot", tmp_path / "two.sciplot"
+    first = plot_editor.PlotEditor(first_path, socket_path=None, timeout=1)
+    second = plot_editor.PlotEditor(second_path, socket_path=None, timeout=1)
+    try:
+        one, two = first._archive_service, second._archive_service
+        assert one is not two
+        session, revision = object(), object()
+        first.archive_project_id = "project-one"
+        first.summary = {"project_id": "project-one", "revision_token": revision}
+        first._show_archive_view(session, "plot-one")
+        first._edit_archive({"idempotency_key": "edit-this"})
+        assert calls == [("view", one, session, "plot-one", "project-one"),
+                         ("plan", one, first_path, "project-one", revision),
+                         ("apply", one, first_path, "project-one", revision)]
+        first.close()
+        assert one in closed and two not in closed
+    finally:
+        first.close()
+        second.close()
+        app.processEvents()
+
+
 @pytest.mark.comprehensive
 def test_project_file_editor_and_daily_mcp_share_one_archive(tmp_path, monkeypatch):
     import anyio

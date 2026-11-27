@@ -9,13 +9,12 @@ from sciplot_core.delivery.install import install_new_delivery
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_io import read_json_object
 from sciplot_core.foundation.research_destination import require_data_destination
-from sciplot_core.plot_engine.service import public_plot_service
+from sciplot_core.plot_engine.service import PlotService, public_plot_service
 from sciplot_core.plot_ir.figure_document import figure_spec
 from sciplot_core.project_lifecycle.contracts import RevisionToken
 from sciplot_core.project_lifecycle.errors import EngineError
 from sciplot_core.project_lifecycle.project_file import ProjectFileSession
 from sciplot_core.project_lifecycle.project_file_handoff import project_file_handoff
-from sciplot_core.project_lifecycle.project_file_intent import project_file_intent
 from sciplot_core.project_lifecycle.project_file_summary import _summarize, saved_project_file_figure
 from sciplot_core.project_store.runtime import project_runtime
 
@@ -39,7 +38,7 @@ def _require_project(expected: str | None, actual: str) -> None:
         raise ValueError("这个路径上的项目已被替换。请关闭窗口，再打开要编辑的项目。")
 
 
-def archive_plot_view(session: ProjectFileSession, figure_id: str | None, *,
+def archive_plot_view(service: PlotService, session: ProjectFileSession, figure_id: str | None, *,
                       expected_project_id: str | None) -> tuple[dict[str, Any], Path | None, str | None]:
     """Return choices or one private native view owned by the caller's session."""
     _require_project(expected_project_id, session.project_id)
@@ -51,7 +50,7 @@ def archive_plot_view(session: ProjectFileSession, figure_id: str | None, *,
         return {"project_id": session.project_id, "figures": exc.repair["figures"]}, None, None
 
     root = owner.attachment.root
-    with closing(public_plot_service()) as service, project_runtime(session.store):
+    with project_runtime(session.store):
         summary = service.describe(root, description={"scope": "summary"})
         if summary.get("pending") or summary.get("changed_inputs"):
             raise EngineError("project_file_view_unavailable", "The saved figure has pending or changed inputs.")
@@ -74,14 +73,6 @@ def archive_plot_view(session: ProjectFileSession, figure_id: str | None, *,
             **{key: document[key] for key in ("plot_id", "revision", "scientific_hash", "presentation_hash")},
             "revision_token": RevisionToken.of(document), "edit_targets": _summarize(session, document)["edit_targets"],
             "axis_ticks": ticks, "domain_semantics": spec.get("domain_semantics")}, native, build["document_sha256"])
-
-
-def archive_intent(path: Path, request: dict[str, Any], *, expected_project_id: str,
-                   expected_revision: RevisionToken) -> dict[str, Any]:
-    """Route a plan or save to the existing typed archive owner."""
-    with closing(public_plot_service()) as service:
-        return project_file_intent(service, path, request, expected_project_id=expected_project_id,
-                                   expected_revision=expected_revision)
 
 
 def export_archive_figure(path: Path, output: Path, *, export_format: Literal["pdf", "tiff_300"],
