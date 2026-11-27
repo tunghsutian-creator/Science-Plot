@@ -14,9 +14,8 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 from sciplot_core.archive_plot_view import archive_intent, archive_plot_view, editor_target_path, is_archive_target
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.plot_editor_dialogs import archive_pdf_action, confirm, confirm_line_color
+from sciplot_core.plot_editor_dialogs import CurveColorEdit, approve_edit, archive_export_actions, confirm
 from sciplot_core.plot_engine.typed_intent import LINE_COLOR
-from sciplot_core.plot_grammar.styles import COLOR
 from sciplot_core.plot_protocol.client import call
 from sciplot_core.plot_protocol.paths import TransportError
 from sciplot_core.project_lifecycle.contracts import RevisionToken
@@ -71,27 +70,14 @@ class PlotEditor(QtWidgets.QMainWindow):
         for widget in (self.axes, self.edit_property, self.label, self.review, self.refresh, self.retry):
             form.addWidget(widget)
         self.body_layout.addLayout(form)
-        self.curve_colors = QtWidgets.QGroupBox("曲线颜色")
-        self.curve_colors.hide()
-        colors = QtWidgets.QHBoxLayout(self.curve_colors)
-        self.curves = QtWidgets.QComboBox()
-        self.curves.setAccessibleName("曲线")
-        self.color = QtWidgets.QLineEdit()
-        self.color.setAccessibleName("新曲线颜色（十六进制）")
-        self.color.setPlaceholderText("例如 #2878B5")
-        self.color.setValidator(QtGui.QRegularExpressionValidator(QtCore.QRegularExpression(COLOR["pattern"]), self.color))
-        self.review_color = QtWidgets.QPushButton("核对曲线颜色…")
-        for widget in (self.curves, self.color, self.review_color):
-            colors.addWidget(widget)
+        self.curve_colors = CurveColorEdit(self._edit_color)
         self.body_layout.addWidget(self.curve_colors)
         self.setCentralWidget(body)
-        self.export_pdf = archive_pdf_action(self, plot, self.status, lambda: self.summary) if self.archive else None
+        self.export_pdf, self.export_tiff = (archive_export_actions(self, plot, self.status, lambda: self.summary)
+                                            if self.archive else (None, None))
         self.axes.currentIndexChanged.connect(self._selected_axis)
         self.edit_property.currentIndexChanged.connect(self._selected_axis)
         self.review.clicked.connect(self._edit)
-        self.curves.currentIndexChanged.connect(self._selected_curve)
-        self.color.textChanged.connect(self._update_color_review)
-        self.review_color.clicked.connect(self._edit_color)
         self.refresh.clicked.connect(self._refresh)
         ensure_veusz_runtime_path()
         ensure_veusz_qsettings_compat()
@@ -137,8 +123,9 @@ class PlotEditor(QtWidgets.QMainWindow):
         self.label.setEnabled(False)
         self.review.setEnabled(False)
         self.curve_colors.setEnabled(False)
-        if self.export_pdf is not None:
-            self.export_pdf.setEnabled(False)
+        for action in (self.export_pdf, self.export_tiff):
+            if action is not None:
+                action.setEnabled(False)
 
     def _refresh(self, initial: bool = False) -> None:
         try:
@@ -172,10 +159,10 @@ class PlotEditor(QtWidgets.QMainWindow):
     def _show_summary(self, summary: dict[str, Any]) -> None:
         same_figure = self.summary.get("plot_id") == summary["plot_id"]
         selected = self.axes.currentData() if same_figure else None
-        selected_curve = self.curves.currentData() if same_figure else None
         self.summary = summary
-        if self.export_pdf is not None:
-            self.export_pdf.setEnabled(self.archive_request is None)
+        for action in (self.export_pdf, self.export_tiff):
+            if action is not None:
+                action.setEnabled(self.archive_request is None)
         self.axes.setEnabled(self.archive_request is None)
         with QtCore.QSignalBlocker(self.axes):
             self.axes.clear()
@@ -184,18 +171,9 @@ class PlotEditor(QtWidgets.QMainWindow):
                 if "axis.label" in edit["properties"]:
                     self.axes.addItem(f"{edit['label']}  ({target})", target)
             self.axes.setCurrentIndex(max(0, self.axes.findData(selected)))
-        with QtCore.QSignalBlocker(self.curves):
-            self.curves.clear()
-            self.curves.addItem("选择曲线", None)
-            if self.archive:
-                for target, edit in summary["edit_targets"].items():
-                    if LINE_COLOR in edit["properties"]:
-                        self.curves.addItem(f"{edit['label']}  ({target})", target)
-            self.curves.setCurrentIndex(max(0, self.curves.findData(selected_curve)))
-        has_colors = self.curves.count() > 1
-        self.curve_colors.setVisible(has_colors)
+        has_colors = self.curve_colors.load_targets(
+            summary["edit_targets"] if self.archive else {}, same_figure=same_figure)
         self.curve_colors.setEnabled(self.archive_request is None)
-        self._selected_curve()
         edits = "坐标轴标题、主刻度和曲线颜色" if has_colors else "坐标轴标题和主刻度"
         self.status.setText(f"修订 {summary['revision']} · {summary['plot_id']}。可修改{edits}。")
         self._selected_axis()
@@ -271,20 +249,12 @@ class PlotEditor(QtWidgets.QMainWindow):
         self._close_viewer()
         super().closeEvent(event)
 
-    def _selected_curve(self) -> None:
-        self.color.clear()
-        self.color.setEnabled(self.curves.currentData() is not None)
-        self._update_color_review()
-
-    def _update_color_review(self) -> None:
-        self.review_color.setEnabled(self.curves.currentData() is not None and self.color.hasAcceptableInput())
-
     def _intent_request(self, prop: str, target: str, value: Any) -> dict[str, Any]:
         return {"plot_id": self.summary["plot_id"], "base_revision": self.summary["revision"],
                 "idempotency_key": uuid4().hex, "property": prop, "target_id": target, "value": value}
 
-    def _edit_color(self) -> None:
-        self._edit_archive(self._intent_request(LINE_COLOR, self.curves.currentData(), self.color.text()))
+    def _edit_color(self, target: str, color: str) -> None:
+        self._edit_archive(self._intent_request(LINE_COLOR, target, color))
 
     def _edit(self) -> None:
         prop = self.edit_property.currentData()
@@ -299,7 +269,7 @@ class PlotEditor(QtWidgets.QMainWindow):
         applying = False
         try:
             plan = self._call("plot.intent", request={**request, "mode": "plan"})
-            if not self._approve_axis(plan):
+            if not approve_edit(self, self.status, plan):
                 return
             applying = True
             result = self._call("plot.intent", request={**request, "mode": "apply"})
@@ -346,23 +316,6 @@ class PlotEditor(QtWidgets.QMainWindow):
             return None
         return value
 
-    def _approve_axis(self, plan: dict[str, Any]) -> bool:
-        ticks = plan["property"] == "axis.ticks"
-        label = "主刻度" if ticks else "坐标轴标题"
-        if plan["status"] == "no_change":
-            self.status.setText(f"{label}未改变。")
-            return False
-
-        def display(value: Any) -> str:
-            if isinstance(value, dict):
-                return "自动刻度"
-            if isinstance(value, list):
-                return ", ".join(map(str, value)) if value else "隐藏主刻度"
-            return str(value)
-
-        return confirm(self, f"核对{label}", f"现在：{display(plan['before'])}\n改为：{display(plan['after'])}\n"
-                             f"坐标轴单位不变：{plan['target_context']['unit']}")
-
     def _edit_archive(self, request: dict[str, Any]) -> None:
         expected = self.summary["revision_token"]
         try:
@@ -372,16 +325,7 @@ class PlotEditor(QtWidgets.QMainWindow):
             self._disable_editing()
             self.status.setText(f"未保存：{exc} 请读取最新版本。")
             return
-        if plan["property"] == LINE_COLOR:
-            if plan["status"] == "no_change":
-                self.status.setText("曲线颜色未改变。")
-                return
-            target = plan["target"]
-            approved = confirm_line_color(self, label=f"{target['label']} ({target['id']})",
-                                          before=plan["before"], after=plan["after"])
-        else:
-            approved = self._approve_axis(plan)
-        if approved:
+        if approve_edit(self, self.status, plan):
             self._save_archive(expected, {**request, "mode": "apply"})
 
     def _retry_archive(self) -> None:

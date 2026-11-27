@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from contextlib import ExitStack, closing, contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any
+from typing import Any, Literal
 
 from sciplot_core.delivery.install import install_new_delivery
 from sciplot_core.foundation.file_hashing import file_sha256
@@ -89,16 +89,19 @@ def archive_intent(path: Path, request: dict[str, Any], *, expected_project_id: 
                                    expected_revision=expected_revision)
 
 
-def export_archive_pdf(path: Path, output: Path, *, project_id: str, revision: RevisionToken) -> None:
+def export_archive_figure(path: Path, output: Path, *, export_format: Literal["pdf", "tiff_300"],
+                          project_id: str, revision: RevisionToken) -> None:
     """Publish a typed handoff to one exact filename, without overwriting."""
     output = require_data_destination(output.parent) / output.name
     if output.exists() or output.is_symlink():
         raise FileExistsError(output)
-    with TemporaryDirectory(prefix=".sciplot-pdf-", dir=output.parent) as temporary:
+    # The handoff includes PDF when requesting TIFF. Only install the selected format.
+    formats = ["pdf", "tiff_300"] if export_format == "tiff_300" else ["pdf"]
+    with TemporaryDirectory(prefix=".sciplot-export-", dir=output.parent) as temporary:
         with closing(public_plot_service()) as service:
             result = project_file_handoff(
                 service, path, {"plot_id": revision.plot_id, "revision": revision.revision,
-                                "formats": ["pdf"], "output_dir": str(Path(temporary) / "handoff")},
+                                "formats": formats, "output_dir": str(Path(temporary) / "handoff")},
                 expected_project_id=project_id, expected_revision=revision)
-        [exported] = result["exports"]
+        [exported] = [item for item in result["exports"] if item["format"] == export_format]
         install_new_delivery(Path(exported["path"]), output)

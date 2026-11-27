@@ -421,9 +421,11 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
     from copy import deepcopy
 
     import pymupdf
+    from PIL import Image
     from PyQt6 import QtCore, QtTest, QtWidgets
     from test_figure_document import request_for_figure
 
+    from sciplot_core import archive_plot_view
     from sciplot_core.plot_backends.figure_marks import mark_path
     from sciplot_core.plot_editor import PlotEditor
     from sciplot_core.project_lifecycle.project_file_summary import project_file_summary
@@ -476,7 +478,14 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
     delivery.mkdir()
     moved = archive.rename(delivery / "Moved.sciplot")
     shutil.rmtree(original)
-    before_a = project_file_summary(moved, plots["A"])
+
+    def figure_a():
+        summary = project_file_summary(moved, plots["A"])
+        # Saving B advances the shared archive generation.
+        del summary["generation"]
+        return summary
+
+    before_a = figure_a()
 
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
@@ -498,7 +507,11 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
         assert window.figures.isVisible() and window.figures.currentData() is None
         assert not window.axes.isEnabled() and not window.review.isEnabled()
         assert not window.summary and window.viewer is None
-        assert not window.export_pdf.isEnabled()
+        assert not window.export_pdf.isEnabled() and not window.export_tiff.isEnabled()
+        [file_menu] = window.menuBar().actions()
+        assert file_menu.menu().actions() == [window.export_pdf, window.export_tiff]
+        assert [action.text() for action in file_menu.menu().actions()] == [
+            "导出当前图 PDF…", "导出当前图 300 dpi TIFF…"]
         assert not window.curve_colors.isVisible()
         assert {window.figures.itemData(i) for i in range(window.figures.count())} == set(plots.values())
         assert file_sha256(moved) == initial.sha256
@@ -506,8 +519,9 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
         window.figures.setCurrentIndex(window.figures.findData(plots["B"]))
         assert window.summary["plot_id"] == plots["B"] and window.summary["revision"] == 0
         assert window.viewer.__class__.__module__ == "veusz.windows.plotwindow"
-        assert window.curve_colors.isVisible() and not window.review_color.isEnabled()
-        assert {window.curves.itemData(i) for i in range(1, window.curves.count())} == {selected_curve, other_curve}
+        assert window.curve_colors.isVisible() and not window.curve_colors.review.isEnabled()
+        curves = window.curve_colors.curves
+        assert {curves.itemData(i) for i in range(1, curves.count())} == {selected_curve, other_curve}
         before_colors, before_data = native_curve_state(window)
         assert before_colors == old_colors
         before_b_science = window.summary["scientific_hash"]
@@ -530,14 +544,48 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
         assert window.axes.currentData() == "axis:xb" and window.label.text() == "Edited B (Hz)"
         after_b = file_sha256(moved)
         assert after_b != initial.sha256
-        assert project_file_summary(moved, plots["A"]) == before_a
+        assert figure_a() == before_a
+
+        tiff = delivery / "Selected B.tiff"
+        tiff_names = iter(("", str(tiff.with_suffix("")), str(tiff)))
+        actual_handoff = archive_plot_view.project_file_handoff
+        tiff_receipts = []
+
+        def choose_tiff(_window, title, proposed, file_filter, **_options):
+            assert title == "导出当前图 300 dpi TIFF" and Path(proposed) == moved.with_suffix(".tiff")
+            assert file_filter == "TIFF (*.tiff *.tif)"
+            return next(tiff_names), file_filter
+
+        def record_tiff_handoff(*args, **kwargs):
+            result = actual_handoff(*args, **kwargs)
+            [selected_tiff] = [item for item in result["exports"] if item["format"] == "tiff_300"]
+            tiff_receipts.append((result["plot_id"], result["revision"], selected_tiff["sha256"]))
+            return result
+
+        with monkeypatch.context() as tiff_test:
+            tiff_test.setattr(QtWidgets.QFileDialog, "getSaveFileName", choose_tiff)
+            tiff_test.setattr(archive_plot_view, "project_file_handoff", record_tiff_handoff)
+            assert window.export_tiff.isEnabled()
+            window.export_tiff.trigger()
+            assert set(delivery.iterdir()) == {moved} and not tiff_receipts
+            window.export_tiff.trigger()
+            assert "已导出修订 1" in window.status.text()
+            assert set(delivery.iterdir()) == {moved, tiff}
+            tiff_bytes = tiff.read_bytes()
+            window.export_tiff.trigger()
+            assert "目标文件已存在" in window.status.text() and tiff.read_bytes() == tiff_bytes
+        assert tiff_receipts == [(plots["B"], 1, file_sha256(tiff))]
+        with Image.open(tiff) as raster:
+            assert raster.format == "TIFF" and raster.n_frames == 1
+            assert raster.tag_v2[282] == raster.tag_v2[283] == 300 and raster.tag_v2[296] == 2
+        assert file_sha256(moved) == after_b
 
         target = delivery / "Selected B.pdf"
         names = iter(("", str(target.with_suffix("")), str(target), str(delivery / "stale.pdf")))
         monkeypatch.setattr(QtWidgets.QFileDialog, "getSaveFileName", lambda *_a, **_kw: (next(names), "PDF (*.pdf)"))
         assert window.export_pdf.isEnabled()
         window.export_pdf.trigger()
-        assert list(delivery.iterdir()) == [moved]
+        assert set(delivery.iterdir()) == {moved, tiff}
         window.export_pdf.trigger()
         assert "已导出修订 1" in window.status.text()
         with pymupdf.open(target) as pdf:
@@ -563,7 +611,7 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
         assert direct.summary["revision"] == 1 and direct.viewer is not None
         direct.axes.setCurrentIndex(direct.axes.findData("axis:xb"))
         assert direct.label.text() == "Edited B (Hz)"
-        assert file_sha256(moved) == after_b and set(delivery.iterdir()) == {moved, target}
+        assert file_sha256(moved) == after_b and set(delivery.iterdir()) == {moved, target, tiff}
 
         with closing(PlotService()) as service:
             changed = service.intent(moved, {"mode": "apply", "property": "axis.label", "target_id": "axis:xb",
@@ -571,26 +619,28 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
             assert changed["revision"] == 2
         latest = file_sha256(moved)
         direct.export_pdf.trigger()
-        assert "项目或图已更新" in direct.status.text() and not direct.export_pdf.isEnabled()
-        assert file_sha256(moved) == latest and set(delivery.iterdir()) == {moved, target}
+        assert "项目或图已更新" in direct.status.text()
+        assert not direct.export_pdf.isEnabled() and not direct.export_tiff.isEnabled()
+        assert file_sha256(moved) == latest and set(delivery.iterdir()) == {moved, target, tiff}
 
-        direct.curves.setCurrentIndex(direct.curves.findData(selected_curve))
-        direct.color.setText("#ab147c")
-        click(direct.review_color)
-        assert "未保存" in direct.status.text() and not direct.review_color.isEnabled()
+        curve_editor = direct.curve_colors
+        curve_editor.curves.setCurrentIndex(curve_editor.curves.findData(selected_curve))
+        curve_editor.color.setText("#ab147c")
+        click(curve_editor.review)
+        assert "未保存" in direct.status.text() and not curve_editor.review.isEnabled()
         assert file_sha256(moved) == latest
 
         click(direct.refresh)
         assert direct.summary["plot_id"] == plots["B"] and direct.summary["revision"] == 2
         assert direct.axes.currentData() == "axis:xb" and direct.label.text() == "Newest B (Hz)"
-        assert direct.review.isEnabled() and direct.export_pdf.isEnabled()
-        assert project_file_summary(moved, plots["A"]) == before_a and file_sha256(moved) == latest
-        assert direct.curves.currentData() == selected_curve and not direct.review_color.isEnabled()
-        direct.color.setText("#ab147")
-        assert not direct.review_color.isEnabled()
+        assert direct.review.isEnabled() and direct.export_pdf.isEnabled() and direct.export_tiff.isEnabled()
+        assert figure_a() == before_a and file_sha256(moved) == latest
+        assert curve_editor.curves.currentData() == selected_curve and not curve_editor.review.isEnabled()
+        curve_editor.color.setText("#ab147")
+        assert not curve_editor.review.isEnabled()
         new_color = "#ab147c"
-        direct.color.setText(new_color)
-        assert direct.review_color.isEnabled()
+        curve_editor.color.setText(new_color)
+        assert curve_editor.review.isEnabled()
 
         def edit_color(button):
             reviewed = []
@@ -607,7 +657,7 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
                 click(buttons.button(button))
 
             QtCore.QTimer.singleShot(0, decide)
-            click(direct.review_color)
+            click(curve_editor.review)
             [(heading, before_save, text)] = reviewed
             assert heading == "核对曲线颜色" and before_save == latest
             assert any("Gprime" in line and selected_curve in line and old_colors[0] in line and new_color in line
@@ -618,7 +668,7 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
         edit_color(QtWidgets.QDialogButtonBox.StandardButton.Save)
         assert direct.summary["revision"] == 3 and direct.summary["scientific_hash"] == before_b_science
         assert native_curve_state(direct) == ((new_color, old_colors[1]), before_data)
-        assert file_sha256(moved) != latest and project_file_summary(moved, plots["A"]) == before_a
+        assert file_sha256(moved) != latest and figure_a() == before_a
         window.figures.setCurrentIndex(window.figures.findData(plots["B"]))
         assert window.summary["revision"] == 3 and native_curve_state(window) == native_curve_state(direct)
         with open_project_file(moved) as session:
