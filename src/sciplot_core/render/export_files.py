@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import shutil
 from collections import Counter
+from contextlib import contextmanager
+from collections.abc import Iterator
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -23,11 +25,36 @@ def _require_new_render_path(path: Path) -> None:
         raise FileExistsError(f"Render target already exists: {path}. Choose a new output directory.")
 
 
+class PartialRenderError(OSError):
+    """An unsuccessful terminal render left some completed outputs in place."""
+
+    reason_code = "partial_terminal_render"
+
+    def __init__(self, installed: list[Path], cause: Exception) -> None:
+        paths = [str(path.absolute()) for path in installed]
+        self.diagnostics = {"installed_outputs": paths}
+        super().__init__(
+            f"Render stopped after writing {len(paths)} output(s). "
+            f"Use a new output directory to retry. Cause: {cause}"
+        )
+
+
+@contextmanager
+def _report_partial_render(installed: list[Path]) -> Iterator[None]:
+    try:
+        yield
+    except Exception as cause:
+        if installed:
+            raise PartialRenderError(installed, cause) from cause
+        raise
+
+
 def _copy_veusz_exports(
     payload: dict[str, Any],
     *,
     output_dir: Path,
     output_base: str,
+    installed: list[Path] | None = None,
 ) -> tuple[list[Path], list[dict[str, Any]]]:
     outputs: list[Path] = []
     export_records: list[dict[str, Any]] = []
@@ -56,6 +83,8 @@ def _copy_veusz_exports(
             candidate = Path(staging) / destination.name
             shutil.copy2(source, candidate)
             install_new_delivery(candidate, destination)
+            if installed is not None:
+                installed.append(destination)
         record = {
             "path": str(destination),
             "format": fmt,

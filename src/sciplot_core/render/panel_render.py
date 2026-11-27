@@ -42,6 +42,7 @@ from sciplot_core.render.export_files import (
     _validate_export_records,
     _export_destination,
     _require_new_render_path,
+    _report_partial_render,
     _cleanup_worker_exports,
 )
 
@@ -55,6 +56,7 @@ def _render_veusz_panel(
     output_base: str,
     options: dict[str, Any],
     export_formats: tuple[str, ...],
+    installed: list[Path] | None = None,
     sheet: str | int = 0,
     split_panel: dict[str, Any] | None = None,
     request_context: dict[str, Any] | None = None,
@@ -99,7 +101,7 @@ def _render_veusz_panel(
         _terminal_source_prepared=_terminal_source_prepared,
     )
     outputs, export_records = _copy_veusz_exports(
-        payload, output_dir=output_dir, output_base=output_base
+        payload, output_dir=output_dir, output_base=output_base, installed=installed
     )
     _validate_export_records(export_records, requested=export_formats)
     document = Path(str(payload["document"]))
@@ -148,13 +150,14 @@ def _render_to_dir_veusz(
     _require_new_render_path(worker_root)
 
     all_outputs: list[Path] = []
+    installed: list[Path] = []
     all_exports: list[dict[str, Any]] = []
     reports: list[dict[str, Any]] = []
     documents: list[str] = []
     specs: list[str] = []
     terminal_requests: list[dict[str, Any]] = []
     transform_steps: list[dict[str, Any]] = []
-    with normalized_source(input_path) as source:
+    with _report_partial_render(installed), normalized_source(input_path) as source:
         split_plan: dict[str, Any] | None = None
         panels: list[tuple[int | None, list[str] | None]]
         if normalized_split_policy is None:
@@ -201,6 +204,7 @@ def _render_to_dir_veusz(
                 output_base=output_base,
                 options=panel_options,
                 export_formats=normalized_exports,
+                installed=installed,
                 sheet=sheet,
                 split_panel=split_panel,
                 request_context=request_context,
