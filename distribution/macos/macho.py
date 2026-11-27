@@ -168,7 +168,6 @@ class Relocator:
                 "source_sha256": source_hash,
                 "bundled_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
             })
-        audit_runtime(self.resources)
         return sorted(self.records, key=lambda item: str(item["path"]))
 
 

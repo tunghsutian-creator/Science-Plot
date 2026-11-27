@@ -11,7 +11,7 @@ import sys
 from typing import Any
 
 from sciplot_core.verification.changed import build_changed_verification_plan
-from sciplot_core.verification.reviewed_feedback import DOCUMENTATION_SOURCE_TARGETS, NARRATIVE_PATHS
+from sciplot_core.verification.reviewed_feedback import DOCUMENTATION_SOURCE_TARGETS
 from sciplot_core.verification.scope_feedback import scope_delta_is_reviewed
 
 NATIVE_PREFIX = (
@@ -30,27 +30,6 @@ NATIVE_EXPECTED = frozenset(NATIVE_PREFIX) | {
     "tests/test_private_observer.py::test_suite_parent_collector_and_supervisor_share_actual_scope[True]",
     "tests/test_render_worker_rejection.py::test_real_public_radar_size_conflict_retains_clear_reason_and_no_artifacts",
 }
-
-
-def native_preflight_plan(paths: list[str], root: Path) -> dict[str, Any]:
-    """Only mapped narrative leaves can skip repeated diagnostics for now.
-
-    Owner disjointness alone does not prove transitive native independence.
-    Unknowns and executable/shared/runtime changes retain early regression checks.
-    """
-    plan = build_changed_verification_plan(paths, repo_root=root)
-    owners = plan["owners"]
-    overlaps = sorted({node for owner in owners for target in owner["pytest_targets"]
-                       for node in NATIVE_EXPECTED if node == target or node.startswith(target + "::")})
-    narrative = bool(paths) and set(paths) <= NARRATIVE_PATHS
-    skip = (narrative and not plan["unowned_paths"] and bool(owners)
-            and all(owner["owner_id"] == "documentation_contract" for owner in owners) and not overlaps)
-    return {"native_preflight": not skip, "reason": "mapped_narrative_leaf" if skip else
-            "unknown_owner" if plan["unowned_paths"] else "native_consumer" if overlaps else "conservative_risk",
-            "changed_paths": paths, "owners": [row["owner_id"] for row in owners],
-            "unowned_paths": plan["unowned_paths"], "native_consumers": overlaps,
-            "targets": sorted({target for owner in owners for target in owner["pytest_targets"]}) if skip else [],
-            "claim": "diagnostic_selection_only_not_acceptance"}
 
 
 def ci_feedback_plan(paths: list[str], root: Path, *, event: str = "push", ref: str = "", base: str = "") -> dict[str, Any]:

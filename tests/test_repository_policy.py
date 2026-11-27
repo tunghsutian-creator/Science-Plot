@@ -86,7 +86,7 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
                  "Verify Chinese glyph fallback in the system Qt runtime", "Build vendored Veusz helpers",
                  "Verify vendored Veusz helpers"):
         assert name in bootstrap
-    from sciplot_core.verification.ci_feedback import NATIVE_PREFIX, NATIVE_EXPECTED, native_preflight_plan
+    from sciplot_core.verification.ci_feedback import NATIVE_PREFIX, NATIVE_EXPECTED
     manifest = json.loads((ROOT / "src/sciplot_core/verification/input_scope_manifest.json").read_text())
     assert len(NATIVE_PREFIX) == 7 and len(NATIVE_EXPECTED) == 12
     assert hashlib.sha256(json.dumps(list(NATIVE_PREFIX)).encode()).hexdigest() == "d474f3c738239b2e6915d6c7cd4baebb85fd67bd204065274d311336a7a38bbd"
@@ -99,20 +99,6 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
     assert "format('{0}-public-primary', needs.feedback-plan.outputs.group)" in workflow
     assert "format('{0}-public-native-first', needs.feedback-plan.outputs.group)" in workflow
     assert "cancel-in-progress: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}" in workflow
-    for paths, early in (
-        (["README.md"], True), (["docs/DESIGN_PROJECT_LIFECYCLE.md"], False),
-        (["docs/unknown-new-prose.md"], True), (["skill/SKILL.md"], True),
-        (["src/sciplot_core/studio_core/annotation_operations.py"], True),
-        (["src/sciplot_core/verification/public_stage.py"], True),
-        (["src/sciplot_core/veusz_runtime.py"], True),
-        ([".github/workflows/minimal-repository.yml"], True),
-        (["src/sciplot_core/task_contract.py"], True), (["pyproject.toml"], True),
-        (["tests/test_attached_edit_checkpoints_native.py"], True),
-        (["src/sciplot_core/unknown.py"], True), ([], True),
-        (["README.md", "src/sciplot_core/unknown.py"], True),
-    ):
-        decision = native_preflight_plan(paths, ROOT)
-        assert decision["native_preflight"] is early, (paths, decision)
     key_step = next(step for step in steps if step.startswith("Isolate future obsolete-run scheduling"))
     source = key_step.split("          python3 - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
     compiled = compile("\n".join(line[10:] for line in source.splitlines()), "workflow-concurrency-key", "exec")
@@ -192,7 +178,6 @@ def test_distribution_policy_changes_select_policy_regressions(tmp_path, monkeyp
         context.setattr(ci_feedback.subprocess, "run", diff)
         changed = ci_feedback.changed_paths(ROOT, "b" * 40)
         assert changed == ["docs/DESIGN_PROJECT_LIFECYCLE.md", "src/sciplot_core/task_contract.py"]
-        assert native_preflight_plan(changed, ROOT)["native_preflight"]
     with monkeypatch.context() as context:
         context.setattr(sys, "argv", ["ci_feedback", "--base", ""])
         native_output = tmp_path / "native-output"
