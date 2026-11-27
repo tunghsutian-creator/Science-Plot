@@ -10345,7 +10345,11 @@
       "tests/test_workflow_project_commands.py::test_complete_workflow_installs_only_the_registered_delivery_delta[False]",
       "tests/test_workflow_project_commands.py::test_complete_workflow_installs_only_the_registered_delivery_delta[True]",
       "tests/test_workflow_project_commands.py::test_two_figure_delivery_can_publish_one_figure_in_the_next_generation[foreign-file-preserved]",
-      "tests/test_workflow_project_commands.py::test_two_figure_delivery_can_publish_one_figure_in_the_next_generation[registered-retirement]"
+      "tests/test_workflow_project_commands.py::test_two_figure_delivery_can_publish_one_figure_in_the_next_generation[registered-retirement]",
+      "tests/test_impact_unit_evidence.py::test_compact_impact_conditions_are_not_interpreted_as_replicates",
+      "tests/test_project_file_add_series.py::test_native_replace_series_preserves_other_layers_and_sealed_originals",
+      "tests/test_project_file_add_series.py::test_public_replace_series_plans_one_original_and_refuses_metadata_change",
+      "tests/test_project_file_add_series.py::test_public_replace_series_rejects_a_source_used_by_another_curve"
     ],
     "private": [
       "tests/test_delivery_recovery_native.py::test_visible_native_style_recovery_then_normal_project_delivery",
@@ -20479,7 +20483,10 @@
       "tests/test_workflow_project_commands.py::test_complete_workflow_installs_only_the_registered_delivery_delta[False]",
       "tests/test_workflow_project_commands.py::test_complete_workflow_installs_only_the_registered_delivery_delta[True]",
       "tests/test_workflow_project_commands.py::test_two_figure_delivery_can_publish_one_figure_in_the_next_generation[foreign-file-preserved]",
-      "tests/test_workflow_project_commands.py::test_two_figure_delivery_can_publish_one_figure_in_the_next_generation[registered-retirement]"
+      "tests/test_workflow_project_commands.py::test_two_figure_delivery_can_publish_one_figure_in_the_next_generation[registered-retirement]",
+      "tests/test_impact_unit_evidence.py::test_compact_impact_conditions_are_not_interpreted_as_replicates",
+      "tests/test_project_file_add_series.py::test_public_replace_series_plans_one_original_and_refuses_metadata_change",
+      "tests/test_project_file_add_series.py::test_public_replace_series_rejects_a_source_used_by_another_curve"
     ],
     "comprehensive": [
       "tests/test_annotation_operations_native.py::test_initial_crop_can_be_reviewed_and_exported_without_regeneration",
@@ -21024,7 +21031,8 @@
       "tests/test_project_file_append.py::test_public_append_uses_observed_generation_and_opens_new_plot[cli]",
       "tests/test_project_file_append.py::test_public_append_uses_observed_generation_and_opens_new_plot[daily]",
       "tests/test_project_file_intent.py::test_relocated_semantic_xy_can_save_twice_across_installations",
-      "tests/test_project_file_add_series.py::test_native_add_series_preserves_selected_plot_identity_and_independent_raw_grids"
+      "tests/test_project_file_add_series.py::test_native_add_series_preserves_selected_plot_identity_and_independent_raw_grids",
+      "tests/test_project_file_add_series.py::test_native_replace_series_preserves_other_layers_and_sealed_originals"
     ]
   },
   "private_failure_responsibilities": [

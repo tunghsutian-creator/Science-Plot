@@ -7,9 +7,9 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 10506,
-    "nodeids_sha256": "4eb7e54b53528e9514d344ebabe040934dff83105c6e03173f0684370fca03e1",
-    "test_sources_sha256": "e3206229cd1a9aa97eb85c7b4cc385f591009a065b11730da587308290f72efe",
+    "nodeid_count": 10510,
+    "nodeids_sha256": "b1c9534ba66549b78801cc57d0dd664e2898261165c06a7e394d7f263faa91b2",
+    "test_sources_sha256": "9987b61315e36ec0436881e5a513335150016976c010a443c837d1dc9a68bf72",
     "test_source_count": 674,
     "candidate_nodeids": [
       "tests/test_plot_template_native.py::test_legacy_paired_template_reauthored_as_managed_preserves_data_and_styles",
@@ -5899,7 +5899,11 @@
       "tests/test_project_file_intent.py::test_public_resume_confirms_a_moved_archive_key_without_edit_or_export",
       "tests/test_rheology_mean_suite_publication.py::test_new_frequency_mean_rejects_duplicate_x_within_one_replicate",
       "tests/test_workflow_project_commands.py::test_two_figure_delivery_can_publish_one_figure_in_the_next_generation[foreign-file-preserved]",
-      "tests/test_workflow_project_commands.py::test_two_figure_delivery_can_publish_one_figure_in_the_next_generation[registered-retirement]"
+      "tests/test_workflow_project_commands.py::test_two_figure_delivery_can_publish_one_figure_in_the_next_generation[registered-retirement]",
+      "tests/test_impact_unit_evidence.py::test_compact_impact_conditions_are_not_interpreted_as_replicates",
+      "tests/test_project_file_add_series.py::test_native_replace_series_preserves_other_layers_and_sealed_originals",
+      "tests/test_project_file_add_series.py::test_public_replace_series_plans_one_original_and_refuses_metadata_change",
+      "tests/test_project_file_add_series.py::test_public_replace_series_rejects_a_source_used_by_another_curve"
     ],
     "synthetic_candidates": [
       {
@@ -28793,6 +28797,22 @@
       {
         "nodeid": "tests/test_workflow_project_commands.py::test_two_figure_delivery_can_publish_one_figure_in_the_next_generation[registered-retirement]",
         "reason": "Synthetic on-disk delivery and controlled builders in tmp; checks registered retirement and preservation of foreign members."
+      },
+      {
+        "nodeid": "tests/test_impact_unit_evidence.py::test_compact_impact_conditions_are_not_interpreted_as_replicates",
+        "reason": "Generated compact CSV and synthetic original rows only."
+      },
+      {
+        "nodeid": "tests/test_project_file_add_series.py::test_native_replace_series_preserves_other_layers_and_sealed_originals",
+        "reason": "Synthetic workbook/script archive, explicitly selected source, real native worker; no private data."
+      },
+      {
+        "nodeid": "tests/test_project_file_add_series.py::test_public_replace_series_plans_one_original_and_refuses_metadata_change",
+        "reason": "Generated original and alternate source, two sheets, selected curve and stale bytes."
+      },
+      {
+        "nodeid": "tests/test_project_file_add_series.py::test_public_replace_series_rejects_a_source_used_by_another_curve",
+        "reason": "Generated archive with two curves intentionally sharing one synthetic source."
       }
     ],
     "review_method": "2026-11-10: actual unfiltered collect-only confirmed 10236 unique nodes, 9740 focused and 496 comprehensive, zero test reports and unchanged Python inputs. Thirty-six added storage lifecycle and changed-runner controls use generated data only and are public-focused. Eighteen unchanged registered Python fixture helpers were adopted by original SHA; no raw or golden data was copied. All 165 private cases, 210 dependencies, 23 directory roles, 111 historical duties and remaining full/scientific access obligations are retained. Static disposition is not full execution or scientific acceptance. 2026-11-10 storage closure: actual zero-body unfiltered10342-node collection,81 additive generated public-focused cases, original tiers/private dependencies/duties retained. Synthetic host providers isolate unit paths; production has no test-environment placement exemption. Static review is not full/private scientific acceptance. 2026-11-10 CI workspace correction: original10342 full collection plus complete11-node policy-module collection gives10345, three additive generated focused allocator controls. The actual unchanged12-node staged native preflight must freshly confirm full scope before any body; no historical node, tier or scientific duty removed. 2026-11-10 callback migration closure: complete50-node collection for four consumer modules remains exact (49 original focused bodies PASS,one original comprehensive deselected). Five test doubles explicitly accept their real namespace parameter and check containment; no production code,scientific assertion,node,tier,dependency or duty change. Only current test-byte binding changes; earlier c29112-node receipt remains historical under its own SHA. 2026-11-10 public capture carrier consumer: the actual guarded child now receives build_check_spec prepared environment; dropping only the workspace carrier is explicitly refused in the same original node. Thirty unchanged module node IDs, no production guard,scientific assertion,scope classification or dependency change. Previous5299705 successful bodies and one failure remain historical,not a new-SHA pass. 2026-11-11 targeted correctness remediation: actual unfiltered 10370-node collection, zero executed bodies, 25 additive generated public-focused controls. Original private cases, dependencies, tiers, and responsibilities remain unchanged. Static test-byte binding only; no new full-suite or scientific acceptance claim. 2026-11-16: unfiltered collect-only confirmed 10372 nodes, zero bodies, two new generated public-focused worksheet controls. Existing tiers, private dependencies and scientific responsibilities unchanged.",
