@@ -29,17 +29,20 @@ from sciplot_core.data_mapping.execution_inputs import (
 def native_runtime_binding(argv: list[str]) -> Iterator[dict[str, str] | None]:
     """Only selected trusted host state creates a locator; no wire/root discovery."""
     selected = selected_source_resolver()
-    if selected is None:
-        native_artifact_binding(argv, None)
-        yield None
-        return
-    if not isinstance(selected, ProjectSourceResolver):
-        raise ProjectStoreError("This scientific locator has no trusted native-worker binding.")
-    project = selected.binding()
     mapping = native_mapping_binding()
+    if selected is None:
+        artifacts = native_artifact_binding(argv, None)
+        if mapping is None:
+            yield None
+            return
+        project = {"kind": "sciplot_mapping_native_runtime", "version": 1}
+    elif isinstance(selected, ProjectSourceResolver):
+        project = selected.binding()
+        artifacts = native_artifact_binding(argv, selected)
+    else:
+        raise ProjectStoreError("This scientific locator has no trusted native-worker binding.")
     if mapping is not None:
         project["mapping_inputs"] = mapping
-    artifacts = native_artifact_binding(argv, selected)
     if artifacts is not None:
         project["native_artifacts"] = artifacts
     value = {"project": project, "argv_sha256": digest(argv), "parent_pid": os.getpid()}
@@ -85,6 +88,11 @@ def _read_binding(reference: dict[str, str], argv: list[str]) -> dict[str, Any]:
     project = value["project"]
     if not isinstance(project, dict):
         raise ProjectStoreError("Unsupported closed native project locator.")
+    if project.get("kind") == "sciplot_mapping_native_runtime":
+        if set(project) != {"kind", "version", "mapping_inputs"} or project["version"] != 1:
+            raise ProjectStoreError("Unsupported closed native mapping witness.")
+        mapping_binding_payload(project["mapping_inputs"])
+        return project
     fields = {"kind", "version", "root", "project_id", "generation", "generation_sha256", "locations"}
     if "source_expectations" in project:
         fields.add("source_expectations")
@@ -128,6 +136,10 @@ def _worker_project_runtime(reference: dict[str, str] | None, argv: list[str]) -
             yield
         return
     value = _read_binding(reference, argv)
+    if value["kind"] == "sciplot_mapping_native_runtime":
+        with source_location_scope(None), bound_mapping_inputs(value["mapping_inputs"]):
+            yield
+        return
     locations = {}
     for key, item in value["locations"].items():
         if (not isinstance(item, dict) or set(item) != {"path", "members"}
@@ -169,7 +181,7 @@ def _worker_project_runtime(reference: dict[str, str] | None, argv: list[str]) -
 
 def mapping_binding_payload(value: Any) -> dict[str, Any]:
     """Validate a closed byte witness, never a new filesystem capability."""
-    if (not isinstance(value, dict) or set(value) != {"execution", "files", "trees"}
+    if (not isinstance(value, dict) or set(value) - {"expected_source"} != {"execution", "files", "trees"}
             or not isinstance(value["execution"], str) or not Path(value["execution"]).is_absolute()
             or not isinstance(value["files"], list) or not value["files"] or not isinstance(value["trees"], list)):
         raise ProjectConflict("Invalid closed mapping input binding.")
@@ -185,6 +197,9 @@ def mapping_binding_payload(value: Any) -> dict[str, Any]:
         paths.add(item["path"])
     if value["execution"] not in paths:
         raise ProjectConflict("The mapping binding lacks its exact execution bytes.")
+    if "expected_source" in value and (not isinstance(value["expected_source"], str)
+                                       or value["expected_source"] not in paths):
+        raise ProjectConflict("The mapping binding lacks the host-selected original source bytes.")
     for tree in value["trees"]:
         if not isinstance(tree, dict) or set(tree) != {"locator", "tree_sha256"}:
             raise ProjectConflict("Invalid mapping directory witness.")
@@ -213,7 +228,8 @@ def native_mapping_binding() -> dict[str, Any] | None:
     return mapping_binding_payload({"execution": active.execution, "files": [
         {"path": item.literal, "sha256": item.sha256, "mode": item.actual_mode}
         for _path, item in sorted(active.files.items())],
-        "trees": [item.to_payload() for _path, item in sorted(active.trees.items())]})
+        "trees": [item.to_payload() for _path, item in sorted(active.trees.items())],
+        **({"expected_source": str(active.expected_source)} if active.expected_source is not None else {})})
 
 
 @contextmanager
@@ -222,7 +238,8 @@ def bound_mapping_inputs(value: dict[str, Any] | None) -> Iterator[None]:
         yield
         return
     value = mapping_binding_payload(value)
-    with mapping_input_reads(value["execution"]) as active:
+    source = Path(value["expected_source"]) if "expected_source" in value else None
+    with mapping_input_reads(value["execution"], expected_source=source) as active:
         assert active is not None
         for item in value["files"]:
             observed, _path = _read(Path(item["path"]), item["sha256"])
@@ -230,6 +247,8 @@ def bound_mapping_inputs(value: dict[str, Any] | None) -> Iterator[None]:
                 raise ProjectConflict("The worker mapping input changed its exact physical permissions.")
         execution = json.loads(active.files[active.execution].data)
         seed = json.loads(active.files[execution["request_seed"]].data)
+        if source is not None and seed["input"] != str(source):
+            raise ProjectConflict("The worker mapping differs from the host-selected original source.")
         roots = {str(Path(active.execution).parent / "data"), execution["source_root"], seed["input"]}
         if any(item["locator"] not in active.files and item["locator"] not in roots for item in value["trees"]):
             raise ProjectConflict("A worker mapping tree is not one of this exact execution's declared source/output roots.")

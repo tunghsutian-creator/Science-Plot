@@ -6,13 +6,14 @@ import json
 from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sciplot_core.assisted_cleanup import (
     consume_ready_cleanup_result,
     write_cleanup_request,
 )
 from sciplot_core.data_mapping import resolve_data_mapping_request
+from sciplot_core.data_mapping.execution_inputs import mapping_input_reads
 from sciplot_core.figure_plan import (
     FigurePlanResolutionError,
     ResolvedFigurePlan,
@@ -20,6 +21,7 @@ from sciplot_core.figure_plan import (
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.foundation.source_locations import literal_source_path
+from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.materials_rules.catalog import resolve_rule_template
 from sciplot_core.one_step import build_one_step_project
 from sciplot_core.policy import layout_policy_for_semantic
@@ -60,6 +62,10 @@ from sciplot_core.workflow.scientific_source_resolution import (
 )
 
 
+if TYPE_CHECKING:
+    from sciplot_core.plan_preview import PlanPreviewResolution
+
+
 def run_request(
     request_path: Path,
     *,
@@ -67,6 +73,7 @@ def run_request(
     _new_creation: bool = False,
     _previous_request: dict[str, Any] | None = None,
     _incoming_request: dict[str, Any] | None = None,
+    _observed_plan: PlanPreviewResolution | None = None,
 ) -> dict[str, Any]:
     """Execute a request transactionally under its declared output path."""
 
@@ -79,7 +86,8 @@ def run_request(
 
     if recognized_project(request_path):
         return run_project_request(request_path, source_request, execute=_run_request_in_managed_output,
-            classifier=_classifier, new_creation=_new_creation, previous_request=_previous_request)
+            classifier=_classifier, new_creation=_new_creation, previous_request=_previous_request,
+            **({"observed_plan": _observed_plan} if _observed_plan is not None else {}))
     if _incoming_request is not None:
         raise ValueError("An incoming project intent requires the exact registered project request.")
     base_dir = request_path.parent
@@ -95,7 +103,11 @@ def run_request(
     from .frequency_managed_workflow import check_visible_frequency_documents, managed_frequency_session
 
     session, authority = managed_frequency_session(output_dir, source_request, new_creation=_new_creation)
-    with session:
+    reference = _resolve_request_path(source_request["data_mapping_execution"], base_dir=base_dir,
+        field="data_mapping_execution") if source_request.get("data_mapping_execution") else None
+    original = (_resolve_request_path(source_request.get("input"), base_dir=base_dir, field="input")
+                if reference is not None and _observed_plan is not None else None)
+    with session, mapping_input_reads(str(reference) if reference is not None else None, expected_source=original):
         if authority is not None:
             check_visible_frequency_documents(authority, source_request, output_dir)
         with _managed_output_transaction(output_dir):
@@ -108,6 +120,7 @@ def run_request(
                 new_creation=_new_creation,
                 previous_request=_previous_request,
                 frequency_authority=authority,
+                **({"observed_plan": _observed_plan} if _observed_plan is not None else {}),
             )
 
 
@@ -126,6 +139,7 @@ def _run_request_in_managed_output(
     frequency_authority: Path | None = None, frequency_prepared: Any = None,
     frequency_required: bool = False,
     observed_scientific_source: ResolvedScientificSource | None = None,
+    observed_plan: PlanPreviewResolution | None = None,
 ) -> dict[str, Any]:
     """Resolve inputs, enforce semantic gates, then render and publish."""
 
@@ -148,6 +162,10 @@ def _run_request_in_managed_output(
             "A confirmed DataMappingProposal and assisted cleanup cannot both "
             "replace the same input in one run."
         )
+    if observed_plan is not None:
+        if cleanup_application is not None:
+            raise ValueError("Approved plan cannot be replaced by assisted cleanup; make a new plan.")
+        observed_scientific_source = observed_plan.scientific_source
     route_intent = resolve_workflow_route_intent(request)
     input_path = _resolve_request_path(
         request.get("input"),
@@ -161,6 +179,8 @@ def _run_request_in_managed_output(
         mapping_application=mapping_application,
         cleanup_application=cleanup_application,
     )
+    if observed_plan is not None:
+        _require_approved_original(observed_plan, output_dir / "raw" / Path(raw_archive["path"]).name)
     atomic_write_json(
         output_dir / "request_snapshot.json",
         json_safe(request),
@@ -199,6 +219,11 @@ def _run_request_in_managed_output(
         )
     except (FigurePlanResolutionError, ScientificSourceResolutionError) as exc:
         raise ValueError(f"{exc.reason_code}: {exc}") from exc
+    if observed_plan is not None and (
+        (figure_plan.to_payload() if figure_plan is not None else None)
+        != observed_plan.payload["resolved_figure_plan"]
+    ):
+        raise ValueError("Workflow figure selection differs from the approved plan; make a new plan.")
     request = deepcopy(request)
     if figure_plan is not None:
         request["resolved_figure_plan"] = figure_plan.to_payload()
@@ -281,6 +306,8 @@ def _run_request_in_managed_output(
         _resolved_figure_plan=figure_plan,
         _managed_result=managed_result,
     )
+    if observed_plan is not None:
+        _require_approved_original(observed_plan, original_input_path)
     return publish_request_result(
         request_path=request_path,
         source_request=source_request,
@@ -301,6 +328,12 @@ def _run_request_in_managed_output(
         _update_project=update_project,
         previous_delivery=previous_delivery,
     )
+
+
+def _require_approved_original(observed: PlanPreviewResolution, original: Path) -> None:
+    identity = observed.payload["preview_identity"]
+    if identity is None or source_tree_sha256(original) != identity["source_tree_sha256"]:
+        raise ValueError("Original input changed after plan approval; make a new plan.")
 
 
 def _enforce_intervention_gate(

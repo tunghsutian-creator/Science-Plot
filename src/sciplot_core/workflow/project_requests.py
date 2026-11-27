@@ -7,7 +7,7 @@ from dataclasses import replace
 import json
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from sciplot_core.data_mapping.execution_directories import mapping_tree_reads, mapping_immutable_reads
@@ -16,6 +16,10 @@ from sciplot_core.project_commands import PreparedFile, ProjectCommand, ProjectC
 from sciplot_core.project_manifest import read_intake_project_manifest, stage_intake_project_manifest
 from sciplot_core.project_store import FileProjectStore
 from sciplot_core.studio_core.preparation_original_sources import original_tree_reads, checked_original_sources
+
+
+if TYPE_CHECKING:
+    from sciplot_core.plan_preview import PlanPreviewResolution
 
 
 def recognized_project(request_path: Path) -> bool:
@@ -53,7 +57,8 @@ def next_project_run(project: Path) -> Path:
 
 def run_project_request(request_path: Path, request: dict[str, Any], *,
                         execute: Callable[..., dict[str, Any]], classifier: Callable[..., dict[str, Any]],
-                        new_creation: bool, previous_request: dict[str, Any] | None) -> dict[str, Any]:
+                        new_creation: bool, previous_request: dict[str, Any] | None,
+                        observed_plan: PlanPreviewResolution | None = None) -> dict[str, Any]:
     """Prepare analysis/native/delivery privately, then publish the complete project once."""
     from sciplot_core.output_contract import requested_delivery_root
     from sciplot_core.studio_core.preparation_candidate import studio_preparation_candidate
@@ -93,7 +98,10 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
         from sciplot_core.data_mapping.execution_inputs import mapping_input_reads
         from sciplot_core.data_mapping.execution_loading import load_data_mapping_execution
 
-        mapping_reads = mapping_scope.enter_context(mapping_input_reads(request.get("data_mapping_execution")))
+        selection = request.get("data_mapping_execution")
+        original = (_resolve_request_path(request.get("input"), base_dir=candidate.project_dir, field="input")
+                    if selection and observed_plan is not None else None)
+        mapping_reads = mapping_scope.enter_context(mapping_input_reads(selection, expected_source=original))
         if mapping_reads is not None:
             load_data_mapping_execution(mapping_reads.execution)
             candidate.mapping_inputs[mapping_reads.execution] = mapping_reads
@@ -109,7 +117,8 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
                     base_dir=candidate.project_dir, output_dir=private_output, classifier=classifier,
                     new_creation=new_creation, previous_request=previous_request,
                     staged_delivery=(private_delivery, delivery), update_project=False,
-                    **({"previous_delivery": previous_delivery} if previous_delivery is not None else {}))
+                    **({"previous_delivery": previous_delivery} if previous_delivery is not None else {}),
+                    **({"observed_plan": observed_plan} if observed_plan is not None else {}))
         except WorkflowIntervention as exc:
             publish_intervention(candidate, baseline=baseline, output=output_name, intent=intent, error=str(exc))
             raise
@@ -128,7 +137,9 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
             manifest = project_workflow_result(manifest, failed_location)
         if _package_snapshot(delivery) != delivery_before:
             raise ValueError("The visible delivery changed during private workflow preparation.")
-        prepared = prepare_studio_candidate(candidate, regenerate_generated=new_creation, _new_creation=new_creation)
+        prepared = prepare_studio_candidate(candidate, regenerate_generated=new_creation, _new_creation=new_creation,
+            **({"_scientific_source": observed_plan.scientific_source}
+               if observed_plan is not None and observed_plan.scientific_source is not None else {}))
         audits, sources = audit_studio_candidate(candidate, prepared)
         manifest = project_workflow_result(manifest, candidate.logical_path)
         (private_output / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")

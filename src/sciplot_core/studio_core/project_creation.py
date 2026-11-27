@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 from collections.abc import Callable
-from copy import deepcopy
 from typing import Any
 
-from sciplot_core.data_mapping.plan_binding import resolve_mapping_plan_request
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.task_semantic_owner import managed_task_call
 from sciplot_core.source_tables.read_session import with_table_reads
@@ -157,32 +155,13 @@ def request_from_verified_plan(source: Path, *, verified: dict[str, Any], projec
                                delivery_root: Path) -> dict[str, Any]:
     """Recover confirmed scientific choices without allocating or writing a project."""
 
-    current = None
-    if "data_mapping" in verified:
-        mapping = verified["data_mapping"]
-        request, current = resolve_mapping_plan_request(
-            source, {**mapping, "rule_id": verified["rule_id"], "template": verified["template"]},
-        )
-        if current != mapping:
-            raise ValueError("The confirmed mapping changed after the expected plan.")
-    else:
-        request = {"input": str(source), "rule_id": verified["rule_id"], "template": verified["template"]}
-    request.update(deepcopy(verified.get("source_options", {})))
-    if request.get("summary_statistic") == "raw_only":
-        request["render_options"] = {**request.get("render_options", {}), "summary_statistic": "raw_only"}
-    request["output"] = str(project_dir / "runs" / "run_001")
-    request[REQUEST_DELIVERY_ROOT_KEY] = str(delivery_root)
-    request["resolved_figure_plan"] = deepcopy(verified["resolved_figure_plan"])
-    if current is not None:
-        request["data_mapping_plan_binding"] = current
-    if verified["rule_id"] == "rheology_stress_relaxation":
-        # The canonical-request route must reuse the rule-default owner just as
-        # raw-source intake does. A top-level scientific choice alone is not a
-        # render option and must never leave a log projection on a linear axis.
-        scale = request.get("xscale", "log")
-        request["render_options"] = {"xscale": scale,
-            **({"x_tick_format": "Auto"} if scale == "linear" else {})}
-    return request
+    from sciplot_core.plan_admission import request_fields_from_verified_plan
+
+    return {
+        **request_fields_from_verified_plan(source, verified),
+        "output": str(project_dir / "runs" / "run_001"),
+        REQUEST_DELIVERY_ROOT_KEY: str(delivery_root),
+    }
 
 
 @with_table_reads

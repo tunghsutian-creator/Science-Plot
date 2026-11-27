@@ -36,7 +36,8 @@ TASK_TERMINAL_RENDER_REQUEST_FIELDS = frozenset(
 )
 TERMINAL_RENDER_REQUEST_FIELDS = (
     LEGACY_TERMINAL_RENDER_REQUEST_FIELDS | TASK_TERMINAL_RENDER_REQUEST_FIELDS
-    | {"categorical_binding", "data_mapping_application", "missing_values", "direct_label_layout_version"}
+    | {"categorical_binding", "data_mapping_application", "missing_values", "direct_label_layout_version",
+       "performance_selection"}
 )
 
 
@@ -157,6 +158,10 @@ def project_terminal_render_request(
         request["categorical_binding"] = json_safe(request_context["categorical_binding"])
         if "missing_values" in request_context:
             request["missing_values"] = request_context["missing_values"]
+    if "performance_selection" in request_context:
+        from sciplot_core.performance_comparison.selection import parse_performance_selection
+
+        request["performance_selection"] = parse_performance_selection(request_context["performance_selection"])
     application = request_context.get("data_mapping_application") or {}
     if application.get("source_groups"):
         request["data_mapping_application"] = json_safe(application)

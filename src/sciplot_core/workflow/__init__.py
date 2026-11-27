@@ -9,7 +9,7 @@ from sciplot_core.workflow.mechanical_bundle import (  # noqa: F401
     _mechanical_summary_sources,
 )
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sciplot_core.figure_plan.plan import ResolvedFigurePlan
 from sciplot_core.render import render_to_dir as render_to_dir
@@ -29,17 +29,27 @@ from sciplot_core.workflow.one_step_entry import (
 )
 
 
+if TYPE_CHECKING:
+    from sciplot_core.plan_preview import PlanPreviewResolution
+
+
 def run_request(
     request_path: Path,
     *,
     _new_creation: bool = False,
     _previous_request: dict[str, Any] | None = None,
+    _incoming_request: dict[str, Any] | None = None,
+    _observed_plan: PlanPreviewResolution | None = None,
 ) -> dict[str, Any]:
     """Run a request through the stable facade and injectable classifier seam."""
 
     context: dict[str, Any] = {"_new_creation": True} if _new_creation else {}
     if _previous_request is not None:
         context["_previous_request"] = _previous_request
+    if _incoming_request is not None:
+        context["_incoming_request"] = _incoming_request
+    if _observed_plan is not None:
+        context["_observed_plan"] = _observed_plan
     return _run_request_impl(request_path, _classifier=classify_source, **context)
 
 
@@ -51,6 +61,7 @@ def run_one_step(
     delivery_root: Path | None = None,
     rule_id: str | None = None,
     template: str | None = None,
+    _observed_plan: PlanPreviewResolution | None = None,
 ) -> dict[str, Any]:
     """Run the one-step route through the facade's current request runner."""
 
@@ -61,6 +72,7 @@ def run_one_step(
         delivery_root=delivery_root,
         rule_id=rule_id,
         template=template,
+        _observed_plan=_observed_plan,
         _request_runner=run_request,
     )
 

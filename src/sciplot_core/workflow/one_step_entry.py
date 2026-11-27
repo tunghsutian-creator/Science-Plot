@@ -5,12 +5,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.output_contract import REQUEST_DELIVERY_ROOT_KEY
 from sciplot_core.policy import (
     AUTOPLOT_RENDER_OPTIONS,
     DEFAULT_EXPORT_FORMATS_POLICY,
 )
+from sciplot_core.plan_admission import request_fields_from_verified_plan
 from sciplot_core.request_contract import normalize_render_options
 
 from sciplot_core.workflow.project_state import (
@@ -24,6 +26,10 @@ from sciplot_core.workflow.request_run import (
 from sciplot_core.workflow.scientific_source_resolution import previous_workflow_request
 
 
+if TYPE_CHECKING:
+    from sciplot_core.plan_preview import PlanPreviewResolution
+
+
 def run_one_step(
     input_path: Path,
     *,
@@ -32,6 +38,7 @@ def run_one_step(
     delivery_root: Path | None = None,
     rule_id: str | None = None,
     template: str | None = None,
+    _observed_plan: PlanPreviewResolution | None = None,
     _request_runner: Callable[..., dict[str, Any]] = run_request,
 ) -> dict[str, Any]:
     input_path = input_path.expanduser().resolve()
@@ -40,6 +47,18 @@ def run_one_step(
         not isinstance(rule_id, str) or not rule_id or rule_id.strip() != rule_id
     ):
         raise ValueError("Autoplot rule_id must be one non-empty canonical identifier.")
+    fields = {}
+    if _observed_plan is not None:
+        verified = dict(_observed_plan.payload)
+        options = verified.get("source_options", {})
+        if ("categorical_binding" in options or "summary_statistic" in options
+                or (verified.get("data_mapping") or {}).get("mapping_shape") == "replicates"):
+            raise ValueError(
+                "Autoplot cannot execute this approved categorical or replicate selection. "
+                "Use the original task route to preserve the selected scientific method."
+            )
+        fields = request_fields_from_verified_plan(input_path, verified)
+        fields.pop(REQUEST_DELIVERY_ROOT_KEY, None)
     project_dir = _one_step_project_dir(input_path, output_root, project_name)
     request_path = project_dir / "plot_request.json"
     from sciplot_core.workflow.project_requests import next_project_run, recognized_project
@@ -56,13 +75,15 @@ def run_one_step(
     else:
         project_dir.mkdir(parents=True, exist_ok=True)
         run_dir = _next_run_dir(project_dir)
+    approved_render_options = fields.pop("render_options", {})
     request: dict[str, Any] = {
-        "recipe": "auto",
         "input": str(input_path),
+        **fields,
+        "recipe": "auto",
         "output": str(run_dir),
         "exports": list(DEFAULT_EXPORT_FORMATS_POLICY),
-        "render_options": normalize_render_options(AUTOPLOT_RENDER_OPTIONS),
-        "explicit_render_option_keys": [],
+        "render_options": normalize_render_options({**AUTOPLOT_RENDER_OPTIONS, **approved_render_options}),
+        "explicit_render_option_keys": sorted(approved_render_options),
     }
     if rule_id is not None:
         request["rule_id"] = rule_id
@@ -81,6 +102,7 @@ def run_one_step(
             _new_creation=True,
             **({"_incoming_request": request} if registered else {}),
             **({"_previous_request": previous} if previous is not None else {}),
+            **({"_observed_plan": _observed_plan} if _observed_plan is not None else {}),
         )
     except ValueError as exc:
         status_path = run_dir / "one_step_status.json"

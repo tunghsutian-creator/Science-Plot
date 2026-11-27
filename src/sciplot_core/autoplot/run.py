@@ -145,13 +145,15 @@ def run_autoplot(
         if not input_path.exists():
             raise ValueError(f"Input not found: {input_path}")
 
+    observed_plan = None
     if expected_plan is not None:
-        from sciplot_core.plan_preview import verify_expected_plan
+        from sciplot_core.plan_preview import resolve_expected_plan
 
-        verified = verify_expected_plan(
+        observed_plan = resolve_expected_plan(
             input_path, expected_plan, rule_id=rule_id, template=template
         )
-        rule_id, template = verified["rule_id"], verified["template"]
+        rule_id = observed_plan.payload["rule_id"]
+        template = observed_plan.payload["template"]
     result = run_one_step(
         input_path,
         output_root=output_root,
@@ -159,6 +161,7 @@ def run_autoplot(
         delivery_root=delivery_root,
         rule_id=rule_id,
         template=template,
+        **({"_observed_plan": observed_plan} if observed_plan is not None else {}),
     )
     summary = build_autoplot_summary(result)
     run_output = Path(str(summary["run_output"]))

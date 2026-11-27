@@ -1,5 +1,6 @@
 """Expected-plan replay admission; the preview producer owns data resolution."""
 
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -89,3 +90,34 @@ def require_expected_observation(
         raise ValueError(
             "Source changed during expected-plan validation; run plan again."
         )
+
+
+def request_fields_from_verified_plan(source: Path, verified: dict[str, Any]) -> dict[str, Any]:
+    """Recover the admitted scientific request, independent of the output route."""
+
+    from sciplot_core.data_mapping.plan_binding import resolve_mapping_plan_request
+
+    current = None
+    if "data_mapping" in verified:
+        mapping = verified["data_mapping"]
+        request, current = resolve_mapping_plan_request(
+            source, {**mapping, "rule_id": verified["rule_id"], "template": verified["template"]},
+        )
+        if current != mapping:
+            raise ValueError("The confirmed mapping changed after the expected plan.")
+    else:
+        request = {"input": str(source), "rule_id": verified["rule_id"], "template": verified["template"]}
+    request.update(deepcopy(verified.get("source_options", {})))
+    if request.get("summary_statistic") == "raw_only":
+        request["render_options"] = {**request.get("render_options", {}), "summary_statistic": "raw_only"}
+    request["resolved_figure_plan"] = deepcopy(verified["resolved_figure_plan"])
+    if current is not None:
+        request["data_mapping_plan_binding"] = current
+    if verified["rule_id"] == "rheology_stress_relaxation":
+        # The canonical-request route must reuse the rule-default owner just as
+        # raw-source intake does. A top-level scientific choice alone is not a
+        # render option and must never leave a log projection on a linear axis.
+        scale = request.get("xscale", "log")
+        request["render_options"] = {"xscale": scale,
+            **({"x_tick_format": "Auto"} if scale == "linear" else {})}
+    return request
