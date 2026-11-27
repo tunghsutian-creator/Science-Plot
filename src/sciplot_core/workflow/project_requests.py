@@ -6,6 +6,7 @@ from copy import deepcopy
 from dataclasses import replace
 import json
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -69,7 +70,7 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
     from sciplot_core.workflow.project_results import project_workflow_result
     from sciplot_core.workflow.errors import WorkflowIntervention
     from sciplot_core.workflow.project_failures import publish_intervention
-    from sciplot_core.workflow.project_output import archive_failed_delivery, private_run_output
+    from sciplot_core.workflow.project_output import archive_failed_delivery, install_private_delivery, private_run_output
     from sciplot_core.delivery.package_transaction import _package_snapshot, _preserve_finder_metadata, protect_delivery_replacement
 
     project = request_path.parent
@@ -111,49 +112,52 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
         # not a guessed manifest discovered from the visible delivery's shell.
         previous_registry = read_intake_project_manifest(candidate.project_dir)
         previous_delivery = previous_registry.get("delivery_package") if previous_registry is not None else None
+        # The package verifier sees only this run, not a mix with the mounted prior delivery.
+        stage = Path(mapping_scope.enter_context(TemporaryDirectory(prefix="delivery-", dir=candidate.resources.parent)))
         try:
             with private_run_output(candidate, output_name):
                 manifest = execute(request_path=private_request, source_request=deepcopy(request),
                     base_dir=candidate.project_dir, output_dir=private_output, classifier=classifier,
                     new_creation=new_creation, previous_request=previous_request,
-                    staged_delivery=(private_delivery, delivery), update_project=False,
+                    staged_delivery=(stage, delivery), update_project=False,
                     **({"previous_delivery": previous_delivery} if previous_delivery is not None else {}),
                     **({"observed_plan": observed_plan} if observed_plan is not None else {}))
         except WorkflowIntervention as exc:
             publish_intervention(candidate, baseline=baseline, output=output_name, intent=intent, error=str(exc))
             raise
+        if _package_snapshot(delivery) != delivery_before:
+            raise ValueError("The visible delivery changed during private workflow preparation.")
         delivery_record = manifest.get("delivery_package", {})
         if delivery_record.get("complete") is True:
             namespace, _, relative = delivery_name.partition("/")
             key = namespace[1:] if namespace.startswith("@") else ""
             locator = snapshot["locators"].get(key)
             original = Path(locator) / (relative if key else delivery_name) if locator is not None else None
-            protect_delivery_replacement(delivery, private_delivery,
+            protect_delivery_replacement(delivery, stage,
                 before=delivery_before, previous_record=previous_delivery, recorded_root=original)
             if delivery.exists():
-                _preserve_finder_metadata(delivery, private_delivery)
+                _preserve_finder_metadata(delivery, stage)
+            install_private_delivery(stage, private_delivery)
+            delivery_result = private_delivery
         else:
-            failed = private_output / "failed_delivery" / uuid4().hex
-            preserved = archive_failed_delivery(candidate, delivery_name, private_delivery, failed, delivery_record)
-            def failed_location(path: str) -> str:
-                old, new = str(private_delivery), str(failed)
-                return new + path[len(old):] if path not in preserved and (path == old or path.startswith(old + "/")) else path
-            manifest = project_workflow_result(manifest, failed_location)
-        if _package_snapshot(delivery) != delivery_before:
-            raise ValueError("The visible delivery changed during private workflow preparation.")
+            delivery_result = private_output / "failed_delivery" / uuid4().hex
+            archive_failed_delivery(stage, delivery_result, delivery_record)
         prepared = prepare_studio_candidate(candidate, regenerate_generated=new_creation, _new_creation=new_creation,
             **({"_scientific_source": observed_plan.scientific_source}
                if observed_plan is not None and observed_plan.scientific_source is not None else {}))
         audits, sources = audit_studio_candidate(candidate, prepared)
-        manifest = project_workflow_result(manifest, candidate.logical_path)
+        def workflow_location(path: str) -> str:
+            if path == str(stage) or path.startswith(str(stage) + "/"):
+                path = str(delivery_result) + path[len(str(stage)):]
+            return candidate.logical_path(path)
+        manifest = project_workflow_result(manifest, workflow_location)
         # The public status must describe the same committed paths as the run
         # manifest, not the disposable delivery image prepared by the worker.
         if isinstance(manifest.get("one_step"), dict):
             _write_one_step_status(private_output, manifest["one_step"])
         (private_output / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         candidate.finalize()
-        # Capture is already a delta, including actual missing members as None.
-        # Resetting the whole delivery would delete unchanged, omitted members.
+        # Capture omits byte-identical members and records authorized retirements as None.
         writes: dict[str, bytes | PreparedFile | None] = dict(candidate.capture())
         updated = read_intake_project_manifest(candidate.project_dir)
         if updated is not None:

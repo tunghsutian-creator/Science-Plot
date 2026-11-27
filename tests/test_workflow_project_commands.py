@@ -14,7 +14,7 @@ from sciplot_core.workflow.project_requests import run_project_request
 def prepared(tmp_path, *, previous_delivery=None, delivery_files=None):
     project, delivery = tmp_path / "project", tmp_path / "delivery"
     project.mkdir()
-    delivery.mkdir()
+    delivery.mkdir(exist_ok=True)
     for name, content in (delivery_files or {}).items():
         member = delivery / name
         member.parent.mkdir(parents=True, exist_ok=True)
@@ -156,9 +156,7 @@ def test_complete_workflow_installs_only_the_registered_delivery_delta(tmp_path,
         output = kwargs["output_dir"]
         (output / "run-evidence.txt").write_bytes(b"controlled native publication port")
         private, _logical = kwargs["staged_delivery"]
-        retired = private / DELIVERY_DATA_DIR / "retired.csv"
-        assert retired.read_bytes() == initial[f"{DELIVERY_DATA_DIR}/retired.csv"]
-        retired.unlink()  # An actual removal in the host-owned private candidate.
+        assert not list(private.iterdir())  # The second generation is built independently.
         for name, content in current.items():
             member = private / name
             member.parent.mkdir(parents=True, exist_ok=True)
@@ -193,3 +191,69 @@ def test_complete_workflow_installs_only_the_registered_delivery_delta(tmp_path,
     assert writes[f"@delivery/{DELIVERY_DATA_DIR}/retired.csv"] is None
     assert {f"@delivery/{DELIVERY_PDF_DIR}/replaced.pdf", f"@delivery/{DELIVERY_PDF_DIR}/added.pdf"} <= writes.keys()
     assert (project / "source.csv").read_bytes() == b"x,y\n1,2\n"
+
+
+@pytest.mark.parametrize("foreign", [False, True], ids=["registered-retirement", "foreign-file-preserved"])
+def test_two_figure_delivery_can_publish_one_figure_in_the_next_generation(tmp_path, monkeypatch, foreign):
+    from copy import deepcopy
+    from dataclasses import replace
+
+    from sciplot_core.delivery.package_builder import _build_staged_delivery, build_delivery_package
+    from sciplot_core.delivery.package_validation import verify_delivery_package
+    from test_delivery_project_documents import _builder_manifest
+
+    root = tmp_path / "delivery"
+    run, both, plan = _builder_manifest(tmp_path)
+    both["request"]["delivery_output"] = str(root)
+    previous = build_delivery_package(run, manifest=both)
+    assert previous["complete"] and len(previous["figures"]) == 4
+    if foreign:
+        (root / "figures/notes.txt").write_bytes(b"only copy of user's notes")
+    previous_bytes = {path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()}
+    inode = root.stat().st_ino
+    project, request, store, before = prepared(tmp_path, previous_delivery=previous)
+
+    # Keep the same real producer, changed selection, and same registered
+    # destination. The retired figure's artifacts still exist in the preimage.
+    retained = set(plan.outcomes[0].artifacts)
+    one = deepcopy(both)
+    selected = replace(plan, tasks=plan.tasks[:1], outcomes=plan.outcomes[:1]).to_payload()
+    one["resolved_figure_plan"] = one["result"]["resolved_figure_plan"] = one["study_model"]["run"]["resolved_figure_plan"] = selected
+    one["figures"] = [path for path in one["figures"] if path in retained]
+    one["veusz_documents"] = [path for path in one["veusz_documents"] if path in retained]
+    one["veusz_document_hashes"] = {path: digest for path, digest in one["veusz_document_hashes"].items() if path in retained}
+    one["result"]["exports"] = [row for row in one["result"]["exports"] if row["path"] in retained]
+    for kind in ("pdfs", "tiffs"):
+        one["qa"][kind] = [row for row in one["qa"][kind] if row["path"] in retained]
+
+    def execute(**kwargs):
+        stage, final = kwargs["staged_delivery"]
+        record = _build_staged_delivery(run, manifest=one, delivery_dir=stage, final_root=final,
+                                        previous_delivery=kwargs["previous_delivery"])
+        return {**one, "created_at": "2026-11-27T06:00:00Z",
+                "output": str(kwargs["output_dir"]), "request_path": str(kwargs["request_path"]),
+                "delivery_package": record, "ready_to_use": record["complete"]}
+
+    monkeypatch.setattr(preparation_commands, "prepare_studio_candidate", lambda *_a, **_k: {})
+    monkeypatch.setattr(preparation_commands, "audit_studio_candidate", lambda *_a: ([], []))
+    def publish():
+        return run_project_request(project / "plot_request.json", request, execute=execute,
+                                   classifier=lambda *_a, **_k: {}, new_creation=False, previous_request=None)
+
+    if foreign:
+        with pytest.raises(ValueError, match="figures/notes.txt"):
+            publish()
+        assert store.snapshot()["generation"] == before["generation"]
+        assert root.stat().st_ino == inode
+        assert {path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()} == previous_bytes
+        return
+    result = publish()
+    record = result["delivery_package"]
+    assert record["complete"] is True, record["verification"]
+    assert root.stat().st_ino == inode
+    assert store.snapshot()["sequence"] == before["sequence"] + 1
+    assert verify_delivery_package(record, expected_root=root, expected_manifest=one)["passed"]
+    assert {Path(row["path"]).name for row in record["figures"]} == {"figure_a.pdf", "figure_a_300dpi.tiff"}
+    assert not list(root.rglob("figure_b*"))
+    assert Path(record["path"]) == root
+    assert all(Path(row["path"]).is_relative_to(root) for row in record["project_documents"] + record["figures"])
