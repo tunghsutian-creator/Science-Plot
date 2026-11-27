@@ -57,6 +57,10 @@ def intent_schema() -> dict[str, Any]:
                    "temperature_source": {"type": "integer", "minimum": 0, "maximum": 31}}, ["x", "y"])
 
 
+def archive_task_target(request: dict[str, Any]) -> str | None:
+    return request.get("project_file") or request.get("append_to")
+
+
 def semantic_request_schema() -> dict[str, Any]:
     from sciplot_core.task_scientific_presentation import presentation_requirement_properties
 
@@ -66,6 +70,8 @@ def semantic_request_schema() -> dict[str, Any]:
                    "intent": intent_schema(), **presentation_requirement_properties(), "out": {"type": "string", "minLength": 1},
                    "formats": {**figure_formats_schema(),
                                "description": "Deliver only the selected files (PDF, optionally 300 dpi TIFF); omitted retains the native snapshot."},
+                   "project_file": {"type": "string", "minLength": 1,
+                                    "description": "New .sciplot file for the first ordinary XY figure. Save only; does not export."},
                    "append_to": {"type": "string", "minLength": 1,
                                  "description": "Existing .sciplot file for one independent ordinary XY figure. Save only; does not export."},
                    "expected_generation": {"type": "string", "minLength": 1,
@@ -74,9 +80,13 @@ def semantic_request_schema() -> dict[str, Any]:
                    "task_dir": {"type": "string", "minLength": 1, "deprecated": True}},
                   ["version", "action", "sources", "intent"])
     schema["dependentRequired"] = {"append_to": ["expected_generation"], "expected_generation": ["append_to"]}
-    schema["dependentSchemas"] = {"append_to": {
-        "not": {"anyOf": [{"required": [key]} for key in ("out", "formats", "choose_columns")]},
+    incompatible = [{"required": [key]} for key in ("out", "formats", "choose_columns")]
+    save_only = {
+        "not": {"anyOf": incompatible},
         "properties": {"intent": {"properties": {"rule_id": {"const": "ordinary_xy"}}}},
+    }
+    schema["dependentSchemas"] = {"append_to": save_only, "project_file": {
+        **save_only, "not": {"anyOf": [*incompatible, {"required": ["append_to"]}]},
     }, "choose_columns": {
         "required": ["curve_display"],
         "properties": {"sources": {"maxItems": 1}, "curve_display": {"const": "raw_overlay"}, "intent": {

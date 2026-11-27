@@ -8,6 +8,7 @@ from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.task_errors import TaskControlError
 from sciplot_core.task_semantic_raw_analysis import admit_raw_curve as admit_raw_curve
+from sciplot_core.task_semantic_contract import archive_task_target
 from sciplot_core.task_storage import save_task, task_summary
 
 
@@ -82,10 +83,10 @@ def _ask_plan(root: Path, state: dict[str, Any]) -> None:
 
 
 def run_creation(root: Path, state: dict[str, Any]) -> None:
-    append = state["request"].get("append_to")
-    if append and state["status"] == "complete":
+    archive_target = archive_task_target(state["request"])
+    if archive_target and state["status"] == "complete":
         return
-    if not append or "managed_request" not in state:
+    if not archive_target or "managed_request" not in state:
         assert_sources_current(state)
     from sciplot_core.task_scientific_presentation import presentation_blocker, scientific_presentation
 
@@ -118,7 +119,7 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
         save_task(root, state)
         from sciplot_core.task_output_choice import require_available_output
 
-        if not append and not require_available_output(state):
+        if not archive_target and not require_available_output(state):
             save_task(root, state)
             return
         paths = [Path(value) for value in state["request"]["sources"]]
@@ -149,13 +150,17 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
     state.update(status="running", phase="creating")
     state.pop("blocker", None)
     save_task(root, state)
-    if append:
+    if archive_target:
         from sciplot_core.plot_backends.figure_plan import capability_profile
-        from sciplot_core.project_lifecycle.project_file_append import project_file_append_xy
+        from sciplot_core.project_lifecycle.project_file_append import project_file_append_xy, project_file_create_xy
 
-        result = project_file_append_xy(Path(append), state["managed_request"],
-                                        expected_generation=state["request"]["expected_generation"],
-                                        capabilities=capability_profile())
+        if "append_to" in state["request"]:
+            result = project_file_append_xy(Path(archive_target), state["managed_request"],
+                                            expected_generation=state["request"]["expected_generation"],
+                                            capabilities=capability_profile())
+        else:
+            result = project_file_create_xy(Path(archive_target), state["managed_request"],
+                                            capabilities=capability_profile())
         state.update(status="complete", phase="finished", result=result)
         save_task(root, state)
         return
@@ -213,8 +218,8 @@ def resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
         return
     assert_sources_current(state)
     if "out" in response:
-        if "append_to" in state["request"]:
-            raise TaskControlError("invalid_task_response", "An append saves only to its bound project file and has no output-directory choice.")
+        if archive_task_target(state["request"]):
+            raise TaskControlError("invalid_task_response", "This save is bound to its project file and has no output-directory choice.")
         from sciplot_core.task_output_choice import accept_output_response
 
         accept_output_response(state, response)
@@ -232,8 +237,8 @@ def resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
         if "managed_request" not in state and (state.get("creation_attempts") or state.get("phase") in {"creating", "exporting", "finished"}):
             raise TaskControlError("task_not_revisable", "The prior native outcome lacks its frozen request. Recover that original outcome before replacing scientific intent.")
         wire = state.get("managed_request")
-        if wire and "append_to" in state["request"]:
-            raise TaskControlError("task_not_revisable", "The append request is frozen. Retry it unchanged to recover any saved figure, or start a new task against the current project generation.")
+        if wire and archive_task_target(state["request"]):
+            raise TaskControlError("task_not_revisable", "The file-save request is frozen. Retry it unchanged to recover any saved figure, or start a new task.")
         if wire:
             from sciplot_core.project_lifecycle.managed_creation_targets import has_committed_managed_creation
 

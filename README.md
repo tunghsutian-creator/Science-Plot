@@ -141,6 +141,11 @@ color in place, use
 `sciplot_plot_intent`, with the file as `plot`. Use the returned plot ID,
 revision as `base_revision`, and the exact axis or curve ID as `target_id`. Success is reported
 only after the file is replaced.
+Save the first ordinary XY figure directly from original data with
+`sciplot task create ORIGINAL.csv --x temperature --y heat_flow --project-file NEW.sciplot --json`
+or daily MCP `sciplot_task_start` with `sources`, `intent` and `project_file`.
+The command creates one new project file and does not overwrite or export.
+
 Saving audits the figure without rendering PDF or TIFF. To deliver PDF alone
 or PDF with 300 dpi TIFF, select the saved revision with the separate
 `plot export` command. To add a separate figure to the same file, use

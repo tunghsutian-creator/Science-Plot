@@ -199,6 +199,8 @@ def dispatch_task(args: Any) -> int:
             create_options["xscale"] = args.xscale
         if args.choose_columns:
             create_options["choose_columns"] = True
+        if args.project_file is not None:
+            create_options["project_file"] = args.project_file
         if args.append_to is not None or args.expected_generation is not None:
             create_options.update(append_to=args.append_to, expected_generation=args.expected_generation)
         semantic = _semantic_intent(args)

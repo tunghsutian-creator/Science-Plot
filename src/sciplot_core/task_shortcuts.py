@@ -70,12 +70,15 @@ def create_task(
     xscale: str | None = None, choose_columns: bool = False,
     sources: list[Path] | None = None, intent: dict[str, Any] | None = None,
     curve_display: str | None = None, summary_statistic: str | None = None,
-    append_to: Path | None = None, expected_generation: str | None = None,
+    project_file: Path | None = None, append_to: Path | None = None,
+    expected_generation: str | None = None,
 ) -> dict[str, Any]:
     """Start from original input; scientific choices stay with ordinary creation."""
-    if append_to is not None or expected_generation is not None:
-        if intent is None or append_to is None or not expected_generation or out is not None:
-            raise TaskControlError("invalid_project_file_append", "Use ordinary XY intent and both --append-to FILE.sciplot and --expected-generation, without --out.")
+    if project_file is not None or append_to is not None or expected_generation is not None:
+        if (intent is None or out is not None or (project_file is not None and append_to is not None)
+                or (append_to is None) != (expected_generation is None)
+                or (append_to is not None and not expected_generation)):
+            raise TaskControlError("invalid_project_file_target", "Use ordinary XY intent and either --project-file NEW.sciplot, or --append-to FILE.sciplot with --expected-generation; neither accepts --out.")
     if intent is not None:
         if template is not None or profile is not None or choose_columns or xscale is not None:
             raise TaskControlError("invalid_semantic_intent", "Semantic attachment creation cannot also select an ordinary template/profile/XY discovery route.")
@@ -97,8 +100,11 @@ def create_task(
     for key, value in (("curve_display", curve_display), ("summary_statistic", summary_statistic)):
         if value is not None:
             request[key] = value
-    if append_to is not None:
-        request.update(append_to=str(append_to), expected_generation=expected_generation)
+    if project_file is not None or append_to is not None:
+        if project_file is not None:
+            request["project_file"] = str(project_file)
+        else:
+            request.update(append_to=str(append_to), expected_generation=expected_generation)
         return start_task(validate_task_request(request), task_dir=task_dir)
     request = validate_task_request(request)
     runtime = doctor_payload()

@@ -183,6 +183,20 @@ accidentally use bundle import on the file, the error gives the same direct-open
 arguments and leaves the destination untouched. If there are multiple figures, specify the
 exact plot ID when opening; saving does not select or discard any figure.
 
+### Save the first ordinary XY figure
+
+```bash
+sciplot task create ORIGINAL.csv --x temperature --y heat_flow \
+  --project-file NEW.sciplot --json
+```
+
+Use a new filename in an existing folder. This saves one editable project
+file without exporting a figure or creating another project folder. In daily
+or expert MCP, send a version 1 create request to `sciplot_task_start` with
+`sources`, `intent` and the new absolute `project_file` path. Reopen with the
+returned `next_step.arguments`. Leave source and project selection unchanged
+when resuming a confirmed task.
+
 ### Append an independent ordinary XY figure
 
 Add a figure from the original data directly. No intermediate plotting project

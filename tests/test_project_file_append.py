@@ -136,6 +136,55 @@ def test_append_keeps_original_points_and_history_and_reopens_each_exact_plot(or
         assert session.store.resolve_source(source_id, version).read_bytes() == incoming_bytes
 
 
+def test_task_create_saves_first_figure_directly_from_selected_workbook_sheet(tmp_path, monkeypatch, capsys):
+    from openpyxl import Workbook
+    from sciplot_core.cli import main
+
+    source = tmp_path / "two sheets.xlsx"
+    book = Workbook()
+    first = book.active
+    first.title = "A"
+    chosen = book.create_sheet("B")
+    for sheet in (first, chosen):
+        for row in [("Temperature", "Heat Flow"), ("C", "W/g"), ("Sample", "Sample")]:
+            sheet.append(row)
+    for sheet, rows in [(first, [(20, 0.3), (22, 0.5), (25, 0.4)]),
+                        (chosen, [(66, -0.023), (61, 0.008), (61, None), (53, -0.016)])]:
+        for row in rows:
+            sheet.append(row)
+    book.save(source)
+    state = tmp_path / "private state"
+    monkeypatch.setattr("platformdirs.user_state_path", lambda _: state)
+    monkeypatch.setattr(managed_creation, "export_head", lambda *_args: pytest.fail("save rendered a native derivative"))
+    destination = tmp_path / "New plot.sciplot"
+    args = ["task", "create", str(source), "--x", "temperature", "--y", "heat_flow",
+            "--source-block", "source:0/table:1/block:0", "--project-file", str(destination), "--json"]
+    assert main(args) == 0
+    outcome = json.loads(capsys.readouterr().out)
+    assert outcome["status"] == "complete", outcome
+    result = outcome["result"]
+    assert result["project_file"] == str(destination) and result["revision"] == 0
+    assert set(tmp_path.iterdir()) == {source, destination, state}
+    assert "exports" not in result
+
+    saved = destination.read_bytes()
+    assert main([*args, "--label", "Distinct operation"]) == 1
+    refused = json.loads(capsys.readouterr().out)
+    assert refused["reason_code"] == "project_file_destination_exists"
+    assert destination.read_bytes() == saved
+
+    source.unlink()
+    assert main(args) == 0
+    replay = json.loads(capsys.readouterr().out)
+    assert replay["result"] == result and saved == destination.read_bytes()
+
+    moved = destination.rename(tmp_path / "Moved plot.sciplot")
+    with project_file_figure(moved, result["plot_id"]) as (session, owner, document):
+        assert session.project_id == result["project_id"]
+        assert session.opened_generation == result["generation"]
+        assert _coordinates(owner, document) == {"x": [66., 61., 61., 53.], "y": [-.023, .008, None, -.016]}
+
+
 def test_task_create_appends_from_original_without_a_request_file(ordinary_archive, tmp_path, monkeypatch, capsys):
     from sciplot_core.cli import main
 

@@ -30,7 +30,7 @@ _DAILY_CONTRACTS: dict[str, tuple[str, dict[str, Any], str]] = {
     "sciplot_task_start": (
         "request",
         {"type": "object", "required": ["version", "action"]},
-        'Use request {version:1, action:"create", source:ABSOLUTE_PATH} for ordinary creation. For explicit coordinates, use sources and intent. To add ordinary XY without exporting, also pass append_to and expected_generation from project_open. Otherwise optional formats selects PDF or PDF plus 300 dpi TIFF. Get exact request fields with task_capabilities(section="request", name=ACTION).',
+        'Use request {version:1, action:"create", source:ABSOLUTE_PATH} for ordinary creation. For explicit coordinates, use sources and intent. To save ordinary XY without exporting, pass project_file for a new .sciplot or append_to with expected_generation from project_open. Otherwise optional formats selects PDF or PDF plus 300 dpi TIFF. Get exact request fields with task_capabilities(section="request", name=ACTION).',
     ),
     "sciplot_task_resume": (
         "response", {"type": "object", "minProperties": 1},
@@ -189,7 +189,7 @@ def tool_definitions(profile: ToolProfile = "expert") -> list[Tool]:
     add("task_capabilities", "Read a small task capability index or one exact schema. Pass its contract_sha256 as expected_contract_sha256 when fetching sections; server validation remains complete.",
         {"section": {"enum": ["request", "response", "operations", "table_region", "common_edit", "paper_request", "semantic_intent"]}, "name": string,
          "expected_contract_sha256": sha, "full": {"type": "boolean"}}, [], read_only=True)
-    add("task_start", "Start one authorized local create/edit/export/update_source task. Semantic create uses sources+small intent, returns one original-source plan and scientific decisions; the program expands Binding/FigureSpec locally. Add append_to and expected_generation from project_open to save one ordinary XY figure into an existing .sciplot without exporting. Answer source-bound column questions; inspect all returned source-update or edit candidate PNGs before resuming.",
+    add("task_start", "Start one authorized local create/edit/export/update_source task. Semantic create uses sources+small intent, returns one original-source plan and scientific decisions; the program expands Binding/FigureSpec locally. Use project_file to save the first ordinary XY figure into a new .sciplot. For an existing file, use append_to and expected_generation from project_open. Neither exports. Answer source-bound column questions; inspect all returned source-update or edit candidate PNGs before resuming.",
         {"request": task_request_schema(), "task_dir": string, "full": full}, ["request"])
     common_schema = common_edit_schema()
     add("task_edit", "Execute exact common palette, typography or supported legend clauses through the existing plot transaction. Preserve data/scientific state. For recovery after a lost first reply, choose a stable task_dir before the first call and reuse it with identical intent. Existing pending/review/export continuations remain authoritative; unavailable properties are rejected.",

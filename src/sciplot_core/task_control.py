@@ -33,6 +33,7 @@ from sciplot_core.task_editing import begin_preview_revision, validate_preview_r
 from sciplot_core.task_repair import normalize_task_location, request_repair, response_repair
 from sciplot_core.task_result_projection import current_task_result
 from sciplot_core.task_output_choice import accept_output_response, creation_output
+from sciplot_core.task_semantic_contract import archive_task_target
 from sciplot_core.task_storage import (
     load_task, save_task, task_location, task_path, task_summary,
 )
@@ -102,12 +103,13 @@ def _start_task(
         exc.repair = request_repair(original_request, exc)
         raise
     source_hashes = None
-    append = "append_to" in request
-    if append:
-        target = canonical_path(Path(request["append_to"]))
+    archive_target = archive_task_target(request)
+    if archive_target is not None:
+        target = canonical_path(Path(archive_target))
         if target.suffix != ".sciplot":
-            raise TaskControlError("invalid_project_file_append", "Choose an existing .sciplot file for append.")
-        request["append_to"] = str(target)
+            raise TaskControlError("invalid_project_file_target", "Choose an exact .sciplot filename.")
+        request["append_to" if "append_to" in request else "project_file"] = str(target)
+        archive_target = str(target)
         request["sources"] = [str(canonical_path(Path(value))) for value in request["sources"]]
         digest = None
     elif "intent" in request:
@@ -134,7 +136,7 @@ def _start_task(
     if not root.exists():
         from sciplot_core.foundation.research_destination import require_data_destination
         require_data_destination(root, existing_namespace=_owned_namespace)
-        if request["action"] == "create" and not append:
+        if request["action"] == "create" and archive_target is None:
             layout = resolve_user_output_layout(request.get("source", request.get("sources", [None])[0]),
                                                 requested_delivery_root=request.get("out"))
             for destination in (layout.delivery_root, layout.workspace_root):
@@ -155,12 +157,18 @@ def _start_task(
             if state["request"] != request and state.get("initial_request") != request:
                 raise TaskControlError("task_already_exists", "此任务目录已用于其他请求。")
             return _current_result(state) if state["status"] == "complete" else task_summary(state)
-        if append:
+        if archive_target is not None:
             from sciplot_core.task_semantic_creation import normalize_sources
 
-            target = Path(request["append_to"])
-            if not target.is_file():
-                raise TaskControlError("path_not_found", "Append needs an existing .sciplot file; no project was created.")
+            target = Path(archive_target)
+            if "append_to" in request:
+                if not target.is_file():
+                    raise TaskControlError("path_not_found", "Append needs an existing .sciplot file; no project was created.")
+            else:
+                if target.exists():
+                    raise TaskControlError("project_file_destination_exists", "Choose a new .sciplot filename. The existing destination was not changed.")
+                if not target.parent.is_dir():
+                    raise TaskControlError("path_not_found", "Choose a .sciplot filename in an existing folder.")
             source_hashes = normalize_sources(request)
         root.mkdir(parents=True, mode=0o700)
         state = {
