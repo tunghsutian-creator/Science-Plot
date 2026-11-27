@@ -286,7 +286,33 @@ def test_rpc_cli_mcp_parity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cap
     tool = tools["sciplot_plot_intent"]
     assert not tool.annotations.read_only_hint and tool.annotations.destructive_hint
     assert tool.input_schema["properties"]["request"]["properties"]["property"]["enum"] == [
-        "axis.label", "axis.ticks", "annotation.text", "style.line.color"]
+        "axis.label", "axis.ticks", "annotation.text", "style.line.color", "series.display_label"]
     monkeypatch.setattr("sciplot_core.plot_protocol.client.call", lambda method, params: forwarded.append((method, params)) or {"status": "ready"})
     assert services.invoke_owner("sciplot_plot_intent", call["params"]) == {"status": "ready"}
     assert forwarded[-1] == ("plot.intent", call["params"])
+
+
+def test_display_alias_uses_stable_measurement_id_and_does_not_rename_source_sample(tmp_path):
+    from sciplot_core.plot_ir.figure_document import figure_spec
+
+    document = _document(tmp_path)
+    request = _request(property="series.display_label", target_id="layer:modulus",
+                       value="TPUU6 (170 °C blend)")
+    request.pop("target_label")
+    patch, plan = compile_intent(document, validate_intent(request))
+    assert plan["target"] == {"id": "layer:modulus", "kind": "layer", "label": "Gprime"}
+    assert plan["before"] == "Gprime" and plan["after"] == request["value"]
+    assert plan["effective_risk"] == "presentation"
+    edited, diff, generic_patch_risk, scientific_update = prepare_update(document, patch)
+    [change] = diff
+    assert change["property"] == "series.display_label"
+    assert not scientific_update and generic_patch_risk == "review"
+    assert edited["scientific"] == document["scientific"]
+    assert edited["scientific_hash"] == document["scientific_hash"]
+    [layer] = figure_spec(edited)["views"][0]["layers"]
+    assert layer["id"] == "layer:modulus" and layer["legend"]["label"] == request["value"]
+
+    request.pop("target_id")
+    with pytest.raises(EngineError) as ambiguous:
+        validate_intent({**request, "target_label": "Gprime"})
+    assert ambiguous.value.reason_code == "plot_intent_target_required"

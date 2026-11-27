@@ -157,10 +157,14 @@ class ProjectApplication(ManagedPlotApplication, CommandDispatch):
     def _apply_intent(self, root: Path, request: dict[str, Any], *, defer_export: bool = False) -> dict[str, Any]:
         with external_project_session(root), admitted(root, "intent", request) as command:
             patch = admit_patch(command.business_request)
-            if defer_export:
+            from sciplot_core.plot_engine.typed_intent import DISPLAY_LABEL
+
+            explicit_alias = request["property"] == DISPLAY_LABEL
+            if defer_export or explicit_alias:
                 from .patch_execution import execute_patch
 
-                return execute_patch(root, patch, self.backend, defer_export=True)
+                return execute_patch(root, patch, self.backend, defer_export=defer_export,
+                                     **({"explicit_alias": True} if explicit_alias else {}))
             return self._patch(root, patch)
 
     def _patch(self, root: Path, request: RequestInput, *, rollback_request: dict[str, Any] | None = None) -> dict[str, Any]:

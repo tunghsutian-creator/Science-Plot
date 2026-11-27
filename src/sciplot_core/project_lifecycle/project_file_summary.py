@@ -7,7 +7,7 @@ from typing import Any
 
 from sciplot_core.plot_engine.description_scope import edit_target_summary
 from sciplot_core.plot_engine.figure_updates import figure_property_names
-from sciplot_core.plot_engine.typed_intent import LINE_COLOR, line_color_targets
+from sciplot_core.plot_engine.typed_intent import DISPLAY_LABEL, LINE_COLOR, display_label_targets, line_color_targets
 from sciplot_core.plot_ir.figure_document import figure_spec, is_figure
 
 from .attached_repository import AttachedProjectRepository
@@ -18,7 +18,7 @@ from .project_file import ProjectFileSession, open_project_file
 
 
 PROJECT_FILE_AXIS_PROPERTIES = {"axis.label", "axis.ticks"}
-PROJECT_FILE_EDIT_PROPERTIES = PROJECT_FILE_AXIS_PROPERTIES | {LINE_COLOR}
+PROJECT_FILE_EDIT_PROPERTIES = PROJECT_FILE_AXIS_PROPERTIES | {LINE_COLOR, DISPLAY_LABEL}
 
 
 @contextmanager
@@ -109,7 +109,9 @@ def _summarize(session: ProjectFileSession, document: dict[str, Any]) -> dict[st
     targets = {target: [prop for prop in properties if prop in PROJECT_FILE_AXIS_PROPERTIES]
                for target, properties in figure_property_names(spec).items()
                if "axis.label" in properties and objects[target]["kind"] == "axis"}
-    targets.update({target: [LINE_COLOR] for target in line_color_targets(document, spec)})
+    line_targets = line_color_targets(document, spec)
+    targets.update({target: [DISPLAY_LABEL, *([LINE_COLOR] if target in line_targets else [])]
+                    for target in display_label_targets(spec)})
     return {"kind": "sciplot_project_file_summary", "version": 1, "read_only": True,
             "project_file": str(session.path), "project_id": session.project_id, "generation": session.opened_generation,
             "edit_targets": edit_target_summary(objects, targets, {}),

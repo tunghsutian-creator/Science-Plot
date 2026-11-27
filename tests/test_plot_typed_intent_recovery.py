@@ -194,3 +194,22 @@ def test_pending_repair_survives_rpc_cli_and_mcp_error_adapters(tmp_path: Path) 
     assert wire["error"]["data"]["repair"] == error.repair
     assert _cli_runtime_error_payload(remote)["repair"] == error.repair
     assert error_payload(remote)["repair"] == error.repair
+
+
+def test_explicit_alias_is_audited_and_saved_without_generic_patch_review(tmp_path: Path) -> None:
+    service, root, backend, source, original_native = _engine(tmp_path)
+    before = load_head(root)["document"]
+    original = source.read_bytes(), original_native.read_bytes()
+    command = _request(mode="apply", property="series.display_label",
+                       target_id="layer:modulus", value="TPUU6 (170 °C blend)")
+    command.pop("target_label")
+    planned = service.intent(root, {**command, "mode": "plan"})
+    assert planned["base_revision"] == 0 and backend.native_writes == 0
+
+    saved = service.intent(root, command)
+    after = load_head(root)["document"]
+    assert saved["status"] == "complete" and saved["revision"] == 1
+    assert after["scientific"] == before["scientific"]
+    assert after["presentation"]["objects"]["layer:modulus"]["label"] == command["value"]
+    assert (source.read_bytes(), original_native.read_bytes()) == original
+    assert service.intent(root, command)["replayed"] is True and backend.native_writes == 1

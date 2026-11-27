@@ -17,7 +17,8 @@ from .execution import advance, replay
 
 def execute_patch(root: Path, request: RequestInput, backend: PlotBackend,
                   *, rollback_request: dict[str, Any] | None = None,
-                  comparison: dict[str, Any] | None = None, defer_export: bool = False) -> dict[str, Any]:
+                  comparison: dict[str, Any] | None = None, defer_export: bool = False,
+                  explicit_alias: bool = False) -> dict[str, Any]:
     patch = admit_patch(request)
     request = patch.to_payload()
     saved = transaction_path(root, request["idempotency_key"])
@@ -41,6 +42,10 @@ def execute_patch(root: Path, request: RequestInput, backend: PlotBackend,
             binding = scientific_binding(binding, document)
     else:
         document, diff, risk = apply_patch(head["document"], patch)
+    if explicit_alias and risk == "review" and document["scientific_hash"] == head["document"]["scientific_hash"]:
+        # Generic review edits are unchanged. plot.intent already binds this
+        # exact alias to a single stable measurement layer.
+        risk = "presentation"
     require_current(backend, binding, input_document=document)
     from sciplot_core.project_lifecycle.publication_repair import authorize_pending, reserve_repair
 

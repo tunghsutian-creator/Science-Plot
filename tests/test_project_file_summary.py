@@ -69,6 +69,7 @@ def test_relocated_project_file_opens_read_only_in_cli_and_daily_mcp(tmp_path):
                 "edit_targets": {
                     "axis:x": {"kind": "axis", "label": "Frequency 乙 (Hz)", "properties": ["axis.label", "axis.ticks"]},
                     "axis:yl": {"kind": "axis", "label": "Modulus (Pa)", "properties": ["axis.label", "axis.ticks"]},
+                    "layer:modulus": {"kind": "layer", "label": "Gprime", "properties": ["series.display_label"]},
                 },
                 **{key: selected[key] for key in ("plot_id", "revision", "scientific_hash", "presentation_hash")}}
 

@@ -60,7 +60,7 @@ def project_file_intent(service: "ProjectApplication", path: Path, request: dict
     request = validate_intent(request)
     if request["property"] not in PROJECT_FILE_EDIT_PROPERTIES:
         raise EngineError("project_file_intent_unsupported",
-                          "Choose an advertised axis title, major tick list, or ordinary XY line color.",
+                          "Choose an advertised axis title, major tick list, legend display name, or ordinary XY line color.",
                           action="inspect_project_file")
     with project_file_figure(path, request["plot_id"]) as (session, owner, before):
         if expected_project_id is not None and session.project_id != expected_project_id:

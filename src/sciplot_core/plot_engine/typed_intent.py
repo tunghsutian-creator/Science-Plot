@@ -20,8 +20,9 @@ from .errors import EngineError
 from .figure_updates import current_edit_value, patch_capabilities
 
 LINE_COLOR = "style.line.color"
+DISPLAY_LABEL = "series.display_label"
 EDIT_KINDS = {"axis.label": "axis", "axis.ticks": "axis", "annotation.text": "annotation",
-              LINE_COLOR: "layer"}
+              LINE_COLOR: "layer", DISPLAY_LABEL: "layer"}
 
 
 def line_color_targets(document: dict[str, Any], spec: dict[str, Any]) -> dict[
@@ -38,6 +39,11 @@ def line_color_targets(document: dict[str, Any], spec: dict[str, Any]) -> dict[
                     and all(mark["type"] in {"line", "point"} for mark in marks)):
                 targets[layer["id"]] = (view, layer, lines[0])
     return targets
+
+
+def display_label_targets(spec: dict[str, Any]) -> list[str]:
+    return [layer["id"] for view in spec["views"] for layer in view["layers"]
+            if layer["role"] == "measurement"]
 
 
 def intent_schema() -> dict[str, Any]:
@@ -69,6 +75,9 @@ def validate_intent(request: Any) -> dict[str, Any]:
     if ("target_id" in request) == ("target_label" in request):
         raise EngineError("plot_intent_target_required", "Choose exactly one stable target ID or exact target label.",
                           action="choose_target", allowed=["target_id", "target_label"])
+    if request["property"] == DISPLAY_LABEL and "target_id" not in request:
+        raise EngineError("plot_intent_target_required", "Choose the stable measurement layer ID shown in the current figure.",
+                          action="choose_target", allowed=["target_id"])
     return deepcopy(request)
 
 
@@ -98,7 +107,10 @@ def compile_intent(document: dict[str, Any], request: dict[str, Any]) -> tuple[P
         contracts = patch_capabilities(spec)
         candidates = [identifier for identifier, obj in objects.items()
                       if obj["kind"] == kind and prop in contracts.get(identifier, {})]
-        contexts = {}
+        if prop == DISPLAY_LABEL:
+            allowed = set(display_label_targets(spec))
+            candidates = [identifier for identifier in candidates if identifier in allowed]
+        contexts = {target: {} for target in candidates}
     if "target_id" in request:
         target = request["target_id"]
         if target not in candidates:
@@ -128,7 +140,9 @@ def compile_intent(document: dict[str, Any], request: dict[str, Any]) -> tuple[P
     else:
         descriptor = contracts[target][prop]
         validate_wire(after, descriptor["value_schema"], code="plot_intent_invalid_value")
-        risk = descriptor["risk"]
+        # A single explicit display string keyed by stable measurement ID does
+        # not change which sample or numerical values the line represents.
+        risk = "presentation" if prop == DISPLAY_LABEL else descriptor["risk"]
         if risk != "presentation":
             raise EngineError("plot_intent_scientific_change", "This edit cannot change scientific state.")
         before = current_edit_value(spec, target, prop)

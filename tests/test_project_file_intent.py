@@ -300,7 +300,7 @@ def test_relocated_semantic_xy_can_save_twice_across_installations(tmp_path):
     assert current["scientific_hash"] == saved["scientific_hash"] and current["plot_id"] == saved["plot_id"]
 
     targets = {item["label"]: identifier for identifier, item in current["edit_targets"].items()
-               if item["properties"] == ["style.line.color"]}
+               if "style.line.color" in item["properties"]}
     assert set(targets) == {"Selected", "Reference"}
     color = "#ab147c"
     intent = {"mode": "apply", "plot_id": current["plot_id"], "base_revision": current["revision"],
@@ -362,3 +362,29 @@ def test_relocated_semantic_xy_can_save_twice_across_installations(tmp_path):
     stale = cli("plot", "intent", target, "--request", request, "--direct", code=1)
     assert stale["reason_code"] == "document_revision_conflict"
     assert file_sha256(target) == published
+
+    alias = "Selected (170 °C blend)"
+    renamed = {**intent, "base_revision": 3, "idempotency_key": "selected-alias",
+               "property": "series.display_label", "value": alias}
+    request.write_text(json.dumps({**renamed, "mode": "plan"}))
+    plan = cli("plot", "intent", target, "--request", request, "--direct")
+    assert plan["before"] == "Selected" and plan["after"] == alias
+    assert file_sha256(target) == published
+    request.write_text(json.dumps(renamed))
+    renamed_result = cli("plot", "intent", target, "--request", request, "--direct")
+    assert renamed_result["status"] == "saved" and renamed_result["revision"] == 4
+    assert renamed_result["scientific_hash"] == current["scientific_hash"]
+    reopened = cli("plot", "open", target, "--direct")
+    assert reopened["edit_targets"][targets["Selected"]]["label"] == alias
+    assert reopened["edit_targets"][targets["Reference"]]["label"] == "Reference"
+    with project_file_figure(target, current["plot_id"]) as (session, owner, after):
+        attached = owner.attachment.root
+        before = owner.load_revision(attached, 3)["document"]
+        assert before["scientific"] == after["scientific"]
+        prior_review = owner.read(transaction_path(attached, "selected-color"))["review"]
+        after_review = owner.read(transaction_path(attached, "selected-alias"))["review"]
+        assert after_review["scientific_audit"]["status"] == "passed"
+        assert after_review["scientific_audit"]["datasets"] == prior_review["scientific_audit"]["datasets"]
+        assert sorted(session.store.resolve_source(source_id, version).read_bytes()
+                      for source_id, versions in session.store.snapshot()["sources"].items()
+                      for version in versions) == sorted([raw, reference_raw])
