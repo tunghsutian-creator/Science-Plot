@@ -458,19 +458,37 @@ def test_current_handoff_reviews_exports_without_rewriting_old_deliveries(
     if has_launcher:
         launcher.write_text("existing launcher")
     before = {p.name: p.read_bytes() for p in delivery.iterdir()}
+    image = {"format": "tiff", "path": str(delivery / "secondary.tiff")}
+    past = {"figure_id": "secondary", "exports": [image]}
+    witness = {"manifest": str(project / "runs/studio_001/manifest.json"),
+               "figures": [{**past, "document_sha256": "d" * 64, "exports": [{**image, "sha256": "e" * 64}]}]}
     current = {"project": str(project), "figures": [{"figure_id": "secondary"}], "source": {"current": True},
-               "qa": {"current": True}, "delivery": {"current": True, "path": str(delivery)}}
+               "qa": {"current": True}, "delivery": {"current": True, "path": str(delivery), "publication": witness}}
     monkeypatch.setattr(control, "inspect_project", lambda _: current)
+    published = receipt(project)
+    published["studio_run"]["manifest"] = witness["manifest"]
+    published["figures"] = [past]
     state = {"kind": "sciplot_task", "status": "complete", "phase": "complete",
              "project": str(project), "task_dir": str(tmp_path / "task"),
-             "request": {"action": "create"}, "result": receipt(project)}
+             "request": {"action": "create"}, "result": published}
     result = compact_task_result(control._current_result(state))
     assert result["next_step"]["action"] == "review_exports_and_deliver"
+    assert result["next_step"]["publication"] == witness
     assert "manual_edit" not in result["next_step"]
     assert {p.name: p.read_bytes() for p in delivery.iterdir()} == before
     state["request"] = {"action": "edit", "figure_id": "secondary"}
     assert control._current_result(state)["next_step"]["action"] == "review_exports_and_deliver"
     assert "manual_edit" not in control._current_result(state)["next_step"]
+    # A sibling's or unbound receipt cannot borrow the verified selected exports.
+    state["request"]["figure_id"] = "primary"
+    assert control._current_result(state)["next_step"]["evidence_gaps"] == ["task_publication"]
+    state["request"]["figure_id"] = "secondary"
+    witness["manifest"] = str(project / "runs/studio_002/manifest.json")
+    newer = control._current_result(state)
+    assert newer["next_step"]["evidence_gaps"] == ["task_publication"]
+    assert newer["next_step"]["current_publication"] == witness
+    assert "images" not in newer["next_step"]
+    assert newer["result"]["figures"] == [past]
     current["delivery"]["current"] = False
     assert "manual_edit" not in control._current_result(state)["next_step"]
 

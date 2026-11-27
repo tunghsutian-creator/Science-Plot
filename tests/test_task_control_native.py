@@ -84,6 +84,9 @@ def test_public_task_creation_annotation_review_export_and_continuation(tmp_path
     assert "manual_edit" not in created["next_step"]
     assert all(Path(path).is_file() for path in created["next_step"]["images"])
     assert created["next_step"]["images"]
+    original_publication = created["next_step"]["publication"]
+    original_tiff = next(item for item in original_publication["figures"][0]["exports"] if item["format"] == "tiff")
+    assert file_sha256(Path(original_tiff["path"])) == original_tiff["sha256"]
     assert created["local_timing"]["last_call_seconds"] > 0
     assert created["local_timing"]["external_model_seconds"] is None
     task_record = Path(created["task_dir"]) / "task.json"
@@ -123,6 +126,21 @@ def test_public_task_creation_annotation_review_export_and_continuation(tmp_path
     current_figure = current["current_project"]["figures"][0]
     assert current_figure["document_sha256"] == file_sha256(Path(figure["document"]))
     assert current_figure["document_sha256"] != figure["document_sha256"]
+    current_publication = current["next_step"]["publication"]
+    assert current["next_step"]["action"] == "review_exports_and_deliver"
+    assert current_publication["manifest"] != original_publication["manifest"]
+    assert current_publication["figures"][0]["figure_id"] == figure_id
+    assert current_publication["figures"][0]["document_sha256"] == current_figure["document_sha256"]
+    current_tiff = next(item for item in current_publication["figures"][0]["exports"] if item["format"] == "tiff")
+    assert current_tiff["path"] == original_tiff["path"]
+    assert file_sha256(Path(current_tiff["path"])) == current_tiff["sha256"] != original_tiff["sha256"]
+    historical = _cli("task", "inspect", created["task_dir"])
+    assert historical["next_step"]["action"] == "resolve_current_evidence"
+    assert historical["next_step"]["evidence_gaps"] == ["task_publication"]
+    assert historical["next_step"]["current_publication"] == current_publication
+    assert "images" not in historical["next_step"]
+    assert historical["result"]["figures"]
+    assert task_record.read_bytes() == task_bytes
     inventory = sorted((project / "runs").glob("studio_*"))
     again = _cli("task", "resume", review["task_dir"], "--response", response)
     assert again["status"] == "complete"

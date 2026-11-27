@@ -130,9 +130,10 @@ Further inspection is for a reported failure, missing/stale evidence or a visibl
 defect. A saved-only edit with `"export":false` is not a publication receipt.
 
 At `resolve_current_evidence`, use the returned `evidence_gaps` and full
-`current_project` details. The query has already run; another unchanged query
-cannot recover a missing original-source fingerprint. Existing artifact paths
-in `result.figures` support visual review but do not establish current readiness.
+`current_project` details. Another unchanged query cannot recover a missing
+original-source fingerprint. With a `task_publication` gap, use the separately
+reported `current_publication`, if present, for the selected figure revisions.
+Paths in `result.figures` are historical locators and may now hold different bytes.
 Resolve the reported cause while retaining unknown/stale status; do not redraw
 or export again solely to manufacture missing source evidence.
 

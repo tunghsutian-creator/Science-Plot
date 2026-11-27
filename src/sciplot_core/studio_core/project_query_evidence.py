@@ -292,6 +292,26 @@ def _optional_manifest_content_sha256(manifest: dict[str, Any]) -> str | None:
         raise
 
 
+def verified_figure_exports(
+    figures: list[dict[str, Any]], package: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Project the identities already checked by document and package verification."""
+    exports: dict[str, list[dict[str, Any]]] = {}
+    for item in package.get("figures", ()):
+        figure_id = item.get("figure_id")
+        if figure_id and all(item.get(key) for key in ("format", "path", "delivery_sha256")):
+            exports.setdefault(figure_id, []).append({
+                "format": item["format"], "path": item["path"], "sha256": item["delivery_sha256"],
+            })
+    return [
+        {"figure_id": figure["figure_id"], "document_sha256": figure["document_sha256"],
+         **({"spec_sha256": figure["spec_sha256"]} if figure.get("spec_sha256") else {}),
+         "exports": exports[figure["figure_id"]]}
+        for figure in figures
+        if figure.get("document_sha256") and figure["figure_id"] in exports
+    ]
+
+
 def publication_indicators(
     project: Path,
     request: dict[str, Any],
@@ -384,6 +404,11 @@ def publication_indicators(
                 qa_current=qa["current"],
                 failed_checks=verification["failed_checks"],
             )
+            if current is True and last is not None and isinstance(manifest.get("delivery_package"), dict):
+                delivery["publication"] = {
+                    "manifest": last["manifest"],
+                    "figures": verified_figure_exports(figures, manifest["delivery_package"]),
+                }
         except (OSError, ValueError, TypeError, KeyError) as exc:
             delivery = _indicator(
                 False,

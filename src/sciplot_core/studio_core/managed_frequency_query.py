@@ -10,6 +10,7 @@ from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.output_contract import REQUEST_DELIVERY_ROOT_KEY, UserOutputLayout
 
 from sciplot_core.project_lifecycle.managed_figure_observation import observe_frequency_figures
+from sciplot_core.studio_core.project_query_evidence import verified_figure_exports
 from sciplot_core.workflow.frequency_locations import FREQUENCY_RECORD, frequency_roots, locate_frequency_project
 
 
@@ -129,9 +130,13 @@ def inspect_frequency_creation(project: Path, *, figure_id: str | None = None) -
                   and manifest["publication_qa"]["status"] == "passed")
     delivery = verify_delivery_package(manifest["delivery_package"], expected_root=Path(request[REQUEST_DELIVERY_ROOT_KEY]),
                                        expected_manifest=manifest)
+    delivery_current = delivery["passed"] is True
+    publication = {"manifest": receipt["studio_run"]["manifest"],
+                   "figures": verified_figure_exports(receipt["figures"], manifest["delivery_package"])}
     return {**receipt, "kind": "sciplot_project_inspection", "status": "ok", "project": str(project),
             "publication_scope": "initial_managed_group_delivery",
             "source": {"current": source_current}, "qa": {"current": qa_current},
-            "delivery": {"current": delivery["passed"] is True},
+            "delivery": {"current": delivery_current,
+                         **({"publication": publication} if source_current and qa_current and delivery_current else {})},
             "readiness_evaluated": True, "ready_to_use": source_current and qa_current and delivery["passed"] is True,
             "live_gui_state_evaluated": False}
