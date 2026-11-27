@@ -5400,6 +5400,9 @@
       "tests/test_project_file.py::test_bad_archive_has_no_working_project[truncated-incomplete]",
       "tests/test_project_file.py::test_native_edit_save_and_cold_reopen_one_project_file",
       "tests/test_project_file.py::test_publication_failure_before_and_after_replace",
+      "tests/test_project_file_append.py::test_append_does_not_overwrite_an_archive_saved_after_it_opened",
+      "tests/test_project_file_append.py::test_append_keeps_original_points_and_history_and_reopens_each_exact_plot",
+      "tests/test_project_file_append.py::test_append_rejects_stale_generation_source_failure_and_old_format",
       "tests/test_project_file_editor.py::test_managed_editor_and_cli_share_axis_ticks_on_same_native_figure",
       "tests/test_project_file_editor.py::test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot",
       "tests/test_project_file_editor.py::test_project_file_editor_and_daily_mcp_share_one_archive",
@@ -10304,6 +10307,8 @@
       "tests/test_task_selected_delivery.py::test_formats_are_normalized_and_only_accepted_for_standalone_semantic_creation",
       "tests/test_task_selected_delivery.py::test_identical_foreign_output_winning_install_race_is_never_claimed",
       "tests/test_task_selected_delivery.py::test_interruption_after_atomic_install_recovers_without_another_install",
+      "tests/test_project_file_append.py::test_public_append_uses_observed_generation_and_opens_new_plot[cli]",
+      "tests/test_project_file_append.py::test_public_append_uses_observed_generation_and_opens_new_plot[daily]",
       "tests/test_project_file_intent.py::test_relocated_semantic_xy_can_save_twice_across_installations",
       "tests/test_operator_versions.py::test_registered_pin_relocation_requires_one_exact_closure_and_no_source_role_overlap"
     ],
@@ -20733,6 +20738,9 @@
       "tests/test_project_derived_directories.py::test_hard_exit_during_retired_parent_projection_resumes_the_same_generation_without_callback[after_directory_projection]",
       "tests/test_project_derived_directories.py::test_hard_exit_during_retired_parent_projection_resumes_the_same_generation_without_callback[before_directory_projection]",
       "tests/test_project_file.py::test_native_edit_save_and_cold_reopen_one_project_file",
+      "tests/test_project_file_append.py::test_append_does_not_overwrite_an_archive_saved_after_it_opened",
+      "tests/test_project_file_append.py::test_append_keeps_original_points_and_history_and_reopens_each_exact_plot",
+      "tests/test_project_file_append.py::test_append_rejects_stale_generation_source_failure_and_old_format",
       "tests/test_project_file_editor.py::test_managed_editor_and_cli_share_axis_ticks_on_same_native_figure",
       "tests/test_project_file_editor.py::test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot",
       "tests/test_project_file_editor.py::test_project_file_editor_and_daily_mcp_share_one_archive",
@@ -20944,6 +20952,8 @@
       "tests/test_task_ordinary_raw_points_native.py::test_public_no_experiment_xy_creates_native_original_values_and_archives_context[snapshot]",
       "tests/test_task_selected_delivery.py::test_cli_first_figure_can_deliver_only_pdf_and_reopen_same_project",
       "tests/test_task_selected_delivery.py::test_daily_mcp_selects_raw_blocks_then_hands_off_only_pdf_and_tiff",
+      "tests/test_project_file_append.py::test_public_append_uses_observed_generation_and_opens_new_plot[cli]",
+      "tests/test_project_file_append.py::test_public_append_uses_observed_generation_and_opens_new_plot[daily]",
       "tests/test_project_file_intent.py::test_relocated_semantic_xy_can_save_twice_across_installations"
     ]
   },

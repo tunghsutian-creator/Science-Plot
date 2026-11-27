@@ -133,16 +133,20 @@ coverage. See the [saved-figure route](skill/references/saved-figure-edit.md).
 For an existing standalone `.sciplot` file, use
 `sciplot plot open FILE.sciplot --scope summary --json` or the MCP
 `sciplot_project_open` summary. Pass `--figure PLOT_ID` (MCP `figure_id`) when
-there is more than one selection. This reads the saved ID, revision, hashes
-and axis `edit_targets` without rendering or modifying the file. To change a
-title or major ticks in place, use
+there is more than one selection. This reads the saved ID, revision, project
+generation, hashes and available `edit_targets` without rendering or modifying
+the file. To change an axis title, major ticks or an eligible ordinary XY line
+color in place, use
 `sciplot plot intent FILE.sciplot --request REQUEST.json --json` or daily MCP
 `sciplot_plot_intent`, with the file as `plot`. Use the returned plot ID,
-revision as `base_revision`, and axis ID as `target_id`. Success is reported
+revision as `base_revision`, and the exact axis or curve ID as `target_id`. Success is reported
 only after the file is replaced.
 Saving audits the figure without rendering PDF or TIFF. To deliver PDF alone
 or PDF with 300 dpi TIFF, select the saved revision with the separate
-`plot export` command.
+`plot export` command. To add a separate figure to the same file, use
+[`plot append` / `sciplot_project_file_append`](skill/references/saved-work-continuation.md#append-an-independent-ordinary-xy-figure)
+with the confirmed ordinary XY request and current project generation. The
+append receipt opens the new figure by its own ID; existing figures are unchanged.
 
 On a Qt desktop, `sciplot plot editor PLOT` opens the exact Managed FigureSpec v2
 `plot` path from that summary. The native view is read-only. Choose an axis,
@@ -151,7 +155,9 @@ CLI and MCP. For major ticks, enter comma-separated numbers or clear the field
 to restore automatic ticks on current-view figures. The editor saves standalone
 projects back to the same `.sciplot` file. When opening a multi-figure project,
 choose the figure in the editor or pass `--figure PLOT_ID` to open it directly.
-Axis edits leave the scale, units and data intact.
+Axis edits leave the scale, units and data intact. Eligible ordinary XY
+figures also offer a curve color editor. It changes only the selected line mark,
+not its point markers or original data.
 If another client saved first, read the latest revision and choose the change
 again; the editor will not overwrite it. A missing current verified native
 artifact must be rebuilt through the existing project command before editing.
