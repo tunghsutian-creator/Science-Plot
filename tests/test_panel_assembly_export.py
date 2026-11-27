@@ -313,7 +313,7 @@ def test_house_panel_label_uses_seven_point_bold_and_measured_reserved_band(tmp_
     assert label["bounds_mm"][1] + label["bounds_mm"][3] < output["panels"][0]["content_mm"][1]
 
 
-def test_empty_panel_label_is_hidden_and_long_or_unicode_label_refuses_export(tmp_path):
+def test_empty_panel_label_is_hidden_and_clipped_or_missing_glyph_refuses_export(tmp_path):
     _path, source = image_source(tmp_path)
     document = add(new_document(rows=1, columns=1, width_mm=18, height_mm=45), source)
     hidden = apply_operations(document, [{"op": "set_label", "id": "image", "label": ""}])
@@ -325,13 +325,62 @@ def test_empty_panel_label_is_hidden_and_long_or_unicode_label_refuses_export(tm
     with pytest.raises(AssemblyError) as error:
         export_document(long, tmp_path / "long-label")
     assert error.value.code == "assembly_label_clipping"
-    from sciplot_core.panel_assembly.export import _label
-
-    with pymupdf.open() as pdf:
-        page = pdf.new_page()
-        with pytest.raises(AssemblyError) as error:
-            _label(page, "Ω", [1, 3], [0, 0, 60, 45], [2, 8, 56, 35])
+    missing = apply_operations(document, [{"op": "set_label", "id": "image", "label": "𐍈"}])
+    with pytest.raises(AssemblyError) as error:
+        export_pdf(missing, tmp_path / "missing-glyph.pdf")
     assert error.value.code == "assembly_label_unsupported"
+    assert not (tmp_path / "missing-glyph.pdf").exists()
+
+
+def test_ordered_bilingual_panel_labels_keep_exact_text_roles_in_final_vector_pdf(tmp_path, capsys):
+    from sciplot_core.cli import main
+
+    left, right = "回收组 α / E/0", "回收组 α / E_0"
+    diagram = tmp_path / "vector-source.pdf"
+    with pymupdf.open() as pdf:
+        page = pdf.new_page(width=120, height=75)
+        page.draw_line((5, 5), (110, 60), color=(.2, .3, .4), width=1)
+        # Same size and text as the left outer caption, but in the right panel body.
+        writer = pymupdf.TextWriter(page.rect)
+        writer.append((10, 30), left, font=pymupdf.Font("cjk"), fontsize=7)
+        writer.write_text(page)
+        pdf.subset_fonts()
+        pdf.save(diagram, deflate=True)
+    raw = diagram.read_bytes()
+    source = capture_source({"kind": "image", "path": str(diagram)})
+    document = add(new_document(rows=1, columns=2, width_mm=124, height_mm=55), source,
+                   name="A", column=1)
+    document = add(document, source, name="B", column=0)
+    document = apply_operations(document, [{"op": "set_label", "id": "A", "label": right},
+                                          {"op": "set_label", "id": "B", "label": left}])
+    layout = tmp_path / "selected-layout.json"
+    layout.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
+    frozen = layout.read_bytes()
+    path = tmp_path / "B-A.pdf"
+    assert main(["compose", "export-pdf", str(layout), "--out", str(path), "--json"]) == 0
+    output = json.loads(capsys.readouterr().out)
+    assert [row["id"] for row in output["panels"]] == ["B", "A"]
+    assert {p.name for p in tmp_path.iterdir()} == {diagram.name, layout.name, path.name}
+    assert diagram.read_bytes() == raw and layout.read_bytes() == frozen and path.stat().st_size < 50000
+    mm = 25.4 / 72
+    with pymupdf.open(path) as pdf:
+        assert len(pdf) == 1 and not pdf[0].get_images()
+        page = pdf[0]
+        assert (page.rect.width * mm, page.rect.height * mm) == pytest.approx((124, 55), abs=.001)
+        spans = [span for block in page.get_text("dict")["blocks"] if "lines" in block
+                 for line in block["lines"] for span in line["spans"]]
+        assert [span["text"] for span in spans].count(left) == 3
+        for item, text in zip(output["panels"], (left, right), strict=True):
+            receipt = item["evidence"]["panel_label"]
+            x, y, width, height = receipt["allowed_band_mm"]
+            band = pymupdf.Rect(x, y, x + width, y + height) / mm
+            span, = [span for span in spans if band.contains(pymupdf.Rect(span["bbox"]))]
+            assert span["text"] == text and span["size"] == 7.0
+            assert "Droid Sans" in span["font"]
+            strokes = [trace for trace in page.get_texttrace() if trace["type"] == 1
+                       and "".join(chr(char[0]) for char in trace["chars"]) == text]
+            assert len(strokes) == 1 and strokes[0]["linewidth"] == pytest.approx(.35)
+            assert item["content_mm"][1] > receipt["bounds_mm"][1] + receipt["bounds_mm"][3]
 
 
 def test_stale_source_and_existing_output_fail_without_publication(tmp_path):

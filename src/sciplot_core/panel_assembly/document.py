@@ -88,6 +88,8 @@ def validate_and_resolve(document: Any) -> tuple[dict[str, Any], dict[str, Any]]
     if len(set(ids)) != len(ids):
         raise AssemblyError("assembly_duplicate_id", "Panel IDs must be unique.")
     for panel in result["panels"]:
+        if panel["label"] and not panel["label"].isprintable():
+            raise AssemblyError("assembly_label_unsupported", "Outer panel labels require printable single-line text.")
         crop = panel["crop"]
         if crop is not None:
             if panel["source"]["kind"] != "image":

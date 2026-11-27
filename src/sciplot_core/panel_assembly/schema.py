@@ -8,7 +8,7 @@ POSITIVE = {"type": "number", "exclusiveMinimum": 0}
 NONNEGATIVE = {"type": "number", "minimum": 0}
 INDEX = {"type": "integer", "minimum": 0, "maximum": 15}
 COUNT = {"type": "integer", "minimum": 1, "maximum": 16}
-LABEL = {"type": ["string", "null"], "maxLength": 16, "pattern": r"^[ -~]*(?![\s\S])"}
+LABEL = {"type": ["string", "null"], "maxLength": 16, "pattern": r"^[^\u0000-\u001f\u007f-\u009f\u2028\u2029]*(?![\s\S])"}
 CROP = {"oneOf": [{"type": "null"}, {"type": "array", "minItems": 4, "maxItems": 4,
     "items": {"type": "number", "minimum": 0, "maximum": 1}}]}
 

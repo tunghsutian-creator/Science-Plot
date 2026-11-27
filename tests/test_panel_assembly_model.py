@@ -66,8 +66,8 @@ def test_automatic_labels_extend_beyond_the_alphabet():
     assert [item["label"] for item in resolve_document(document)["panels"]][-3:] == ["z", "aa", "ab"]
 
 
-@pytest.mark.parametrize("label", ["é", "中", "A\n", "\n", "\t", "\x7f", "A" * 17])
-def test_outer_panel_labels_reject_nonprintable_and_nonascii_text_before_resolution(label):
+@pytest.mark.parametrize("label", ["\u2028", "A\u202e", "A\n", "\n", "\t", "\x7f", "A" * 17])
+def test_outer_panel_labels_reject_multiline_nonprintable_or_overlong_text(label):
     document = add(panel())
     with pytest.raises(AssemblyError):
         apply_operations(document, [{"op": "set_label", "id": "panel:a", "label": label}])
@@ -75,9 +75,11 @@ def test_outer_panel_labels_reject_nonprintable_and_nonascii_text_before_resolut
         add(panel(label=label))
 
 
-def test_outer_panel_labels_preserve_printable_ascii_punctuation_and_case():
+def test_outer_panel_labels_preserve_printable_labels_verbatim():
     document = add(panel(label=" (A)-1 "))
     assert resolve_document(document)["panels"][0]["label"] == " (A)-1 "
+    changed = apply_operations(document, [{"op": "set_label", "id": "panel:a", "label": "回收组 α / E/0"}])
+    assert resolve_document(changed)["panels"][0]["label"] == "回收组 α / E/0"
 
 
 def test_whole_batch_can_pass_through_overlap_then_swap_without_mutating_input():
