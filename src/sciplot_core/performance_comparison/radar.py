@@ -65,7 +65,7 @@ def _normalized_radar_value(value: float, metric: PerformanceMetric) -> float:
             "performance_radar_scale_incomplete",
             f"Metric {metric.metric_id!r} has no complete radar scale.",
         )
-    if value < metric.scale_min - 1e-12 or value > metric.scale_max + 1e-12:
+    if not metric.scale_min <= value <= metric.scale_max:
         raise PerformanceComparisonError(
             "performance_radar_value_outside_scale",
             f"Metric {metric.metric_id!r} value {value:g} is outside the declared "
