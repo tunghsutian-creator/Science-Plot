@@ -10,7 +10,7 @@ from tempfile import TemporaryDirectory
 from typing import Any, Iterator
 
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.plot_backends.managed_audit import compare_native, native_state, content_hash, scientific_audit
+from sciplot_core.plot_backends.managed_audit import compare_native_states, native_state, scientific_audit
 from sciplot_core.plot_backends.managed_plan import apply_plan, validate_capabilities
 from sciplot_core.veusz_worker.document_edit import loaded_native_document, _preview
 
@@ -66,10 +66,11 @@ def compile_plot_ir(ir_path: Path, document: Path, preview: Path) -> dict[str, A
         candidate = Path(staging) / "document.vsz"
         candidate_preview = Path(staging) / "preview.png"
         with fresh_document(ir) as expected:
+            # Snapshot the IR-derived state before Save, so any mutation during
+            # serialization cannot also rewrite the reference used for audit.
+            reference = native_state(expected)
             import_module("veusz.document").CommandInterface(expected).Save(str(candidate))
-            expected_hash = content_hash(native_state(expected))
-        # Rebuild the reference and reopen the Save without revalidating its input snapshot.
-        result = _inspect_validated_ir(ir, candidate)
+        result = _inspect_saved(ir, candidate, reference)
         if result["status"] != "unchanged" or result["scientific_audit"]["status"] != "passed":
             raise ValueError(f"Saved managed artifact failed native fidelity: {result}")
         if result.get("publication_qa", {}).get("status", "passed") != "passed":
@@ -104,20 +105,21 @@ def compile_plot_ir(ir_path: Path, document: Path, preview: Path) -> dict[str, A
     return {"kind": "sciplot_managed_compile", "document": str(document),
             "document_sha256": audited_hash, "ir_path": str(ir_path),
             "ir_hash": ir["ir_hash"], "scientific_hash": ir["scientific_hash"],
-            "native_state_hash": expected_hash, "scientific_audit": result["scientific_audit"],
+            "native_state_hash": result["expected_native_state_hash"], "scientific_audit": result["scientific_audit"],
             "preview": image, **({"publication_qa": result["publication_qa"]} if "publication_qa" in result else {})}
 
 
 def inspect_plot_ir(ir_path: Path, document: Path) -> dict[str, Any]:
     ir, _ = _read_ir(ir_path)
-    return _inspect_validated_ir(ir, document)
+    with fresh_document(ir) as expected:
+        return _inspect_saved(ir, document, native_state(expected))
 
 
-def _inspect_validated_ir(ir: dict[str, Any], document: Path) -> dict[str, Any]:
+def _inspect_saved(ir: dict[str, Any], document: Path, reference: dict[str, Any]) -> dict[str, Any]:
     before = file_sha256(document)
     qa: dict[str, Any] | None = None
-    with fresh_document(ir) as expected, loaded_native_document(document) as actual:
-        comparison = compare_native(ir, expected, actual)
+    with loaded_native_document(document) as actual:
+        comparison = compare_native_states(ir, reference, native_state(actual))
         try:
             audit = scientific_audit(ir, actual)
         except (ValueError, KeyError) as exc:

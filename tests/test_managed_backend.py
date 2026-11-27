@@ -98,7 +98,7 @@ def test_compile_receipt_cannot_combine_old_audit_with_new_native_bytes(tmp_path
         CommandInterface=lambda _: SimpleNamespace(Save=save)))
     monkeypatch.setattr(managed, "native_state", lambda _: {})
     with monkeypatch.context() as mocks:
-        mocks.setattr(managed, "_inspect_validated_ir", lambda *_: {"status": "unchanged",
+        mocks.setattr(managed, "_inspect_saved", lambda *_: {"status": "unchanged",
             "document_sha256": file_sha256(staged[-1]), "scientific_audit": {"status": "passed"}})
         mocks.setattr(managed, "loaded_native_document", lambda _: nullcontext(object()))
 

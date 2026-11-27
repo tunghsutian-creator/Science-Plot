@@ -20,7 +20,7 @@ def test_compile_preview_cannot_alias_canonical_document(tmp_path, monkeypatch):
     assert not native.exists()
 
 
-@pytest.mark.parametrize("failure", [None, "save", "audit", "preview", "concurrent_native"])
+@pytest.mark.parametrize("failure", [None, "save", "save_mutates_native", "audit", "preview", "concurrent_native"])
 def test_managed_compile_stages_native_until_audited_and_rendered(tmp_path, monkeypatch, failure):
     native, preview = tmp_path / "document.vsz", tmp_path / "preview.png"
     source = tmp_path / "source.csv"
@@ -31,6 +31,7 @@ def test_managed_compile_stages_native_until_audited_and_rendered(tmp_path, monk
     staged = []
     read = managed._read_ir
     snapshots = []
+    expected, builds = {"value": 1}, []
 
     def read_once(path):
         assert path == ir_path and not snapshots
@@ -43,14 +44,23 @@ def test_managed_compile_stages_native_until_audited_and_rendered(tmp_path, monk
         staged.append(path)
         assert path != native and path.parent.parent == tmp_path
         assert not native.exists()
+        if failure == "save_mutates_native":
+            expected["value"] = 2
         path.write_bytes(b"complete native Save")
         if failure == "save":
             raise RuntimeError("interrupted Save")
 
-    def inspect(validated, candidate):
+    def fresh(validated):
         assert validated is snapshots[0]
+        builds.append(validated)
+        return nullcontext(expected)
+
+    def inspect(validated, candidate, reference):
+        assert validated is snapshots[0]
+        assert reference == {"value": 1}
         assert not native.exists()
-        return {"status": "unchanged", "document_sha256": file_sha256(candidate),
+        return {"status": "unchanged" if reference == expected else "external_mutation",
+                "document_sha256": file_sha256(candidate), "expected_native_state_hash": "audited reference",
                 "scientific_audit": {"status": "passed"},
                 "publication_qa": {"status": "failed" if failure == "audit" else "passed"}}
 
@@ -64,11 +74,11 @@ def test_managed_compile_stages_native_until_audited_and_rendered(tmp_path, monk
         return {"path": str(path), "sha256": file_sha256(path)}
 
     monkeypatch.setattr(managed, "_read_ir", read_once)
-    monkeypatch.setattr(managed, "fresh_document", lambda _: nullcontext(object()))
+    monkeypatch.setattr(managed, "fresh_document", fresh)
     monkeypatch.setattr(managed, "import_module", lambda _: SimpleNamespace(
         CommandInterface=lambda _: SimpleNamespace(Save=save)))
-    monkeypatch.setattr(managed, "native_state", lambda _: {})
-    monkeypatch.setattr(managed, "_inspect_validated_ir", inspect)
+    monkeypatch.setattr(managed, "native_state", dict)
+    monkeypatch.setattr(managed, "_inspect_saved", inspect)
     monkeypatch.setattr(managed, "loaded_native_document", lambda _: nullcontext(object()))
     monkeypatch.setattr(managed, "_preview", render)
     if failure:
@@ -83,9 +93,10 @@ def test_managed_compile_stages_native_until_audited_and_rendered(tmp_path, monk
         result = managed.compile_plot_ir(ir_path, native, preview)
         assert result["document"] == str(native)
         assert result["document_sha256"] == file_sha256(native)
+        assert result["native_state_hash"] == "audited reference"
         assert result["preview"]["path"] == str(preview)
         assert result["preview"]["sha256"] == file_sha256(preview)
         assert native.read_bytes() == b"complete native Save"
-    assert snapshots == [ir]
+    assert snapshots == [ir] and builds == [ir]
     assert source.read_bytes() == b"original user bytes\n"
     assert staged and not staged[0].exists()

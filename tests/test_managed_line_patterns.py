@@ -136,8 +136,8 @@ def test_existing_complete_native_comparison_detects_dash_dot_changed_to_dashed(
                 if widget["settings"].get("PlotLine/style") == "dash-dot" and widget["settings"].get("xData"))
     actual["widgets"][path]["settings"]["PlotLine/style"] = "dashed"
     monkeypatch.setattr(managed_audit, "native_state", deepcopy)
-    assert managed_audit.compare_native(ir, expected, expected)["status"] == "unchanged"
-    compared = managed_audit.compare_native(ir, expected, actual)
+    assert managed_audit.compare_native_states(ir, managed_audit.native_state(expected), managed_audit.native_state(expected))["status"] == "unchanged"
+    compared = managed_audit.compare_native_states(ir, managed_audit.native_state(expected), managed_audit.native_state(actual))
     assert compared["status"] == "external_mutation" and compared["opaque_native_change"]
     assert compared["native_differences"] == [{"path": path, "setting": "PlotLine/style", "before": "dash-dot", "after": "dashed"}]
     assert actual["datasets"] == expected["datasets"]

@@ -116,8 +116,7 @@ def scientific_audit(ir: dict[str, Any], loaded: Any) -> dict[str, Any]:
             "datasets": datasets, "series": series}
 
 
-def compare_native(ir: dict[str, Any], expected: Any, actual: Any) -> dict[str, Any]:
-    reference, current = native_state(expected), native_state(actual)
+def compare_native_states(ir: dict[str, Any], reference: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
     differences: list[dict[str, Any]] = []
     semantic: list[dict[str, Any]] = []
     known: dict[tuple[str, str], tuple[str, str]] = {}
