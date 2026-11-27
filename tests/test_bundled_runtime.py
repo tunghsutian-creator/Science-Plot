@@ -41,8 +41,6 @@ def test_missing_bundled_qt_does_not_fall_back_to_developer_machine(tmp_path, mo
 def test_selected_qt_keeps_real_python_framework_across_worker_gui_and_intake(
     tmp_path, monkeypatch, explicit, platform,
 ):
-    from sciplot_core.intake.packaging import _studio_prepare_env
-
     local_qt = tmp_path / "runtime/.local/runtime/qt/lib"
     explicit_qt = tmp_path / "explicit Qt/lib"
     local_qt.mkdir(parents=True)
@@ -70,17 +68,16 @@ def test_selected_qt_keeps_real_python_framework_across_worker_gui_and_intake(
         monkeypatch.setenv("SCIPLOT_BUNDLED_QT_LIB", str(selected))
 
     worker = veusz_worker_environment()
-    intake = _studio_prepare_env()
     captured = {}
     monkeypatch.setattr(studio_runtime.os, "execvpe", lambda exe, argv, env: captured.update(exe=exe, argv=argv, env=env))
     studio_runtime.maybe_reexec_with_qt_runtime(["studio", "figure.vsz"])
     gui = captured["env"]
     assert captured["exe"] == str(alias)
     assert captured["argv"] == [str(alias), "-m", "sciplot_core.cli", "studio", "figure.vsz"]
-    for environment in (worker, intake, gui):
+    for environment in (worker, gui):
         assert environment["SCIPLOT_BUNDLED_QT_LIB"] == str(selected)
         assert environment["DYLD_FRAMEWORK_PATH"] == str(python_root) + ":" + str(selected)
         assert "DYLD_LIBRARY_PATH" not in environment
         assert environment["SCIPLOT_STUDIO_QT_RUNTIME"] == "1"
-    assert worker["QT_QPA_PLATFORM"] == intake["QT_QPA_PLATFORM"] == (platform or "offscreen")
+    assert worker["QT_QPA_PLATFORM"] == (platform or "offscreen")
     assert gui.get("QT_QPA_PLATFORM") == platform

@@ -1179,38 +1179,6 @@ def test_zip_replace_failure_keeps_last_good_archive_and_cleans_stage(
     assert not list(tmp_path.glob(".project.zip.sciplot-tmp-*"))
 
 
-def test_studio_package_preparation_failure_is_explicit(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project_dir = tmp_path / "project"
-    project_dir.mkdir()
-    legacy = project_dir / "Open_SciPlot_Project.command"
-    legacy.write_bytes(b"historical registered UI entry; never rewritten or executed")
-    legacy.chmod(0o751)
-    original = legacy.read_bytes(), legacy.stat().st_mode
-
-    def fail_prepare(
-        command: list[str],
-        **_kwargs: object,
-    ) -> subprocess.CompletedProcess[str]:
-        raise subprocess.CalledProcessError(
-            returncode=7,
-            cmd=command,
-            stderr="synthetic Studio preparation failure",
-        )
-
-    monkeypatch.setattr(packaging.subprocess, "run", fail_prepare)
-
-    with pytest.raises(
-        RuntimeError,
-        match="synthetic Studio preparation failure",
-    ):
-        packaging._prepare_studio_project_package(project_dir)
-
-    assert (legacy.read_bytes(), legacy.stat().st_mode) == original
-
-
 def test_failed_studio_preparation_does_not_refresh_project_zip(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

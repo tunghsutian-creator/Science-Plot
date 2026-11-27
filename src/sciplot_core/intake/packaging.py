@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 import mimetypes
 import os as os
-import subprocess
-import sys
 import zipfile as zipfile
 from pathlib import Path
 from typing import Any
@@ -27,7 +25,6 @@ from .archive_storage import _write_zip_snapshot_unlocked
 from sciplot_core.project_manifest import (
     locked_intake_project_manifest,
 )
-from sciplot_core.veusz_runtime import veusz_worker_environment
 
 
 def _write_zip(project_dir: Path, zip_path: Path) -> None:
@@ -225,40 +222,3 @@ def _project_package_info(project_dir: Path, *, project_slug: str) -> dict[str, 
         "sciplot_manifests": sciplot_manifests,
         "zip": zip_info,
     }
-
-
-def _studio_prepare_env() -> dict[str, str]:
-    return veusz_worker_environment()
-
-
-def _prepare_studio_project_package(project_dir: Path) -> None:
-    try:
-        subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "sciplot_core.cli",
-                "studio",
-                str(project_dir),
-                "--prepare-only",
-                "--json",
-            ],
-            text=True,
-            capture_output=True,
-            check=True,
-            env=_studio_prepare_env(),
-        )
-    except subprocess.CalledProcessError as exc:
-        diagnostic = exc.stderr or exc.stdout
-        detail = diagnostic.strip()[-2000:] if isinstance(diagnostic, str) else ""
-        message = (
-            f"SciPlot Studio package preparation failed for {project_dir} "
-            f"with exit status {exc.returncode}."
-        )
-        if detail:
-            message = f"{message} {detail}"
-        raise RuntimeError(message) from exc
-    except OSError as exc:
-        raise RuntimeError(
-            f"SciPlot Studio package preparation could not start for {project_dir}."
-        ) from exc

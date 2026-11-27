@@ -360,9 +360,7 @@ dialog>img{display:block;max-width:100%;width:100%;height:75vh;object-fit:contai
   cursor: grab;
   user-select: none;
 }
-.canvas-viewport.is-panning,
-.canvas-viewport.is-dragging,
-.canvas-viewport[data-panning="true"] { cursor: grabbing; }
+.canvas-viewport.is-dragging { cursor: grabbing; }
 .canvas-image {
   position: absolute;
   top: 50%;
