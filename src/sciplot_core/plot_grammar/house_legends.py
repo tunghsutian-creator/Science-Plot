@@ -33,9 +33,14 @@ def resolve_house_legends(spec: dict[str, Any], guides: list[dict[str, Any]], da
                                 dimension + "scale": scale["transform"], "reverse_" + dimension: scale["direction"] == "descending"})
             curves = []
             for entry, layer in zip(guide["entries"], selected, strict=True):
-                columns = datasets[layer["dataset_id"]]["columns"]
-                pairs = [(x, y) for x, y in zip(columns[layer["mappings"]["x"]]["values"],
-                    columns[layer["mappings"]["y"]]["values"], strict=True) if x is not None and y is not None]
+                if "y" in layer["mappings"]:
+                    columns = datasets[layer["dataset_id"]]["columns"]
+                    pairs = [(x, y) for x, y in zip(columns[layer["mappings"]["x"]]["values"],
+                        columns[layer["mappings"]["y"]]["values"], strict=True) if x is not None and y is not None]
+                else:
+                    from .mark_geometry import layer_geometry
+
+                    pairs = [point for mark in layer_geometry(layer, datasets) for point in mark.points]
                 curves.append((entry["label"], pairs))
             placement, anchor = _placement(curves, options, resolver)
             guide["position_fraction"] = anchor

@@ -79,6 +79,18 @@ def _data_qa(spec: dict[str, Any], datasets: dict[str, dict[str, Any]]) -> list[
         for layer in view["layers"]:
             if not layer.get("visible", True):
                 continue
+            if "y" not in layer["mappings"]:
+                from .mark_geometry import layer_geometry, window_intersects
+
+                geometry = layer_geometry(layer, datasets)
+                inside = [window_intersects(mark, scales[layer["x_scale"]], scales[layer["y_scale"]]) for mark in geometry]
+                if not any(inside):
+                    fail("figure_empty_visible_layer", "The band does not intersect its current window.",
+                         "/views/layers", "visible_data", layer_id=layer["id"])
+                if not all(inside):
+                    warnings.append({"code": "geometry_outside_current_domain", "semantic_id": layer["id"],
+                                     "primitive_count": inside.count(False)})
+                continue
             columns = datasets[layer["dataset_id"]]["columns"]
             xs, ys = (columns[layer["mappings"][axis]]["values"] for axis in ("x", "y"))
             x_domain, y_domain = (scales[layer[axis + "_scale"]]["domain"] for axis in ("x", "y"))

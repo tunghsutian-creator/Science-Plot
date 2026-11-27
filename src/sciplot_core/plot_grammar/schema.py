@@ -85,7 +85,7 @@ def axis_schema(*, resolved: bool = False) -> dict[str, Any]:
 
 def layer_schema(*, resolved: bool = False) -> dict[str, Any]:
     fields = {"id": IDENTIFIER, "dataset_id": IDENTIFIER,
-        "mappings": closed({name: IDENTIFIER for name in ("x", "y", "y_low", "y_high")}, ["x", "y"]),
+        "mappings": closed({name: IDENTIFIER for name in ("x", "y", "y_low", "y_high")}, ["x"]),
         "mapping_semantics": closed({"x": TEXT, "y": TEXT}), "x_scale": IDENTIFIER, "y_scale": IDENTIFIER,
         "marks": {"type": "array", "minItems": 1, "items": mark_schema(resolved=resolved)},
         "role": {"type": "string", "minLength": 1}, "label": TEXT,

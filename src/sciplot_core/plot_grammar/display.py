@@ -15,11 +15,11 @@ def resolve_display_curves(views: list[dict[str, Any]], datasets: dict[str, dict
             result.update(_stacked_curves(view, datasets))
             continue
         for layer in view["layers"]:
-            columns = datasets[layer["dataset_id"]]["columns"]
-            x_column, y_column = (layer["mappings"][channel] for channel in ("x", "y"))
-            x, y = columns[x_column]["values"], columns[y_column]["values"]
             for mark in layer["marks"]:
                 if mark["type"] == "line" and "interpolation" in mark:
+                    columns = datasets[layer["dataset_id"]]["columns"]
+                    x_column, y_column = (layer["mappings"][channel] for channel in ("x", "y"))
+                    x, y = columns[x_column]["values"], columns[y_column]["values"]
                     result[mark["id"]] = {"source_dataset_id": layer["dataset_id"],
                         "x_column": x_column, "y_column": y_column,
                         "input_numeric_hash": canonical_json_sha256({"x": x, "y": y}, allow_nan=False),

@@ -81,7 +81,11 @@ def validate_figure_document(document: dict[str, Any]) -> dict[str, Any]:
         for axis in ("x", "y"):
             ref = mapping[axis]
             column = "column:" + str(ref["column_index"]) if "column_index" in ref else ref["column"]
-            if (ref["source_id"] != layer["dataset_id"] or column != layer["mappings"][axis]
+            # The existing Binding y slot supplies ordinate identity/units.
+            # A centre-free band anchors that slot to its declared lower bound;
+            # both bound columns remain explicit in the same immutable dataset.
+            channel = "y_low" if axis == "y" and "y" not in layer["mappings"] else axis
+            if (ref["source_id"] != layer["dataset_id"] or column != layer["mappings"][channel]
                     or mapping[axis + "_unit"] != scales[layer[axis + "_scale"]]["unit"]):
                 fail("figure_binding_mismatch", "Figure layers must preserve explicit Binding dataset, column and unit identities.",
                      "/scientific/mappings", "exact_binding", target=name)

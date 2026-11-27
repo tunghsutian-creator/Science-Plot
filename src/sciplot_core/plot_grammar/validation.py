@@ -16,6 +16,15 @@ def _check(condition: bool, code: str, message: str, path: str) -> None:
         fail(code, message, path, code.removeprefix("figure_"))
 
 
+def mark_mappings_match(layer: dict[str, Any]) -> bool:
+    kinds = {mark["type"] for mark in layer["marks"]}
+    channels = set(layer["mappings"])
+    bounds = {"x", "y_low", "y_high"}
+    if kinds == {"band"} and channels == bounds:
+        return True  # An independent envelope has no measured centre.
+    return channels == (bounds | {"y"} if kinds & {"errorbar", "band"} else {"x", "y"})
+
+
 def scale_quantity_matches(scale: dict[str, Any], quantity: str) -> bool:
     return quantity in scale["quantity_members"] if "quantity_members" in scale else quantity == scale["quantity"]
 
@@ -224,9 +233,9 @@ def validate_figure_spec(value: Any, *, pending_domains: bool = False) -> dict[s
                     "figure_scale_mapping_conflict", "Scale dimension and quantity must match the explicitly declared mapping semantics.", "/views/layers")
                 used.add(name)
                 bound.add(name)
-            uncertainty = any(mark["type"] in {"errorbar", "band"} for mark in layer["marks"])
-            _check(set(layer["mappings"]) == ({"x", "y", "y_low", "y_high"} if uncertainty else {"x", "y"}),
-                "figure_mark_mappings", "Error bars and bands require absolute y_low and y_high columns; unused mappings are rejected.", "/views/layers/mappings")
+            _check(mark_mappings_match(layer), "figure_mark_mappings",
+                "Bounds require y_low and y_high at the same original x. Only a band-only layer may omit y; unused mappings are rejected.",
+                "/views/layers/mappings")
         sides = [axis["side"] for axis in view["axes"]]
         _check(len(sides) == len(set(sides)), "figure_axis_stack_unsupported", "This grammar version supports one axis guide per view side.", "/views/axes")
         for axis in view["axes"]:
@@ -287,7 +296,7 @@ def validate_bound_data(spec: dict[str, Any], datasets: dict[str, dict[str, Any]
                 if scale["transform"] == "log":
                     _check(all(value is None or value > 0 for value in column["values"]), "figure_log_data_domain",
                         "Logarithmic mappings cannot silently discard zero or negative measurements.", "/views/layers/mappings")
-            if not layer.get("visible", True):
+            if not layer.get("visible", True) and "y" in layer["mappings"]:
                 xs, ys = (dataset["columns"][layer["mappings"][name]]["values"] for name in ("x", "y"))
                 _check(any(x is not None and y is not None for x, y in zip(xs, ys, strict=True)),
                        "figure_empty_hidden_layer", "Hidden layers still require paired scientific measurements.", "/views/layers/mappings")
@@ -300,9 +309,10 @@ def validate_bound_data(spec: dict[str, Any], datasets: dict[str, dict[str, Any]
                 high = dataset["columns"][layer["mappings"]["y_high"]]["values"]
                 _check(all(a is None or b is None or a <= b for a, b in zip(low, high, strict=True)),
                     "figure_uncertainty_bounds", "Absolute uncertainty bounds must be ordered for every original row.", "/views/layers/mappings")
-                complete = [all(value is not None for value in row) for row in zip(
-                    dataset["columns"][layer["mappings"]["x"]]["values"],
-                    dataset["columns"][layer["mappings"]["y"]]["values"], low, high, strict=True)]
+                columns = [dataset["columns"][layer["mappings"]["x"]]["values"], low, high]
+                if "y" in layer["mappings"]:
+                    columns.append(dataset["columns"][layer["mappings"]["y"]]["values"])
+                complete = [all(value is not None for value in row) for row in zip(*columns, strict=True)]
                 _check(any(complete), "figure_empty_uncertainty", "Uncertainty marks require at least one complete paired interval.",
                        "/views/layers/mappings")
                 if any(mark["type"] == "band" for mark in layer["marks"]):

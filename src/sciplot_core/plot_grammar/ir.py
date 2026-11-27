@@ -14,7 +14,7 @@ from sciplot_core.rendering_contract.registry import CURRENT_HOUSE_CONTRACT_ID
 
 from .schema import rendering_binding_schema, annotation_schema, axis_schema, guide_schema, layer_schema, scale_schema
 from .styles import COLOR, style_schema
-from .validation import validate_bound_data, validate_axis_presentation, scale_quantity_matches, validate_quantity_members
+from .validation import mark_mappings_match, validate_bound_data, validate_axis_presentation, scale_quantity_matches, validate_quantity_members
 from .display import resolve_display_curves, validate_stack_view
 
 
@@ -95,8 +95,7 @@ def _validate(value: Any, *, verify: bool) -> dict[str, Any]:
                 if scale is None or scale["dimension"] != dimension or not scale_quantity_matches(scale, layer["mapping_semantics"][dimension]):
                     _invalid("Layers bind existing scales with matching dimensions and scientific quantities.", "/views/layers")
                 bound.add(layer[dimension + "_scale"])
-            bounds = any(mark["type"] in {"errorbar", "band"} for mark in layer["marks"])
-            if set(layer["mappings"]) != ({"x", "y", "y_low", "y_high"} if bounds else {"x", "y"}):
+            if not mark_mappings_match(layer):
                 _invalid("Mark channel requirements must be represented exactly.", "/views/layers/mappings")
         for axis in view["axes"]:
             ids.append(axis["id"])

@@ -88,6 +88,14 @@ provenance; generated demonstration measurements must never be labeled real
 experimental evidence. Actual exported files, QA records and limitations are
 required before claiming this design implemented.
 
+For a centre-free band in a Managed FigureTemplate, use a band-only layer with
+`mappings: {x, y_low, y_high}` in one immutable dataset. In the existing
+source Binding slot, `y` names the original lower-bound column as the
+ordinate anchor; it is not a centre or an additional series. Both limits use
+the same y scale, independently retain their original values, and must occupy
+the same source rows. Differently sampled bounds need an explicit upstream
+scientific alignment; the band will not pair them by position or interpolate.
+
 ## Primary references consulted
 
 - [Vega-Lite composition](https://vega.github.io/vega-lite/docs/composition.html)
@@ -159,7 +167,7 @@ cause semantic deduplication.
 | line / point | Supported | Original paired arrays and missing breaks |
 | bar | Supported | Explicit numeric X, baseline and width in data units |
 | errorbar | Supported | Explicit absolute y_low/y_high; physical cap width |
-| band | Supported | Ordered original rows, complete consecutive intervals; missing rows break polygons |
+| band | Supported | Ordered original rows, complete consecutive intervals, and gaps remain separate. An independent band-only layer maps one shared original x, y_low and y_high; no centre or implicit grid join. |
 | rule / fixed text | Supported | Explicit layer scales and coordinates |
 | independent/multiple Scale and Axis guides | Supported | Linear/log, ascending/descending; one visible guide per side |
 | single/hconcat/vconcat/grid | Supported | Full rectangular grids, one view per cell, unequal weights |

@@ -126,3 +126,56 @@ def test_empty_or_disconnected_band_is_not_a_visible_layer(bounds):
     data['raw:A']['columns']['column:3']={'label':'High','unit':'Pa','values':bounds}
     with pytest.raises(DocumentError, match='(complete|consecutive)'):
         resolve(spec,data)
+
+
+def test_independent_band_binds_real_bounds_without_centre_or_gap_bridging(tmp_path):
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.plot_backends.figure_plan import drawing_plan
+    from sciplot_core.plot_engine.contracts import validate_create
+    from sciplot_core.plot_engine.managed_sources import load_sources
+    from sciplot_core.plot_ir import compile_document, create_managed_document
+    from sciplot_core.rendering_contract import contract_binding
+
+    source = tmp_path / "independent-bounds.csv"
+    source.write_text("Frequency,Lower,Upper\nHz,Pa,Pa\n"
+                      "0,1,3\n1,2,4\n5,,12\n8,6,9\n10,7,11\n")
+    digest = file_sha256(source)
+    spec, _ = example()
+    spec["rendering_contract"] = contract_binding()
+    spec["guides"][0]["location"] = "inside-best"
+    layer = spec["views"][0]["layers"][0]
+    layer["mappings"] = {"x": "column:0", "y_low": "column:1", "y_high": "column:2"}
+    layer["marks"] = [{"id": "mark:bounds", "type": "band", "style": {}}]
+    template = {"kind": "sciplot_figure_template", "schema_version": 2,
+                "template_id": "independent-band", "figure_spec": spec}
+    binding = {"kind": "sciplot_binding", "schema_version": 1, "template_id": template["template_id"],
+               "data_sources": [{"source_id": "raw:A", "path": str(source), "sha256": digest,
+                                 "table_selection": {"sheet": None, "header_rows": [0], "unit_row": 1,
+                                                     "data_start_row": 2, "data_end_row": 7}}],
+               "slots": {layer["id"]: {"series_id": layer["id"], "sample": "Bounds",
+                                      "x": {"source_id": "raw:A", "column": "Frequency", "column_index": 0},
+                                      "y": {"source_id": "raw:A", "column": "Lower", "column_index": 1},
+                                      "x_unit": "Hz", "y_unit": "Pa"}},
+               "transforms": [], "guards": {}, "provenance": {}}
+    wire = validate_create({"idempotency_key": "bounds", "rule_id": "ordinary_xy",
+                            "template_definition": template, "data_binding": binding})
+    document = create_managed_document(wire["template_definition"], wire["data_binding"], plot_id="bounds")
+    data = load_sources(document, "ordinary_xy")
+    ir = compile_document(document, data)
+    assert validate_ir(ir) == ir
+    resolved = ir["datasets"]["raw:A"]
+    assert resolved["columns"]["column:1"]["values"] == [1, 2, None, 6, 7]
+    assert resolved["columns"]["column:2"]["values"] == [3, 4, 12, 9, 11]
+    assert resolved["provenance"]["sources"][0]["rows"] == [2, 3, 4, 5, 6]
+    polygons = [node["settings"] for node in drawing_plan(ir) if node["type"] == "polygon"]
+    assert [(node["xPos"], node["yPos"]) for node in polygons] == [
+        ([0, 1, 1, 0], [1, 2, 4, 3]), ([8, 10, 10, 8], [6, 7, 11, 9]),
+    ]
+    layer["marks"].append({"id": "mark:centre", "type": "line", "style": {}})
+    with pytest.raises(DocumentError, match="band-only"):
+        create_managed_document(template, binding, plot_id="requires-centre")
+    layer["marks"].pop()
+    layer["mappings"]["x_high"] = "column:0"
+    with pytest.raises(DocumentError):
+        create_managed_document(template, binding, plot_id="no-implicit-alignment")
+    assert file_sha256(source) == digest
