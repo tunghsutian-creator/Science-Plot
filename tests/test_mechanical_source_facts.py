@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -73,6 +74,43 @@ def test_excerpt_metrics_remain_missing_with_actionable_complete_plan_blocker(
     assert "modulus_MPa" in str(exc_info.value)
     assert "0.05--0.25" in str(exc_info.value)
     assert "fracture" in str(exc_info.value)
+
+
+def test_reported_tensile_break_integrates_only_acquired_loading_from_zero(tmp_path, capsys):
+    from sciplot_core.cli import main
+
+    def observe(name, points):
+        folder = tmp_path / name
+        folder.mkdir()
+        source = folder / "specimen.csv"
+        original = ("结果表格1\n拉伸应力(最大值),拉伸应变(断裂),模量\nMPa,%,MPa\n10,1,1000\n"
+                    "结果表格2\n拉伸应变,拉伸应力\n%,MPa\n"
+                    + "".join(f"{x},{y}\n" for x, y in points)).encode()
+        source.write_bytes(original)
+        facts = load_mechanical_source_facts(folder, rule_id="tensile_curve")
+        assert facts.raw_series[0].points == tuple(points)
+        assert source.read_bytes() == original
+        summary, = facts.summary_records()
+        assert summary["elongation_at_break_percent"] == 1.
+        assert summary["strength_MPa"] == 10. and summary["modulus_MPa"] == 1000.
+        return folder, summary
+
+    measured, summary = observe("measured", [(-.1, 10), (0, 0), (1, 10)])
+    assert summary["toughness_MJ_m3"] == pytest.approx(.05)
+    assert float(summary["available_curve_integral_MJ_m3"]) == pytest.approx(.055)
+    assert main(["plan", str(measured), "--rule", "tensile_curve", "--template", "curve", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "planned"
+
+    _, bracketed = observe("bracketed", [(-.2, 2), (.2, 6), (1.2, 16)])
+    assert bracketed["toughness_MJ_m3"] == pytest.approx(.09)
+
+    for name, points in [("excerpt", [(.3, 3), (1, 10)]),
+                         ("unloading", [(0, 0), (.5, 5), (.2, 2), (1, 10)])]:
+        source_dir, incomplete = observe(name, points)
+        assert "toughness_MJ_m3" not in incomplete
+        assert incomplete["toughness_source"] == "unavailable"
+        assert main(["plan", str(source_dir), "--rule", "tensile_curve", "--template", "curve", "--json"]) == 1
+        assert json.loads(capsys.readouterr().out)["blocker"]["reason_code"] == "mechanical_summary_metric_missing"
 
 
 def _write_curves(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+from math import isfinite
 from pathlib import Path
 from typing import Any
 import numpy as np
@@ -157,6 +158,44 @@ def _read_paired_curve_table(path: Path) -> list[pd.DataFrame]:
     return [frame for _sample, frame in _read_labeled_paired_curve_table(path)]
 
 
+def _tensile_loading_integral(
+    points: list[tuple[float, float]] | tuple[tuple[float, float], ...],
+    break_strain: float,
+    strain_fraction_factor: float,
+) -> float:
+    """Integrate the acquired loading path, not a strain-sorted envelope."""
+    missing = float("nan")
+    if not isfinite(break_strain) or break_strain <= 0:
+        return missing
+    first = next((index for index, (x, _) in enumerate(points) if isfinite(x) and x >= 0), None)
+    if first is None:
+        return missing
+    x, y = points[first]
+    if not isfinite(y):
+        return missing
+    if x == 0:
+        loading = [(x, y)]
+        first += 1
+    else:
+        if first == 0:
+            return missing
+        x0, y0 = points[first - 1]
+        if not isfinite(x0) or not isfinite(y0) or x0 >= 0:
+            return missing
+        loading = [(0.0, y0 - x0 * (y - y0) / (x - x0))]
+    for x, y in points[first:]:
+        x0, y0 = loading[-1]
+        if not isfinite(x) or not isfinite(y) or x < x0:
+            return missing
+        if x >= break_strain:
+            y_break = y if x == break_strain else y0 + (break_strain - x0) * (y - y0) / (x - x0)
+            loading.append((break_strain, y_break))
+            strain, stress = np.asarray(loading, dtype=float).T
+            return float(np.trapezoid(stress, strain * strain_fraction_factor))
+        loading.append((x, y))
+    return missing
+
+
 def tensile_curve_metric_values(
     points: list[tuple[float, float]] | tuple[tuple[float, float], ...],
     *,
@@ -254,40 +293,7 @@ def tensile_curve_metric_values(
     break_coordinate = (
         elongation_at_break if strain_is_percent else elongation_at_break / 100.0
     )
-    clipped = data[data["strain"] <= break_coordinate].copy()
-    after_break = data[data["strain"] > break_coordinate]
-    if (
-        not clipped.empty
-        and not after_break.empty
-        and float(clipped["strain"].iloc[-1]) < break_coordinate
-    ):
-        left = clipped.iloc[-1]
-        right = after_break.iloc[0]
-        x0, y0 = float(left["strain"]), float(left["stress"])
-        x1, y1 = float(right["strain"]), float(right["stress"])
-        if x1 > x0:
-            y_break = y0 + (break_coordinate - x0) * (y1 - y0) / (x1 - x0)
-            clipped = pd.concat(
-                [
-                    clipped,
-                    pd.DataFrame([{"strain": break_coordinate, "stress": y_break}]),
-                ],
-                ignore_index=True,
-            )
-    complete_to_break = (
-        reported_break is not None
-        and float(data["strain"].iloc[0]) <= 0.0
-        and float(data["strain"].iloc[-1]) >= break_coordinate
-    )
-    if complete_to_break and len(clipped) >= 2:
-        toughness = float(
-            np.trapezoid(
-                clipped["stress"].to_numpy(dtype=float),
-                clipped["strain"].to_numpy(dtype=float) * strain_fraction_factor,
-            )
-        )
-    else:
-        toughness = float("nan")
+    toughness = _tensile_loading_integral(points, break_coordinate, strain_fraction_factor)
 
     toughness_source = (
         "curve_integral_to_reported_break" if np.isfinite(toughness) else "unavailable"
@@ -295,8 +301,9 @@ def tensile_curve_metric_values(
     toughness_reason = (
         ""
         if np.isfinite(toughness)
-        else "Toughness requires a verified break and at least two curve points "
-        "covering zero strain through that break; an excerpt integral is incomplete."
+        else "Toughness requires a verified break and a continuous nondecreasing "
+        "loading path from measured or bracketed zero strain through that break; "
+        "an excerpt or unloading integral is not toughness."
     )
     available_integral = (
         float(
