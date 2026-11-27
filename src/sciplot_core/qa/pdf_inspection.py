@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 import pymupdf as fitz
-from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.qa.artifacts import (
     _raster_visual_qa,
 )
@@ -24,9 +24,19 @@ from sciplot_core.qa.pdf_graphics import (
 
 
 def _pdf_info(path: Path) -> dict[str, Any]:
-    if not path.exists() or path.stat().st_size <= 0:
+    try:
+        content = path.read_bytes()
+    except FileNotFoundError as exc:
+        raise ValueError(f"{path} is missing or empty.") from exc
+    if not content:
         raise ValueError(f"{path} is missing or empty.")
-    with fitz.open(path) as document:
+    try:
+        decoded = fitz.Document(stream=content, filetype="pdf")
+    except fitz.FileDataError as exc:
+        raise ValueError(f"Cannot read the declared PDF artifact: {path}") from exc
+    with decoded as document:
+        if not document.is_pdf:
+            raise ValueError(f"Document bytes do not match the declared PDF artifact: {path}")
         page_count = document.page_count
         if page_count <= 0:
             raise ValueError(f"{path} has no pages.")
@@ -62,8 +72,8 @@ def _pdf_info(path: Path) -> dict[str, Any]:
     first_page = pages[0]
     return {
         "path": str(path),
-        "size_bytes": path.stat().st_size,
-        "sha256": file_sha256(path),
+        "size_bytes": len(content),
+        "sha256": sha256(content).hexdigest(),
         "page_count": page_count,
         "media_box_pt": first_page["media_box_pt"],
         "physical_size_mm": first_page["physical_size_mm"],

@@ -1,11 +1,10 @@
-"""Shared raster metadata, retaining streaming TIFF and immutable PNG inputs."""
+"""Read raster metadata from the same bytes as the reported digest."""
 
 from io import BytesIO
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
 from PIL import Image
-from sciplot_core.foundation.file_hashing import file_sha256
 
 
 def _metadata(image: Image.Image) -> dict[str, Any]:
@@ -18,9 +17,16 @@ def _metadata(image: Image.Image) -> dict[str, Any]:
 
 
 def _tiff_info(path: Path) -> dict[str, Any]:
-    with Image.open(path) as image:
-        metadata = _metadata(image)
-    return {"path": str(path), "size_bytes": path.stat().st_size, "sha256": file_sha256(path), **metadata}
+    content = path.read_bytes()
+    try:
+        with Image.open(BytesIO(content)) as image:
+            if image.format != "TIFF":
+                raise ValueError(f"Raster bytes do not match the declared TIFF artifact: {path}")
+            image.load()
+            metadata = _metadata(image)
+    except OSError as exc:
+        raise ValueError(f"Cannot decode the declared TIFF artifact: {path}") from exc
+    return {"path": str(path), "size_bytes": len(content), "sha256": sha256(content).hexdigest(), **metadata}
 
 
 def _png_info(path: Path, content: bytes) -> dict[str, Any]:
