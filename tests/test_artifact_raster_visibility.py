@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from hashlib import sha256
+import json
 from pathlib import Path
 
 import fitz
@@ -141,3 +142,24 @@ def test_qa_does_not_admit_corrupt_tiff_pixels_or_renamed_png(tmp_path):
     tiff.replace(pdf)
     with pytest.raises(ValueError, match="declared PDF artifact"):
         run_qa(tmp_path)
+
+
+
+def test_qa_cli_strict_without_profile_is_not_evaluated_but_keeps_artifact_evidence(tmp_path, capsys):
+    from sciplot_core.cli import main
+
+    _write_pdf(tmp_path / "figure.pdf", sparse_stroke=True)
+    with Image.new("RGB", (200, 100), "navy") as image:
+        image.save(tmp_path / "figure_300dpi.tiff", format="TIFF", dpi=(300, 300))
+
+    assert main(["qa", str(tmp_path)]) == 0
+    ordinary = json.loads(capsys.readouterr().out)
+    assert ordinary["status"] == "passed" and "publication" not in ordinary
+
+    assert main(["qa", str(tmp_path), "--strict-publication"]) == 1
+    strict = json.loads(capsys.readouterr().out)
+    assert strict["status"] == "failed" and strict["publication_strict"] is True
+    assert strict["publication"]["status"] == "not_evaluated"
+    assert strict["publication"]["reason_code"] == "publication_profile_missing"
+    assert strict["publication"]["checked_constraints_passed"] is None
+    assert strict["pdfs"] == ordinary["pdfs"] and strict["tiffs"] == ordinary["tiffs"]

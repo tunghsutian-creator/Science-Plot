@@ -104,13 +104,20 @@ def run_qa(
         if profile and required_formats
         else None
     )
-    status = "passed"
-    if (
-        strict_publication
-        and publication is not None
-        and publication["status"] != "passed"
-    ):
-        status = "failed"
+    if strict_publication and publication is None:
+        publication = {
+            "kind": "sciplot_publication_qa",
+            "version": 2,
+            "status": "not_evaluated",
+            "reason_code": "publication_profile_missing",
+            "message": "Strict publication QA requires a profile. Supply --publication-profile or provide journal_profile.json.",
+            "checked_constraints_passed": None,
+            "coverage_complete": False,
+            "journal_compliance_established": False,
+        }
+    status = (
+        "failed" if strict_publication and (publication or {}).get("status") != "passed" else "passed"
+    )
     payload = {
         "kind": "sciplot_artifact_qa",
         "version": 2,

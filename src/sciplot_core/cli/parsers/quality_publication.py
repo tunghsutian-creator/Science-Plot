@@ -28,7 +28,7 @@ def register_quality_publication_commands(subparsers: Any) -> None:
     qa_parser.add_argument(
         "--strict-publication",
         action="store_true",
-        help="Return a failed QA status when publication-profile checks need revision.",
+        help="Require a publication profile and fail unless its implemented checks pass.",
     )
 
     publication_parser = subparsers.add_parser(

@@ -384,6 +384,10 @@ skill/scripts/sciplot qa OUTDIR --strict-publication
 skill/scripts/sciplot batch INPUT_DIR --out /path/to/new-batch --mode smoke
 ```
 
+Strict QA requires a profile from `--publication-profile` or
+`OUTDIR/journal_profile.json`. Without one, the report retains the file checks
+but marks the publication checks as not evaluated and exits nonzero.
+
 Batch output must be a new directory outside the input, tensile allow-list,
 and SciPlot checkout directories. Choose a new destination for each run.
 
