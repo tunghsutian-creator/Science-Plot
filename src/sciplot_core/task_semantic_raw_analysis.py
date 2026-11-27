@@ -23,7 +23,11 @@ def admit_raw_curve(state: dict[str, Any], plan: dict[str, Any],
     if (fields == ["mapping"] and rule_id == "uvvis_spectrum" and source.suffix.casefold() in {".csv", ".tsv"}
             and _admit_mapped_uvvis(state, plan, source, observed)):
         return True
-    if fields:
+    explicit_ftir_stack = (fields == ["curve_display"] and rule_id == "ftir_spectrum"
+                           and request["curve_display"] == "stacked_offset"
+                           and observed is not None and observed.transform is not None
+                           and len(observed.transform.series) >= 2)
+    if fields and not explicit_ftir_stack:
         return _native_only(state, "raw_request_fields_not_managed",
                             "The source-only Managed curve contract does not cover: " + ", ".join(fields))
     if source.suffix.casefold() not in {".csv", ".tsv"} or source.is_dir():
@@ -317,7 +321,8 @@ def _admit_ftir_stack(
     units = {"x": "cm^-1", "response": y_unit}
     conversions = {(item["sample"], item["role"]): item for item in transform["unit_conversions"]}
     for group, trace in zip(columns, series, strict=True):
-        if (group["sources"] != [str(source)] or trace["response_mode"] != mode or trace["excluded_point_count"]
+        if (group["sources"] != [str(source)] or trace["response_mode"] != mode
+                or trace["excluded_point_count"] != trace["excluded_by_reason"]["empty_pair"]
                 or trace["point_count"] < 2 or group["response"]["response_mode_detection"] != "detected_from_explicit_response_header"):
             return False
         for role, header in headers.items():
@@ -345,7 +350,9 @@ def _admit_ftir_stack(
         return False
     for block, binding, group, trace in zip(blocks, bindings, columns, series, strict=True):
         region = binding["table_selection"]
-        if (binding["block_id"] != block["block_id"] or block["point_count"] != trace["point_count"]
+        # Managed counts physical rows, including blank pairs; FTIR metrics count
+        # measurements. The display stack needs the original rows to retain gaps.
+        if (binding["block_id"] != block["block_id"] or block["point_count"] != trace["candidate_row_count"]
                 or region["header_rows"] != [group["header_row_index"]]
                 or region["data_start_row"] != group["data_start_row_index"]
                 or "sample_row" not in region):
