@@ -77,6 +77,14 @@ def test_ragged_csv_description_rows_do_not_shift_original_columns(tmp_path):
     assert selected["rows"][0]["row_index"] == 2
     assert selected["columns"][1]["y_eligible"]
 
+    # Punctuation in a quoted note is data, not a delimiter vote in a TSV.
+    tsv = tmp_path / "measurement.tsv"
+    tsv.write_text(source.read_text().replace(",", "\t").replace("null", '"a,b,c,d,e,f,g,h,i,j,k,l,m,n"'))
+    snapshot = table_choice_snapshot(tsv, "uvvis_spectrum")
+    selected = select_table(snapshot, {"sheet": None, "header_rows": [2], "data_start_row": 3, "data_end_row": 5})
+    assert [column["header"] for column in selected["columns"]] == ["Wavelength (nm)", "Absorbance (a.u.)", "", "Notes"]
+    assert selected["columns"][1]["y_eligible"]
+
 
 def test_multirow_header_x_sample_and_float_precision_are_preserved(tmp_path):
     from sciplot_core.data_mapping.output_files import paired_table_text

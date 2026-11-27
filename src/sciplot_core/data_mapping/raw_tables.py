@@ -65,6 +65,8 @@ class _RawTable:
 def _detect_delimiter(text: str, reference: DataSourceReference) -> str:
     if reference.delimiter != "auto":
         return reference.delimiter
+    if Path(reference.relative_path).suffix.casefold() == ".tsv":
+        return "\t"
     lines = [line for line in text.splitlines()[:40] if line.strip()]
     sample = "\n".join(lines)
     counts = {
