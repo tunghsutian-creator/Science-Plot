@@ -5,7 +5,6 @@ description: Create, edit, export and continue source-bound scientific figures t
 
 # SciPlot Materials Analysis
 External AI interprets original data and user intent; SciPlot validates and plots locally without calling a model. Use `skill/scripts/sciplot` and its public contracts.
-Keep ordinary plotting work within that interface.
 
 ## Select one route
 
@@ -20,7 +19,7 @@ Read the matching self-contained route once per session while its contract is un
 | Package selected ManagedPlot native snapshots with guarded local continuation | [Managed delivery](references/managed-delivery.md) |
 | Arrange saved figures and images on one physical page | [Panel assembly](references/panel-assembly.md) |
 | Read performance radar units, normalization and direction | [Radar interpretation](references/performance-radar.md) |
-| Plot original data as a new ordinary task | [Create](references/ordinary-create.md) |
+| Plot original data, or [save a new ordinary XY project file](references/saved-work-continuation.md#save-the-first-ordinary-xy-figure) | [Create](references/ordinary-create.md) |
 | Append an independent ordinary XY figure to an existing `.sciplot` project file | [Append a figure](references/saved-work-continuation.md#append-an-independent-ordinary-xy-figure) |
 | Reauthor a compatible legacy template for Managed creation | [Template migration](references/managed-template-migration.md) |
 | Add an original table to an existing Managed XY figure | [Source append](references/source-append.md) |
@@ -58,7 +57,7 @@ For source revisions, groups/comparisons or legacy diagnostics, read only the re
 - Let a local task command finish within the tool's normal initial wait. For
   `exec_command`, use 10–30 seconds instead of routinely yielding after one second;
   premature backgrounding adds an AI round just to wait for a short native call.
-- At successful completion, view the returned final TIFF and deliver. Stop there:
+- Inspect and deliver only what was requested. A save without export needs no handoff:
   no extra inspect/audit/export, ad hoc hash or data reconstruction script, test,
   smoke or acceptance run for ordinary plotting. Investigate a reported failure,
   stale binding, missing evidence or visible defect only as far as needed.
@@ -84,10 +83,10 @@ or silently promote an incomplete import to full semantic authority.
 
 Managed Template/Binding/Theme creation uses document authority. FigureTemplate v2 composes Views/Scales/Layers/Marks in physical mm; `plot.describe` returns its typed edit contract. Retain raw inputs and `.sciplot_documents`; rebuild disposable artifacts with `plot.export`. Source/transform/executor or scale-domain edits need scientific intent. Reject unknown native state; source-only `task create` remains compatible; its semantic attachment route compiles into this same Managed authority.
 
-For raw-input plotting, omit `--out` by default. Deliveries belong beside the original source in `SOURCE_SciPlot/`; hidden `.sciplot/` holds internal evidence.
+For directory-based raw-input plotting, omit `--out` by default. Deliveries belong beside the original source in `SOURCE_SciPlot/`; hidden `.sciplot/` holds internal evidence.
 Do not put user plotting deliveries inside the SciPlot repository or its `outputs/`.
 Development evidence belongs under ignored `.tmp_verify/`; its name never authorizes deletion (see Development).
-Require Doctor `status=ready` before artifact handoff; reuse current readiness. Deliver plotting CSVs, PDF/TIFF and editable VSZ. Continue changes through the current AI task/document commands; do not launch the retired browser editor. Keep PDF review marks on a separate copy. Use the registered-project PDF reference route for a trusted current binding; a standalone parser result or an unknown PDF is not such a binding.
+Require Doctor `status=ready` before artifact handoff; reuse current readiness. For directory packages, deliver plotting CSVs, PDF/TIFF and editable VSZ. Continue changes through the current AI task/document commands; do not launch the retired browser editor. Keep PDF review marks on a separate copy. Use the registered-project PDF reference route for a trusted current binding; a standalone parser result or an unknown PDF is not such a binding.
 
 ## Authority
 
