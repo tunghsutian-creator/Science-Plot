@@ -7,9 +7,9 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 10483,
-    "nodeids_sha256": "42bc92a777b2903791282d39aca1b4e602a30aff7b07a037464df2ea231c6320",
-    "test_sources_sha256": "ee1de70079212c52b8357f77c095161ad7616b584293da03cb70f5033895ee4a",
+    "nodeid_count": 10495,
+    "nodeids_sha256": "677c139687ab44cd41893d1ecba670eaa8a9619c989e7be33a98463dd06c9e4a",
+    "test_sources_sha256": "c0aa0f5fb88a5c2e2d902592c850dedf2839c721ab96c8297acb114e886b01db",
     "test_source_count": 672,
     "candidate_nodeids": [
       "tests/test_plot_template_native.py::test_legacy_paired_template_reauthored_as_managed_preserves_data_and_styles",
@@ -5394,7 +5394,6 @@
       "tests/test_veusz_identity_source_versions.py::test_registered_file_tree_uses_its_byte_version_and_preserves_composite[True]",
       "tests/test_veusz_identity_source_versions.py::test_unbound_cold_directory_cannot_be_reconstructed_from_used_files",
       "tests/test_workflow_project_commands.py::test_complete_workflow_generation_contains_native_run_manifest_and_matching_zip",
-      "tests/test_workflow_project_commands.py::test_complete_workflow_publishes_the_capture_delta_without_deleting_unchanged_members",
       "tests/test_workflow_project_commands.py::test_failed_native_audit_does_not_publish_any_analysis_or_project_members",
       "tests/test_workflow_project_commands.py::test_request_preparation_forwards_committed_delivery_evidence",
       "tests/test_workflow_project_commands_native.py::test_general_run_publishes_native_delivery_and_matching_project_then_reopens[explicit-external-output]",
@@ -5869,7 +5868,20 @@
       "tests/test_project_file_append.py::test_task_create_saves_first_figure_directly_from_selected_workbook_sheet",
       "tests/test_resolved_figure_plan.py::test_studio_package_requires_decoded_exports_bound_to_the_selected_outcome",
       "tests/test_project_file_save_as.py::test_save_as_rejects_stale_occupied_and_opaque_archive",
-      "tests/test_project_file_save_as.py::test_whole_file_save_as_copies_all_current_figures_and_sealed_versions"
+      "tests/test_project_file_save_as.py::test_whole_file_save_as_copies_all_current_figures_and_sealed_versions",
+      "tests/test_artifact_raster_visibility.py::test_an_identically_styled_label_on_another_page_cannot_prove_panel_typography",
+      "tests/test_delivery_project_documents.py::test_delivery_repeat_never_discards_an_unregistered_member[data/raw.csv]",
+      "tests/test_delivery_project_documents.py::test_delivery_repeat_never_discards_an_unregistered_member[figures/extra.pdf]",
+      "tests/test_delivery_project_documents.py::test_delivery_repeat_never_discards_an_unregistered_member[figures/notes.txt]",
+      "tests/test_delivery_project_documents.py::test_registered_delivery_repeat_can_replace_only_its_unchanged_artifact",
+      "tests/test_delivery_project_documents.py::test_registered_delivery_repeat_preserves_an_edited_artifact[data_csvs]",
+      "tests/test_delivery_project_documents.py::test_registered_delivery_repeat_preserves_an_edited_artifact[figures]",
+      "tests/test_impact_terminal_data_contract.py::test_impact_bar_keeps_unknown_sd_distinct_from_measured_zero",
+      "tests/test_managed_preview_audit_reuse.py::test_managed_render_reuses_only_this_invocations_exact_compile",
+      "tests/test_rheology_tts.py::test_duplicate_tts_evidence_never_rebinds_to_the_last_column",
+      "tests/test_rheology_tts.py::test_frequency_trial_selection_binds_same_test_to_original_row_and_source_sha",
+      "tests/test_workflow_project_commands.py::test_complete_workflow_installs_only_the_registered_delivery_delta[False]",
+      "tests/test_workflow_project_commands.py::test_complete_workflow_installs_only_the_registered_delivery_delta[True]"
     ],
     "synthetic_candidates": [
       {
@@ -26625,10 +26637,6 @@
         "reason": "_direct_execution writes generated UVvis CSV and exact proposal/confirmation; sibling unselected temp text never becomes source authority; real mapping ledger."
       },
       {
-        "nodeid": "tests/test_workflow_project_commands.py::test_complete_workflow_publishes_the_capture_delta_without_deleting_unchanged_members",
-        "reason": "prepared creates generated source/request/registry and delivery members; controlled analysis/native port; actual capture-delta/ProjectCommands commit preserves unchanged members and source."
-      },
-      {
         "nodeid": "tests/test_workflow_project_commands.py::test_request_preparation_forwards_committed_delivery_evidence",
         "reason": "prepared creates generated source/request/registry and delivery members; controlled analysis/native port; actual capture-delta/ProjectCommands commit preserves unchanged members and source."
       },
@@ -28643,6 +28651,58 @@
       {
         "nodeid": "tests/test_project_file_save_as.py::test_whole_file_save_as_copies_all_current_figures_and_sealed_versions",
         "reason": "Generated scratch CSV bytes and ordinary archives exercise the public save-as CLI, exact current figure and sealed-source copying, and semantic edit independence. No private input or native rendering."
+      },
+      {
+        "nodeid": "tests/test_artifact_raster_visibility.py::test_an_identically_styled_label_on_another_page_cannot_prove_panel_typography",
+        "reason": "Both PDF pages drawn by fixture at run time."
+      },
+      {
+        "nodeid": "tests/test_delivery_project_documents.py::test_delivery_repeat_never_discards_an_unregistered_member[data/raw.csv]",
+        "reason": "Package and foreign members are generated in tmp_path."
+      },
+      {
+        "nodeid": "tests/test_delivery_project_documents.py::test_delivery_repeat_never_discards_an_unregistered_member[figures/extra.pdf]",
+        "reason": "Package and foreign members are generated in tmp_path."
+      },
+      {
+        "nodeid": "tests/test_delivery_project_documents.py::test_delivery_repeat_never_discards_an_unregistered_member[figures/notes.txt]",
+        "reason": "Package and foreign members are generated in tmp_path."
+      },
+      {
+        "nodeid": "tests/test_delivery_project_documents.py::test_registered_delivery_repeat_can_replace_only_its_unchanged_artifact",
+        "reason": "Generated old and staged package bytes with an edited or registered artifact."
+      },
+      {
+        "nodeid": "tests/test_delivery_project_documents.py::test_registered_delivery_repeat_preserves_an_edited_artifact[data_csvs]",
+        "reason": "Generated old and staged package bytes with an edited or registered artifact."
+      },
+      {
+        "nodeid": "tests/test_delivery_project_documents.py::test_registered_delivery_repeat_preserves_an_edited_artifact[figures]",
+        "reason": "Generated old and staged package bytes with an edited or registered artifact."
+      },
+      {
+        "nodeid": "tests/test_impact_terminal_data_contract.py::test_impact_bar_keeps_unknown_sd_distinct_from_measured_zero",
+        "reason": "Generated replicate CSV distinguishes unknown and zero sample variance."
+      },
+      {
+        "nodeid": "tests/test_managed_preview_audit_reuse.py::test_managed_render_reuses_only_this_invocations_exact_compile",
+        "reason": "Generated VSZ and PNG byte stubs with controlled compile result."
+      },
+      {
+        "nodeid": "tests/test_rheology_tts.py::test_duplicate_tts_evidence_never_rebinds_to_the_last_column",
+        "reason": "Generated UTF-16 evidence columns and temporary instrument request."
+      },
+      {
+        "nodeid": "tests/test_rheology_tts.py::test_frequency_trial_selection_binds_same_test_to_original_row_and_source_sha",
+        "reason": "Generated repeated UTF-16 intervals in an isolated directory."
+      },
+      {
+        "nodeid": "tests/test_workflow_project_commands.py::test_complete_workflow_installs_only_the_registered_delivery_delta[False]",
+        "reason": "Generated delivery/registry and controlled native port; checks unregistered files and committed delta."
+      },
+      {
+        "nodeid": "tests/test_workflow_project_commands.py::test_complete_workflow_installs_only_the_registered_delivery_delta[True]",
+        "reason": "Generated delivery/registry and controlled native port; checks unregistered files and committed delta."
       }
     ],
     "review_method": "2026-11-10: actual unfiltered collect-only confirmed 10236 unique nodes, 9740 focused and 496 comprehensive, zero test reports and unchanged Python inputs. Thirty-six added storage lifecycle and changed-runner controls use generated data only and are public-focused. Eighteen unchanged registered Python fixture helpers were adopted by original SHA; no raw or golden data was copied. All 165 private cases, 210 dependencies, 23 directory roles, 111 historical duties and remaining full/scientific access obligations are retained. Static disposition is not full execution or scientific acceptance. 2026-11-10 storage closure: actual zero-body unfiltered10342-node collection,81 additive generated public-focused cases, original tiers/private dependencies/duties retained. Synthetic host providers isolate unit paths; production has no test-environment placement exemption. Static review is not full/private scientific acceptance. 2026-11-10 CI workspace correction: original10342 full collection plus complete11-node policy-module collection gives10345, three additive generated focused allocator controls. The actual unchanged12-node staged native preflight must freshly confirm full scope before any body; no historical node, tier or scientific duty removed. 2026-11-10 callback migration closure: complete50-node collection for four consumer modules remains exact (49 original focused bodies PASS,one original comprehensive deselected). Five test doubles explicitly accept their real namespace parameter and check containment; no production code,scientific assertion,node,tier,dependency or duty change. Only current test-byte binding changes; earlier c29112-node receipt remains historical under its own SHA. 2026-11-10 public capture carrier consumer: the actual guarded child now receives build_check_spec prepared environment; dropping only the workspace carrier is explicitly refused in the same original node. Thirty unchanged module node IDs, no production guard,scientific assertion,scope classification or dependency change. Previous5299705 successful bodies and one failure remain historical,not a new-SHA pass. 2026-11-11 targeted correctness remediation: actual unfiltered 10370-node collection, zero executed bodies, 25 additive generated public-focused controls. Original private cases, dependencies, tiers, and responsibilities remain unchanged. Static test-byte binding only; no new full-suite or scientific acceptance claim. 2026-11-16: unfiltered collect-only confirmed 10372 nodes, zero bodies, two new generated public-focused worksheet controls. Existing tiers, private dependencies and scientific responsibilities unchanged.",
