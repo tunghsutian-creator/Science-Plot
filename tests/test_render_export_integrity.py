@@ -104,3 +104,36 @@ def test_terminal_render_reports_exact_outputs_left_by_install_failure(
     retry = json.loads(capsys.readouterr().out)
     assert "Choose a new output directory" in retry["message"]
     assert pdf.read_bytes() == b"pdf"
+
+
+def test_stacked_split_uses_the_renderers_shared_x_series_and_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import json
+
+    from sciplot_core.render import panel_render
+
+    source = tmp_path / "spectra.csv"
+    source.write_text("Wavenumber,A,B,C,D,E\n1000,2,3,4,5,6\n1100,4,5,6,7,8\n")
+    rendered_groups = []
+
+    def export(request_path, *_args, **_kwargs):
+        options = json.loads(request_path.read_text())["render_options"]
+        group = options["series_include"]
+        assert options["series_order"] == group
+        rendered_groups.append(group)
+        pdf = request_path.with_suffix(".pdf")
+        pdf.write_text(",".join(group))
+        return {
+            "exports": [{"format": "pdf", "path": str(pdf)}],
+            "document": str(request_path.with_suffix(".vsz")),
+        }
+
+    monkeypatch.setattr(panel_render, "_render_studio_exports", export)
+    result = render.render_to_dir(
+        source, template="stacked_curve", output_dir=tmp_path / "figures",
+        options={"series_include": ["A", "B", "C", "E"], "series_order": ["E", "C"]},
+        export_formats=["pdf"], split_policy={"max_series_per_panel": 3},
+    )
+    assert rendered_groups == [["E", "C", "A"], ["B"]]
+    assert [Path(p).read_text() for p in result["outputs"]] == ["E,C,A", "B"]

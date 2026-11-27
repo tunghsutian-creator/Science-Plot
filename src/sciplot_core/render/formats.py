@@ -1,19 +1,11 @@
-"""Normalize export requests and resolve split-series labels."""
+"""Normalize export requests."""
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
 from sciplot_core.policy import (
     DEFAULT_EXPORT_FORMATS_POLICY,
     normalize_export_formats,
 )
-from sciplot_core.render.series_selection import (
-    filter_curve_series,
-    reorder_curve_series,
-    unknown_series_order_labels,
-)
-from sciplot_core.source_tables import load_curve_table
 
 
 DEFAULT_EXPORT_FORMATS = DEFAULT_EXPORT_FORMATS_POLICY
@@ -26,29 +18,3 @@ def _normalize_export_formats(
     export_formats: list[str] | tuple[str, ...] | None,
 ) -> tuple[str, ...]:
     return normalize_export_formats(export_formats, default=DEFAULT_EXPORT_FORMATS)
-
-
-def _series_labels_for_split(
-    source: Path, sheet: str | int, options: dict[str, Any]
-) -> list[str]:
-    series_list = load_curve_table(source, sheet_name=sheet)
-    available = [series.sample for series in series_list]
-    series_include = options.get("series_include")
-    unknown_include = unknown_series_order_labels(available, series_include)
-    if unknown_include:
-        raise ValueError(
-            "series_include contains unknown series labels: "
-            + ", ".join(unknown_include)
-        )
-    selected = filter_curve_series(series_list, series_include)
-    if not selected and series_include:
-        raise ValueError("series_include did not match any series.")
-    selected_labels = [series.sample for series in selected]
-    series_order = options.get("series_order")
-    unknown_order = unknown_series_order_labels(selected_labels, series_order)
-    if unknown_order:
-        raise ValueError(
-            "series_order contains unknown series labels: " + ", ".join(unknown_order)
-        )
-    ordered = reorder_curve_series(selected, series_order)
-    return [series.sample for series in ordered]

@@ -17,10 +17,7 @@ from sciplot_core.terminal_source_binding import (
     MaterializedTerminalSourceBinding,
 )
 
-from sciplot_core.render.formats import (
-    _normalize_export_formats,
-    _series_labels_for_split,
-)
+from sciplot_core.render.formats import _normalize_export_formats
 
 from sciplot_core.render.worker_runtime import (
     _read_json_if_exists,
@@ -45,6 +42,27 @@ from sciplot_core.render.export_files import (
     _report_partial_render,
     _cleanup_worker_exports,
 )
+
+
+def _panel_requests(
+    source: Path, *, template: str, output_dir: Path, options: dict[str, Any],
+    export_formats: tuple[str, ...], sheet: str | int,
+    request_context: dict[str, Any] | None,
+    _terminal_source_binding: MaterializedTerminalSourceBinding | None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    terminal_request = project_terminal_render_request(
+        template=template,
+        render_options=options,
+        request_context={**(request_context or {}), "sheet": sheet},
+    )
+    if _terminal_source_binding is not None and "series_order" not in terminal_request:
+        terminal_request["series_order"] = list(_terminal_source_binding.sample_order)
+    return terminal_request, {
+        "input": literal_source_path(source.resolve()),
+        "output": str(output_dir),
+        "exports": list(export_formats),
+        **terminal_request,
+    }
 
 
 def _render_veusz_panel(
@@ -72,19 +90,11 @@ def _render_veusz_panel(
     list[dict[str, Any]],
 ]:
     panel_dir.mkdir(parents=True, exist_ok=True)
-    terminal_request = project_terminal_render_request(
-        template=template,
-        render_options=options,
-        request_context={**(request_context or {}), "sheet": sheet},
+    terminal_request, request = _panel_requests(
+        source, template=template, output_dir=output_dir, options=options,
+        export_formats=export_formats, sheet=sheet, request_context=request_context,
+        _terminal_source_binding=_terminal_source_binding,
     )
-    if _terminal_source_binding is not None and "series_order" not in terminal_request:
-        terminal_request["series_order"] = list(_terminal_source_binding.sample_order)
-    request = {
-        "input": literal_source_path(source.resolve()),
-        "output": str(output_dir),
-        "exports": list(export_formats),
-        **terminal_request,
-    }
     request_path = panel_dir / "plot_request.json"
     request_path.write_text(
         json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8"
@@ -163,8 +173,21 @@ def _render_to_dir_veusz(
         if normalized_split_policy is None:
             panels = [(None, None)]
         else:
-            labels = _series_labels_for_split(source, sheet, options)
-            split_plan = build_split_plan(labels, policy=normalized_split_policy)
+            from sciplot_core.studio_core.series_request import _series_from_request
+
+            _, request = _panel_requests(
+                source, template=template, output_dir=output_dir, options=options,
+                export_formats=normalized_exports, sheet=sheet, request_context=request_context,
+                _terminal_source_binding=_terminal_source_binding,
+            )
+            _, axis_info, _, _ = _series_from_request(
+                request, base_dir=output_dir.resolve(),
+                _terminal_source_binding=_terminal_source_binding,
+                _terminal_source_prepared=_terminal_source_prepared,
+            )
+            split_plan = build_split_plan(
+                axis_info["semantic_terminal_series_order"], policy=normalized_split_policy
+            )
             chunks = [list(chunk["series"]) for chunk in split_plan["chunks"]]
             panels = [(index, chunk) for index, chunk in enumerate(chunks, start=1)]
 
