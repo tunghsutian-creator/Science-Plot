@@ -284,6 +284,8 @@ def test_cold_expert_bundle_does_not_write_to_its_historical_publication(tmp_pat
         assert all(Path(item["path"]).is_relative_to(output) for item in created["exports"])
         plot = Path(created["plot"])
         store = plot.parent.parent
+        second = with_service.create(request_for_source(sources, "B"), project=store)
+        assert second["ready_to_use"] and second["plot_id"] != created["plot_id"]
         snapshot = {path.relative_to(output): path.read_bytes() for path in output.rglob("*") if path.is_file()}
     finally:
         with_service.close()
@@ -310,6 +312,15 @@ def test_cold_expert_bundle_does_not_write_to_its_historical_publication(tmp_pat
             assert relocated["project"] == str(moved) and relocated["status"] == "imported"
             assert (relocated["project_id"], relocated["generation"]) == (result["project_id"], result["generation"])
             assert relocated["host_grants_included"] is False
+            step = relocated["next_step"]
+            assert step["action"] == "select_figure"
+            choices = {item["plot_id"]: item["open_arguments"] for item in step["figures"]}
+            assert choices.keys() == {created["plot_id"], second["plot_id"]}
+            for expected in (created, second):
+                reopened = await _call(client, "sciplot_project_open", choices[expected["plot_id"]])
+                assert reopened["plot_id"] == expected["plot_id"] and reopened["revision"] == 0
+                assert reopened["scientific_hash"] == expected["scientific_hash"]
+                assert Path(reopened["plot"]).is_relative_to(moved)
             duplicate = await client.call_tool("sciplot_project_bundle_import", relocation)
             assert duplicate.is_error and duplicate.structured_content["error"]["code"] == "project_bundle_destination_exists"
             cold_store = FileProjectStore(moved)

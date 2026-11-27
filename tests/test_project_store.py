@@ -154,8 +154,7 @@ def test_complete_portable_bundle_preserves_ids_native_history_and_source_versio
                             {**exported["next_step"]["arguments"], "output_dir": str(destination)})
     assert (imported["project_id"], imported["generation"]) == (exported["project_id"], exported["generation"])
     assert imported["project"] == str(destination) and imported["host_grants_included"] is False
-    assert imported["next_step"] == {"action": "project.open",
-                                     "arguments": {"target": str(destination), "description": {"scope": "summary"}}}
+    assert imported["next_step"] == {"action": "no_registered_figures"}
     relocated = FileProjectStore(destination)
     with pytest.raises(ValueError) as occupied:
         invoke_owner("sciplot_project_bundle_import", {"bundle": str(bundle), "output_dir": str(destination)})

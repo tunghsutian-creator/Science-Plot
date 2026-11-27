@@ -35,13 +35,27 @@ def _open_arguments(path: Path) -> dict[str, Any]:
     return {"target": str(path), "description": {"scope": "summary"}}
 
 
+def _import_step(store: FileProjectStore, head: dict[str, Any]) -> dict[str, Any]:
+    arguments = _open_arguments(store.root)
+    figures = [{"figure_id": entry["figure_id"], "plot_id": entry["plot_id"],
+                "open_arguments": {**arguments, "figure_id": entry["plot_id"]}}
+               for entry in read_index(store, head)["attachments"].values()]
+    if len(figures) == 1:
+        return {"action": "project.open", "arguments": figures[0]["open_arguments"]}
+    if figures:
+        return {"action": "select_figure", "figures": figures}
+    return {"action": "no_registered_figures"}
+
+
 def _result(operation: str, project: Path, bundle: Path, head: dict[str, Any], *,
-            single_file: bool = False) -> dict[str, Any]:
-    if operation == "exported" and not single_file:
+            single_file: bool = False, next_step: dict[str, Any] | None = None) -> dict[str, Any]:
+    if next_step is not None:
+        step = next_step
+    elif not single_file:
         step = {"action": "project.bundle-import", "arguments": {"bundle": str(bundle)},
                 "required_arguments": ["output_dir"]}
     else:
-        step = {"action": "project.open", "arguments": _open_arguments(bundle if single_file else project)}
+        step = {"action": "project.open", "arguments": _open_arguments(bundle)}
     return {"kind": "sciplot_project_bundle_result", "version": 1, "status": operation,
             "project": str(project), "bundle": str(bundle), "project_id": head["project_id"],
             "generation": head["generation"], "mode": "same_project_relocation",
@@ -138,4 +152,4 @@ def import_project_bundle(bundle: Path, destination: Path) -> dict[str, Any]:
     head = store.snapshot()
     if head["projection_status"] != "current":
         raise ProjectConflict("The installed relocation is not current; preserve its directory and inspect it.")
-    return _result("imported", store.root, source, head)
+    return _result("imported", store.root, source, head, next_step=_import_step(store, head))

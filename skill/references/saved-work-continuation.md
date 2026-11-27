@@ -131,8 +131,10 @@ In daily or expert MCP, call `sciplot_project_bundle_export` with
 Then call `sciplot_project_bundle_import` with the returned `bundle` path and
 an unused `output_dir` for the project. Both tools use the same Store owner as
 the CLI. The export receipt's `next_step` supplies the exact bundle argument;
-choose the new project directory yourself. The import receipt supplies the
-new project's `project.open` arguments.
+choose the new project directory yourself. The import receipt supplies exact
+`project.open` arguments for one registered figure or asks you to choose from
+the returned figure IDs when there are several. A Store with no registered
+figures reports that state rather than promising an editable figure.
 Compare returned `project_id` and `generation` before continuing at the new
 location. Use the returned `project` path to reopen it. Import preserves the
 project and admitted history, without granting executor permissions or external
