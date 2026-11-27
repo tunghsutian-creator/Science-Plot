@@ -9,6 +9,9 @@ from sciplot_core.data_mapping.original_tables import read_original_table, sourc
 from sciplot_core.data_mapping.table_choice import select_table
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.source_locations import resolve_source_path
+from sciplot_core.semantic_sources.numeric_separators import (
+    numeric_cell_syntax, parse_numeric_cell, selected_columns_use_decimal_comma,
+)
 from sciplot_core.source_tables.read_session import with_table_reads
 from sciplot_core.plot_transforms import ordered_nodes
 
@@ -89,16 +92,30 @@ def load_sources(document: dict[str, Any], rule_id: str, *,
             source_frames[source["source_id"]] = {"frame": frame, "table_id": selected["table_id"]}
         start, end = selection["data_start_row"], selection["data_end_row"]
         columns: dict[str, Any] = {}
+        ordinary_delimited = rule_id == "ordinary_xy" and Path(source["path"]).suffix.casefold() in {".csv", ".tsv"}
         for column in selected["columns"]:
             values: list[float | None] = []
-            for raw in frame.iloc[start:end, column["index"]]:
+            cells = frame.iloc[start:end, column["index"]]
+            has_comma = ordinary_delimited and any(isinstance(value, str) and "," in value for value in cells)
+            decimal_comma = False
+            if has_comma:
+                try:
+                    decimal_comma = selected_columns_use_decimal_comma(cells.to_frame(), start_row=0, columns=(0,))
+                except ValueError as exc:
+                    raise EngineError("managed_source_numeric_separator", f"Original column {column['header']!r}: {exc}") from exc
+            for raw in cells:
                 text = str(raw).strip()
                 if (raw is None or text in {"", "nan"}
                         or (rule_id == "ordinary_xy" and text.casefold() in _MISSING_STRINGS)):
                     values.append(None)
                     continue
                 try:
-                    number = float(raw)
+                    if has_comma and "," in text:
+                        number = parse_numeric_cell(raw, decimal_comma=decimal_comma) if numeric_cell_syntax(raw) == "numeric_candidate" else None
+                        if number is None:
+                            raise ValueError("Invalid separated numeric cell.")
+                    else:
+                        number = float(raw)
                 except (TypeError, ValueError) as exc:
                     raise EngineError("managed_source_nonnumeric", "Managed datasets currently require numeric columns in the explicit region.") from exc
                 if not math.isfinite(number):

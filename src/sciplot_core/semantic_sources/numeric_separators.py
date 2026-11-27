@@ -134,16 +134,21 @@ def _separator_evidence(value: object) -> SeparatorEvidence | None:
         return None
     mantissa = match.group("mantissa")
     if "," in mantissa and "." in mantissa:
-        return "comma" if mantissa.rfind(",") > mantissa.rfind(".") else "point"
+        decimal, group = (",", ".") if mantissa.rfind(",") > mantissa.rfind(".") else (".", ",")
+        whole, _fractional = mantissa.rsplit(decimal, 1)
+        groups = whole.split(group)
+        if decimal in whole or not 1 <= len(groups[0]) <= 3 or any(len(part) != 3 for part in groups[1:]):
+            return "malformed"
+        return "comma" if decimal == "," else "point"
     if "," not in mantissa:
         return "malformed" if mantissa.count(".") > 1 else (
             "point" if "." in mantissa else None
         )
     groups = mantissa.split(",")
     if len(groups) > 2:
-        return "point" if all(len(group) == 3 for group in groups[1:]) else "malformed"
+        return "point" if 1 <= len(groups[0]) <= 3 and all(len(group) == 3 for group in groups[1:]) else "malformed"
     integer, fractional = groups
-    if len(fractional) == 3 and integer.lstrip("0"):
+    if len(fractional) == 3 and 1 <= len(integer) <= 3 and integer.lstrip("0"):
         return "ambiguous"
     return "comma"
 

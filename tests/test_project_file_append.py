@@ -221,6 +221,44 @@ def test_ordinary_csv_missing_coordinates_keep_literal_sample_and_original_rows(
     assert not refused_archive.exists()
 
 
+def test_ordinary_delimited_coordinates_resolve_only_valid_separator_evidence(tmp_path, monkeypatch, capsys):
+    from sciplot_core.cli import main
+
+    monkeypatch.setattr("platformdirs.user_state_path", lambda _: tmp_path / "state")
+
+    def create(name, original):
+        source = tmp_path / name
+        source.write_text(original)
+        archive = source.with_suffix(".sciplot")
+        status = main(["task", "create", str(source), "--x", "temperature", "--y", "heat_flow",
+                       "--project-file", str(archive), "--json"])
+        return status, archive, json.loads(capsys.readouterr().out)
+
+    success = {
+        "decimal.tsv": ("Temperature (C)\tHeat Flow (W/g)\n1,5\t1,5\n3\t1.234,5\n2\t2,1250\n",
+                        {"x": [1.5, 3., 2.], "y": [1.5, 1234.5, 2.125]}),
+        "group.csv": ('Temperature (C),Heat Flow (W/g)\n1.5,"1,234.5"\n3,0\n2,2.125\n',
+                      {"x": [1.5, 3., 2.], "y": [1234.5, 0., 2.125]}),
+    }
+    for name, (original, expected) in success.items():
+        status, archive, result = create(name, original)
+        assert status == 0, result
+        with project_file_figure(archive, result["result"]["plot_id"]) as (_, owner, document):
+            assert _coordinates(owner, document) == expected
+            assert document["scientific"]["data_sources"][0]["table_selection"]["data_start_row"] == 1
+
+    for problem, observations, expected in [
+        ("ambiguous", ["1,234", "2,345"], "ambiguous"),
+        ("malformed", ["1,2,34.5", "2.456"], "malformed"),
+        ("mixed", ["1,5", "2.456"], "mix point-decimal and comma-decimal"),
+    ]:
+        status, archive, result = create(
+            problem + ".tsv", f"Temperature (C)\tHeat Flow (W/g)\n3\t0\n1\t{observations[0]}\n2\t{observations[1]}\n")
+        assert status == 1 and not archive.exists()
+        assert result["blocker"]["reason_code"] == "managed_source_numeric_separator"
+        assert expected in result["blocker"]["message"]
+
+
 def test_task_create_appends_from_original_without_a_request_file(ordinary_archive, tmp_path, monkeypatch, capsys):
     from sciplot_core.cli import main
 

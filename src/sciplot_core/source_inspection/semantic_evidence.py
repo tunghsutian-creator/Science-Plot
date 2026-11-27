@@ -16,6 +16,7 @@ from sciplot_core.data_mapping.original_tables import (
 )
 from sciplot_core.data_mapping.raw_tables import _original_text
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.semantic_sources.numeric_separators import numeric_cell_syntax
 from sciplot_core.semantic_sources.paired_curve_table_metadata import explicit_header_unit, header_quantity_text, looks_like_unit
 from sciplot_core.source_inspection.header_matching import cell_text
 from sciplot_core.source_inspection.input_errors import SourceInputError, require_source_file
@@ -69,13 +70,18 @@ def _unit(value: Any) -> str:
     return text if text and _finite(text) is None and looks_like_unit(unwrapped) else ''
 
 
-def _sample_row(frame: pd.DataFrame, row: int, headers: list[str]) -> bool:
+def _sample_row(frame: pd.DataFrame, row: int, headers: list[str], *, comma_numbers: bool) -> bool:
     values = [cell_text(frame.iat[row, index]) for index, header in enumerate(headers) if header]
     # Repeated literal sample cells distinguish this metadata row from a note.
-    return bool(values) and all(value and _finite(value) is None for value in values) and len(set(values)) < len(values)
+    return bool(values) and all(
+        value and _finite(value) is None
+        and not (comma_numbers and "," in value and numeric_cell_syntax(value) == "numeric_candidate")
+        for value in values
+    ) and len(set(values)) < len(values)
 
 
-def _header_candidate(frame: pd.DataFrame, *, gpc: bool = False) -> tuple[int, int | None, int | None] | None:
+def _header_candidate(frame: pd.DataFrame, *, gpc: bool = False,
+                      comma_numbers: bool = False) -> tuple[int, int | None, int | None] | None:
     for row in range(min(32, len(frame))):
         headers = [cell_text(value) for value in frame.iloc[row]]
         if sum(bool(header) and _finite(header) is None for header in headers) < 2:
@@ -91,7 +97,7 @@ def _header_candidate(frame: pd.DataFrame, *, gpc: bool = False) -> tuple[int, i
             if row + offset >= len(frame):
                 break
             middle = row + 1 if offset == 2 and any(cell_text(value) for value in frame.iloc[row + 1]) else None
-            if middle is not None and not _sample_row(frame, middle, headers):
+            if middle is not None and not _sample_row(frame, middle, headers, comma_numbers=comma_numbers):
                 continue
             adjacent = (sum(bool(_unit(value)) for value in frame.iloc[row + offset]) if row + offset < len(frame) else 0)
             if adjacent >= 2:
@@ -194,13 +200,15 @@ def _blocks(frame: pd.DataFrame, columns: list[dict[str, Any]], start: int, end:
 
 
 def _candidate(frame: pd.DataFrame, sheet: str | None, position: int, *, source: Path, rule_id: str | None = None) -> dict[str, Any] | None:
-    header = _header_candidate(frame, gpc=rule_id == "gpc_sec_chromatogram")
+    comma_numbers = rule_id in {None, "ordinary_xy"} and source.suffix.casefold() in {".csv", ".tsv"}
+    header = _header_candidate(frame, gpc=rule_id == "gpc_sec_chromatogram", comma_numbers=comma_numbers)
     if header is None:
         return None
     header_row, unit_row, sample_row = header
     start = max(value for value in (header_row, unit_row, sample_row) if value is not None) + 1
     # One explicit sample metadata row is retained when it precedes numeric data.
-    if sample_row is None and start < len(frame) and _sample_row(frame, start, [cell_text(value) for value in frame.iloc[header_row]]):
+    if sample_row is None and start < len(frame) and _sample_row(
+            frame, start, [cell_text(value) for value in frame.iloc[header_row]], comma_numbers=comma_numbers):
         sample_row = start
         start += 1
     if start >= len(frame):
@@ -277,9 +285,10 @@ def inspect_semantic_tables(path: str | Path, *, rule_id: str | None = None,
                             ftir_response: str | None = None) -> dict[str, Any]:
     """Expose original columns and stage candidates for the existing task owner.
 
-    ``rule_id`` records caller context only; it never changes observed metadata,
-    chooses an X axis, or confirms a percentage column as mass. Opted-in
-    FTIR block selection bounds each complete spectrum in this same frame.
+    Caller context can select an existing table grammar, not an X axis or a
+    scientific identity. For ordinary delimited data, numeric comma tokens
+    are not sample labels. Opted-in FTIR block selection bounds each complete
+    spectrum in this same frame.
     """
     source = Path(path).expanduser().resolve()
     require_source_file(source)
