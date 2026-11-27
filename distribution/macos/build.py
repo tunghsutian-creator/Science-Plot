@@ -8,6 +8,7 @@ import platform
 import shutil
 import sys
 import tomllib
+from importlib.machinery import EXTENSION_SUFFIXES
 from pathlib import Path
 
 from distribution.macos.entrypoints import compile_finder_launcher, write_entrypoints
@@ -25,6 +26,16 @@ def build_app(repo: Path, output: Path) -> Path:
     for tool in ("otool", "install_name_tool", "codesign"):
         if shutil.which(tool) is None:
             raise RuntimeError(f"Build tool unavailable: {tool}")
+    helpers = repo / "third_party/veusz/veusz/helpers"
+    missing = [
+        name for name in ("qtloops", "qtmml", "recordpaint", "threed", "_nc_cntr")
+        if not any((helpers / (name + suffix)).is_file() for suffix in EXTENSION_SUFFIXES)
+    ]
+    if missing:
+        raise RuntimeError(
+            f"Missing compiled Veusz helpers: {', '.join(missing)}. "
+            f"Build them for this Python and Qt runtime before packaging: {helpers}"
+        )
     resources = output / "Contents/Resources"
     resources.mkdir(parents=True)
     before = source_snapshot(repo)

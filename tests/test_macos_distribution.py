@@ -229,3 +229,23 @@ assert main() == 0
         env=os.environ | {"QT_QPA_PLATFORM": "offscreen"},
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_build_refuses_a_checkout_without_compiled_veusz_helpers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from distribution.macos import build
+
+    # Reach the actual build entry point without relying on host tool discovery.
+    monkeypatch.setattr(build.sys, "platform", "darwin")
+    monkeypatch.setattr(build.shutil, "which", lambda tool: tool)
+    repo = tmp_path / "checkout"
+    helpers = repo / "third_party/veusz/veusz/helpers"
+    helpers.mkdir(parents=True)
+    # Source and a different Python ABI are not usable native inputs.
+    (helpers / "qtloops.sip").touch()
+    (helpers / "qtloops.cpython-999-darwin.so").touch()
+    output = tmp_path / "SciPlot.app"
+    with pytest.raises(RuntimeError, match="Missing compiled Veusz helpers: qtloops"):
+        build_app(repo, output)
+    assert not output.exists()

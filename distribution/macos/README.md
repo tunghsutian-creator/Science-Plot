@@ -17,7 +17,7 @@ artifact_root=$(mktemp -d "$HOME/SciPlot-release.XXXXXX")
   --out "$artifact_root/SciPlot.app"
 ```
 
-构建器不下载依赖，也不复制整台机器或整个仓库。它读取 `pyproject.toml` 的运行依赖与
+构建器不下载依赖，也不复制整台机器或整个仓库。传给构建器的源码目录必须包含当前 Python 对应的 Veusz 编译模块；缺失时不会创建应用。它读取 `pyproject.toml` 的运行依赖与
 `studio` 和 `mcp` extras，并带上 Veusz 使用的 Matplotlib、Setuptools；递归解析当前环境中
 已安装的依赖与所选 extras，记录确切版本。复制标准库、应用源码、公开 skill、Veusz
 源码、界面资源及依赖许可证，排除 editable `.pth`、缓存、项目和原始实验数据。
