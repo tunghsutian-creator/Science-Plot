@@ -220,3 +220,63 @@ def test_relocated_project_file_selected_handoff_through_cli_and_daily_mcp(tmp_p
     assert failed.value.repair == {"action": "inspect_project_file_handoff", "project_file": str(moved),
                                    "project_id": archive_receipt.project_id}
     assert not refused.exists() and file_sha256(moved) == archive_receipt.sha256
+
+
+def test_historical_fallback_only_allows_the_owned_completed_current_series_edit(tmp_path, monkeypatch):
+    from contextlib import nullcontext
+    from copy import deepcopy
+    from types import SimpleNamespace
+
+    from sciplot_core.project_lifecycle import project_file_handoff as owner_module
+    from sciplot_core.project_lifecycle.context import digest, transaction_path
+    from sciplot_core.project_lifecycle.contracts import NormalizedCommand, RevisionToken
+
+    def document(revision, science):
+        return {"plot_id": "plot:selected", "plot_type": "ManagedPlot", "revision": revision,
+                "scientific_hash": science * 64, "presentation_hash": "c" * 64}
+
+    root = tmp_path / "selected namespace"
+    runtime = tmp_path / "runtime-cache"
+    prior = {"document": document(0, "a"), "binding": {"ir_hash": "prior"}}
+    cache = root / "export-cache.json"
+    current = document(1, "b")
+
+    def install_transaction(kind, key, operation, *, phase="complete"):
+        request = {"idempotency_key": key, "intent_class": "scientific",
+                   "plot_id": "plot:selected", "base_revision": 0,
+                   "changes": [{"op": "set", "target": ["view:main"], "property": operation, "value": {}}]}
+        command = NormalizedCommand.create(kind, request, expected_revision=RevisionToken.of(prior["document"]))
+        journal = transaction_path(root, key)
+        tx = {"normalized_command": command.to_payload(), "request": request, "phase": phase,
+              "id": digest(key), "export_deferred": True, "document": deepcopy(current), "before": prior["document"]}
+        head.update(transaction=tx["id"])
+        records.clear()
+        records.update({journal: tx, cache: {"export": {"ir_hash": "prior"}}})
+        return tx
+
+    head = {"document": current}
+    records = {}
+    owner = SimpleNamespace(runtime_path=lambda _: runtime, query_scope=lambda _: nullcontext(),
+                            load_head=lambda _: head, exists=lambda path: path in records,
+                            read=records.__getitem__, load_revision=lambda _, revision: prior)
+    good = {"ready_to_use": True}
+    monkeypatch.setattr(owner_module, "sealed_publication", lambda path, revision: good if path == root and revision == prior else None)
+    series_key = "archive-series:" + "d" * 64
+    install_transaction("patch", series_key, "source.append")
+    assert owner_module._has_deferred_export(owner, root)
+    # An invalid local cache remains evidence: it must not mask failure.
+    runtime.write_text("damaged current cache")
+    assert not owner_module._has_deferred_export(owner, root)
+    runtime.unlink()
+
+    install_transaction("patch", "manual-patch", "source.append")
+    assert not owner_module._has_deferred_export(owner, root)
+    install_transaction("patch", series_key, "series.display_label")
+    assert not owner_module._has_deferred_export(owner, root)
+    install_transaction("patch", series_key, "source.append", phase="prepared")
+    assert not owner_module._has_deferred_export(owner, root)
+    install_transaction("patch", series_key, "source.append")["document"]["scientific_hash"] = "f" * 64
+    assert not owner_module._has_deferred_export(owner, root)
+    install_transaction("patch", series_key, "source.append")
+    good["ready_to_use"] = False
+    assert not owner_module._has_deferred_export(owner, root)

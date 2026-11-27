@@ -168,6 +168,10 @@ def add_project_file_series(service: "ProjectApplication", path: Path, request: 
         head = observe_plot_head(root, owner=owner)
         if head is None or head["document"]["revision"] != before["revision"] + 1:
             raise EngineError("project_file_series_not_saved", "The private transaction did not advance the selected figure by one revision.")
+        # The lease may materialize the prior archive's derivative locally.
+        # It is not evidence for this deferred revision; keep the historical
+        # Store member and remove only the disposable runtime copy.
+        owner.runtime_path(root / "export-cache.json").unlink(missing_ok=True)
         generation = session.store.snapshot()["generation"]
         try:
             session.save(expected_generation=generation)

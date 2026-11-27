@@ -1,5 +1,6 @@
 """Public same-figure append: one exact selection, one saved revision."""
 from contextlib import closing
+from pathlib import Path
 
 import pytest
 from openpyxl import Workbook
@@ -98,6 +99,18 @@ def test_native_add_series_preserves_selected_plot_identity_and_independent_raw_
         after_sibling = service.open(archive, sibling["plot_id"])
         for key in ("plot_id", "revision", "scientific_hash", "presentation_hash"):
             assert after_sibling[key] == sibling[key]
+        output = archive.parent / "selected-TIFF"
+        result = service.export(archive, handoff={"plot_id": plot_id, "revision": done["revision"],
+                                                  "output_dir": str(output), "formats": ["tiff_300"]})
+        assert result["scientific_hash"] == done["scientific_hash"]
+        [rendered] = result["exports"]
+        from PIL import Image
+
+        with Image.open(rendered["path"]) as image:
+            image.load()
+            assert image.format == "TIFF" and image.info["dpi"] == pytest.approx((300., 300.))
+        assert [path.name for path in output.iterdir()] == [Path(rendered["path"]).name]
+        assert archive.read_bytes() == committed
     with project_file_figure(archive, plot_id) as (_, owner, current):
         with repository_scope(owner), owner.query_scope(owner.attachment.root):
             content = resolve_document_content(owner.attachment.root, current)

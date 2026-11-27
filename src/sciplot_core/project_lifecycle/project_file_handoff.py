@@ -11,9 +11,10 @@ from sciplot_core.plot_engine.export_status import export_cache_record, sealed_p
 from sciplot_core.project_store.runtime import project_runtime
 
 from .attached_repository import AttachedProjectRepository
-from .context import repository_scope
+from .context import repository_scope, transaction_path
 from .contracts import RevisionToken
 from .errors import EngineError
+from .journal_identity import saved_command
 from .project_file_summary import project_file_figure
 
 if TYPE_CHECKING:
@@ -36,11 +37,19 @@ def _has_deferred_export(owner: AttachedProjectRepository, root: Path) -> bool:
         if not owner.exists(journal):
             return False
         tx = owner.read(journal)
+        if (tx["id"] != tx_id or tx["phase"] != "complete" or tx.get("export_deferred") is not True
+                or RevisionToken.of(tx["document"]) != RevisionToken.of(head["document"])):
+            return False
+        command = saved_command(tx)
+        if command is None or transaction_path(root, command.idempotency_key) != journal:
+            return False
+        if command.kind != "intent":
+            changes = command.business_payload.get("changes", [])
+            if (command.kind != "patch" or re.fullmatch(r"archive-series:[a-f0-9]{64}", command.idempotency_key) is None
+                    or len(changes) != 1 or changes[0].get("property") != "source.append"):
+                return False
         fallback_ir = owner.read(path)["export"].get("ir_hash")
-        if (tx.get("normalized_command", {}).get("kind") != "intent" or tx["id"] != tx_id
-                or tx["phase"] != "complete" or tx.get("export_deferred") is not True
-                or RevisionToken.of(tx["document"]) != RevisionToken.of(head["document"])
-                or not isinstance(fallback_ir, str)):
+        if not isinstance(fallback_ir, str):
             return False
         for revision in range(head["document"]["revision"] - 1, -1, -1):
             prior = owner.load_revision(root, revision)
