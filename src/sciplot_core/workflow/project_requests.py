@@ -5,7 +5,6 @@ from contextlib import ExitStack
 from copy import deepcopy
 from dataclasses import replace
 import json
-import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -70,7 +69,7 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
     from sciplot_core.workflow.project_results import project_workflow_result
     from sciplot_core.workflow.errors import WorkflowIntervention
     from sciplot_core.workflow.project_failures import publish_intervention
-    from sciplot_core.workflow.project_output import private_run_output
+    from sciplot_core.workflow.project_output import archive_failed_delivery, private_run_output
     from sciplot_core.delivery.package_transaction import _package_snapshot, _preserve_finder_metadata, _protect_editable_documents
 
     project = request_path.parent
@@ -123,18 +122,17 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
         except WorkflowIntervention as exc:
             publish_intervention(candidate, baseline=baseline, output=output_name, intent=intent, error=str(exc))
             raise
-        delivery_complete = manifest.get("delivery_package", {}).get("complete") is True
-        if delivery_complete:
+        delivery_record = manifest.get("delivery_package", {})
+        if delivery_record.get("complete") is True:
             _protect_editable_documents(delivery, private_delivery)
             if delivery.exists():
                 _preserve_finder_metadata(delivery, private_delivery)
         else:
             failed = private_output / "failed_delivery" / uuid4().hex
-            failed.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(private_delivery), failed)
+            preserved = archive_failed_delivery(candidate, delivery_name, private_delivery, failed, delivery_record)
             def failed_location(path: str) -> str:
                 old, new = str(private_delivery), str(failed)
-                return new + path[len(old):] if path == old or path.startswith(old + "/") else path
+                return new + path[len(old):] if path not in preserved and (path == old or path.startswith(old + "/")) else path
             manifest = project_workflow_result(manifest, failed_location)
         if _package_snapshot(delivery) != delivery_before:
             raise ValueError("The visible delivery changed during private workflow preparation.")
