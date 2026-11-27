@@ -130,9 +130,9 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
         delivery_record = manifest.get("delivery_package", {})
         if delivery_record.get("complete") is True:
             namespace, _, relative = delivery_name.partition("/")
-            key = namespace[1:] if namespace.startswith("@") else ""
-            locator = snapshot["locators"].get(key)
-            original = Path(locator) / (relative if key else delivery_name) if locator is not None else None
+            delivery_namespace = namespace[1:] if namespace.startswith("@") else ""
+            locator = snapshot["locators"].get(delivery_namespace)
+            original = Path(locator) / (relative if delivery_namespace else delivery_name) if locator is not None else None
             protect_delivery_replacement(delivery, stage,
                 before=delivery_before, previous_record=previous_delivery, recorded_root=original)
             if delivery.exists():

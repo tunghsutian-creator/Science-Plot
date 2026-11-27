@@ -250,16 +250,19 @@ def _render_veusz_mechanical_bundle(
             staged_artifacts=staged_artifacts,
             final_artifacts=final_artifacts,
         )
-        completed = finalize_figure_plan_result(plan, result)
-        if completed is None or not completed.complete:
-            raise ValueError(
-                "mechanical_task_artifacts_incomplete: every selected mechanical "
-                "task requires one VSZ, PDF, and 300-dpi TIFF."
-            )
+        def bind_installed_artifacts() -> None:
+            completed = finalize_figure_plan_result(plan, result)
+            if completed is None or not completed.complete:
+                raise ValueError(
+                    "mechanical_task_artifacts_incomplete: every selected mechanical "
+                    "task requires one VSZ, PDF, and 300-dpi TIFF."
+                )
+
         _install_staged_figures(
             staged_figures,
             figures_dir=figures_dir,
             transaction_dir=transaction,
+            verify=bind_installed_artifacts,
         )
         installed = True
         return result
@@ -366,14 +369,22 @@ def _install_staged_figures(
     *,
     figures_dir: Path,
     transaction_dir: Path,
+    verify: Callable[[], None],
 ) -> None:
     previous = transaction_dir / "previous_figures"
+    installed = False
     try:
         if figures_dir.exists() or figures_dir.is_symlink():
             figures_dir.replace(previous)
         staged_figures.replace(figures_dir)
+        installed = True
+        # The host must bind to the new files, not the previous generation or
+        # final paths that do not exist yet on an admitted rerun.
+        verify()
     except BaseException:
-        if previous.exists() and not figures_dir.exists():
+        if installed:
+            figures_dir.replace(staged_figures)
+        if previous.exists() or previous.is_symlink():
             previous.replace(figures_dir)
         raise
 
