@@ -90,13 +90,11 @@ def export_archive_figure(path: Path, output: Path, *, export_format: Literal["p
     output = require_data_destination(output.parent) / output.name
     if output.exists() or output.is_symlink():
         raise FileExistsError(output)
-    # The handoff includes PDF when requesting TIFF. Only install the selected format.
-    formats = ["pdf", "tiff_300"] if export_format == "tiff_300" else ["pdf"]
     with TemporaryDirectory(prefix=".sciplot-export-", dir=output.parent) as temporary:
         with closing(public_plot_service()) as service:
             result = project_file_handoff(
                 service, path, {"plot_id": revision.plot_id, "revision": revision.revision,
-                                "formats": formats, "output_dir": str(Path(temporary) / "handoff")},
+                                "formats": [export_format], "output_dir": str(Path(temporary) / "handoff")},
                 expected_project_id=project_id, expected_revision=revision)
-        [exported] = [item for item in result["exports"] if item["format"] == export_format]
+        [exported] = result["exports"]
         install_new_delivery(Path(exported["path"]), output)

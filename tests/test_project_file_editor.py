@@ -556,9 +556,11 @@ def test_multi_figure_editor_opens_only_the_explicitly_selected_saved_plot(tmp_p
             assert file_filter == "TIFF (*.tiff *.tif)"
             return next(tiff_names), file_filter
 
-        def record_tiff_handoff(*args, **kwargs):
-            result = actual_handoff(*args, **kwargs)
-            [selected_tiff] = [item for item in result["exports"] if item["format"] == "tiff_300"]
+        def record_tiff_handoff(service, archive, request, **kwargs):
+            assert request["formats"] == ["tiff_300"]
+            result = actual_handoff(service, archive, request, **kwargs)
+            [selected_tiff] = result["exports"]
+            assert selected_tiff["format"] == "tiff_300"
             tiff_receipts.append((result["plot_id"], result["revision"], selected_tiff["sha256"]))
             return result
 
