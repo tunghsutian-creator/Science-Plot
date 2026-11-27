@@ -159,3 +159,22 @@ def test_impact_same_sample_mixed_notch_conditions_do_not_become_replicates(tmp_
     plan = json.loads(capsys.readouterr().out)["resolved_figure_plan"]
     assert plan["tasks"][0]["replicate_counts"] == [{"sample": "E2", "count": 4}]
     assert read_impact_condition_payloads(source)[0][1].values == ((7.0, 8.0, 22.0, 23.0),)
+
+
+def test_compact_impact_conditions_are_not_interpreted_as_replicates(tmp_path):
+    from sciplot_core.semantic_sources.impact_sources import ImpactConditionConflict
+
+    source = tmp_path / "impact.csv"
+    header = "Sample,Condition,Impact strength (kJ/m²)\n"
+    text = header + "E2,notched,7\nE2,notched,8\nE2,unnotched,22\nE2,unnotched,23\n"
+    source.write_text(text)
+    with pytest.raises(ImpactConditionConflict, match="rows 2 and 4.*notched.*unnotched"):
+        _read_impact_source(source)
+    assert source.read_text() == text
+
+    source.write_text(text.replace(",unnotched,", ",,"))
+    with pytest.raises(ImpactConditionConflict, match="row 4 has no declared Impact Condition"):
+        _read_impact_source(source)
+
+    source.write_text(text.replace("unnotched", "notched"))
+    assert _read_impact_source(source).values == ((7.0, 8.0, 22.0, 23.0),)

@@ -179,6 +179,10 @@ def _read_impact_canonical_tables(source: Path) -> ImpactReplicatePayload:
     parsed: list[tuple[str, str, list[float]]] = []
     unit_candidates: list[object] = []
     for table_name, raw_table in _read_candidate_tables(source):
+        if source.suffix.casefold() == ".csv" and _compact_condition_column(raw_table) is not None:
+            # Explicit row metadata takes precedence over interpreting observations
+            # as the three header rows of a wide replicate table.
+            return _read_impact_compact_table(source, raw=raw_table)
         sheet_label = table_name.split(":", 1)[-1] if ":" in table_name else ""
         for sample, values, unit in _wide_impact_columns(table_name, raw_table):
             parsed.append((sheet_label, sample, values))
@@ -278,8 +282,27 @@ def _read_impact_block_table(source: Path) -> ImpactReplicatePayload:
     return _impact_payload(groups, unit=_validated_impact_unit(unit_candidates))
 
 
-def _read_impact_compact_table(source: Path) -> ImpactReplicatePayload:
-    raw = read_raw_table(source).dropna(how="all").dropna(axis=1, how="all")
+def _compact_condition_column(raw: pd.DataFrame) -> int | None:
+    if raw.empty:
+        return None
+    headers = [_token(value) for value in raw.iloc[0].tolist()]
+    if not {"sample", "samplename"}.intersection(headers) or not any(
+        "impact" in header or "冲击" in header for header in headers
+    ):
+        return None
+    matches = [column for column, header in enumerate(headers)
+               if header in {"condition", "testcondition"}]
+    if len(matches) > 1:
+        raise ImpactConditionConflict("Select one original compact Impact Condition column; more than one is declared.")
+    return matches[0] if matches else None
+
+
+def _read_impact_compact_table(
+    source: Path, *, raw: pd.DataFrame | None = None,
+) -> ImpactReplicatePayload:
+    if raw is None:
+        raw = read_raw_table(source)
+    raw = raw.dropna(how="all").dropna(axis=1, how="all")
     if raw.shape[0] < 2:
         raise ValueError(
             "Impact compact table needs a header and at least one data row."
@@ -303,6 +326,8 @@ def _read_impact_compact_table(source: Path) -> ImpactReplicatePayload:
     )
     if sample_col is None or metric_col is None:
         raise ValueError("Impact compact table needs sample and impact columns.")
+    condition_col = _compact_condition_column(raw)
+    conditions: dict[str, tuple[str, int]] = {}
     header_unit = _impact_unit_candidate_from_header(
         _clean_text(raw.iat[0, metric_col])
     )
@@ -318,6 +343,22 @@ def _read_impact_compact_table(source: Path) -> ImpactReplicatePayload:
         value = _float(raw.iat[row_index, metric_col])
         if not sample or value is None:
             continue
+        if condition_col is not None:
+            condition = _clean_text(raw.iat[row_index, condition_col])
+            original_row = int(raw.index[row_index]) + 1
+            if not condition:
+                raise ImpactConditionConflict(
+                    f"{source.name}, sample {sample!r}: original row {original_row} has no declared "
+                    "Impact Condition. Select exact condition rows separately; no values were pooled."
+                )
+            previous, previous_row = conditions.setdefault(sample, (condition, original_row))
+            if previous != condition:
+                raise ImpactConditionConflict(
+                    f"{source.name}, sample {sample!r}: original rows {previous_row} and {original_row} "
+                    f"have different Impact Conditions ({previous!r} and {condition!r}). "
+                    "Bind the existing categorical condition_column to compare groups, "
+                    "or select one condition's rows; no values were pooled."
+                )
         groups.setdefault(sample, []).append(value)
         if unit_col is not None:
             unit = _clean_text(raw.iat[row_index, unit_col])
