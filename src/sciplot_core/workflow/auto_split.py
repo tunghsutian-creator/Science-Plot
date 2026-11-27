@@ -179,8 +179,11 @@ def _render_with_auto_split(
     if policy is None:
         return result
 
-    if figures_dir.exists():
-        shutil.rmtree(figures_dir)
+    # A successful terminal render owns its reported exports and its fresh
+    # worker root, not other files already in the figures directory.
+    for path in result["outputs"]:
+        Path(path).unlink()
+    shutil.rmtree(figures_dir / "_veusz")
     split_options = _compact_auto_split_options(options)
     split_result = render_to_dir(
         input_path,

@@ -7,9 +7,9 @@
   "collection_audit": {
     "version": 1,
     "static_review_complete": true,
-    "nodeid_count": 10512,
-    "nodeids_sha256": "dbc3bc8a6d8648c7dc489c7f9d7acd3c9c36ed8ad618dbbee1d3dd5d8765312c",
-    "test_sources_sha256": "f5e8d1d326806e6cbd362499a75fb91393e9bdc45410e7a14ce841b09c7bc184",
+    "nodeid_count": 10513,
+    "nodeids_sha256": "d5884f0d37bc0947857c8d58aaa269048fe610c4698706bb465298a3944191be",
+    "test_sources_sha256": "2a991e89b6af7e31ade786a565e6883d0d1468991013c4fe5eb03d1fde608765",
     "test_source_count": 674,
     "candidate_nodeids": [
       "tests/test_plot_template_native.py::test_legacy_paired_template_reauthored_as_managed_preserves_data_and_styles",

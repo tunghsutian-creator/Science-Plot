@@ -525,3 +525,47 @@ def test_known_generic_rule_reaches_real_generic_renderer(
     assert result["template"] == template
     assert all(Path(path).is_file() for path in result["outputs"])
     assert result["terminal_render_requests"][0]["rule_id"] == rule_id
+
+
+def test_automatic_stack_split_does_not_remove_existing_figure_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    figures = tmp_path / "out" / "figures"
+    figures.mkdir(parents=True)
+    existing = figures / "input_stacked_curve_part01.pdf"
+    existing.write_bytes(b"user's earlier panel")
+    first_pass = figures / "input_stacked_curve.pdf"
+    worker = figures / "_veusz"
+
+    def render(_source, *, output_dir, split_policy, **_kwargs):
+        assert output_dir == figures
+        if split_policy is None:
+            first_pass.write_bytes(b"temporary layout")
+            worker.mkdir()
+            (worker / "first.vsz").touch()
+            return {
+                "outputs": [str(first_pass)],
+                "qa_reports": [{
+                    "issues": [{"id": "stack_peak_too_small"}],
+                    "layout_summary": {"figure_size_mm": [70, 110]},
+                }],
+            }
+        assert not first_pass.exists()
+        assert not worker.exists()
+        if existing.exists():
+            raise FileExistsError(existing)
+        output_dir.mkdir(exist_ok=True)
+        existing.write_bytes(b"replacement panel")
+        return {"outputs": [str(existing)]}
+
+    monkeypatch.setattr(auto_split, "render_to_dir", render)
+    with pytest.raises(FileExistsError, match=existing.name):
+        auto_split._render_with_auto_split(
+            tmp_path / "input.csv",
+            template="stacked_curve",
+            output_dir=figures.parent,
+            options={},
+            export_formats=["pdf"],
+            request={},
+        )
+    assert existing.read_bytes() == b"user's earlier panel"
