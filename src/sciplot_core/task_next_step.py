@@ -45,6 +45,14 @@ def task_next_step(state: dict[str, Any]) -> dict[str, Any]:
     if state.get("defer_creation_export") is True and phase == "prepared" and status == "complete":
         return {"action": "continue_template_creation", "task": task,
                 "message": "The exact native project is prepared but has not been published; its semantic creation owner must continue styling/export."}
+    if "append_to" in state["request"]:
+        if status == "complete":
+            return {**state["result"]["next_step"],
+                    "message": "Open the saved figure by this ID. This task saved the project file; it did not export."}
+        if status == "running":
+            return {"action": "retry_same_task", "task": task, "response_template": {"retry": True},
+                    "cli_argv": ["sciplot", "task", "resume", task, "--retry", "--json"],
+                    "message": "Resume this exact append to preserve its saved request and avoid adding a second figure."}
     if status in {"complete", "cancelled"}:
         return {"action": "inspect_current_project", "task": task,
                 "message": "Inspect current source, QA and delivery before handoff or another edit."}

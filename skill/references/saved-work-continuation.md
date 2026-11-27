@@ -185,29 +185,31 @@ exact plot ID when opening; saving does not select or discard any figure.
 
 ### Append an independent ordinary XY figure
 
-Use the `managed_request` frozen in the confirmed ordinary XY task's `task.json`.
-`task inspect TASK_DIRECTORY --json` reports that file at `source_plan.evidence.path`.
-Copy the `managed_request` object into `REQUEST.json` with its original source bindings
-and `idempotency_key`. The request carries `rule_id: "ordinary_xy"` and
-`storage: "project_store_v2"`. Resolve any scientific questions in the original task first.
+Add a figure from the original data directly. No intermediate plotting project
+or request file is needed. First read the current project generation:
 
 ```bash
 sciplot plot open FILE.sciplot --scope summary --json
-sciplot plot append FILE.sciplot --expected-generation GENERATION --request REQUEST.json --json
+sciplot task create ORIGINAL.csv --x temperature --y heat_flow \
+  --append-to FILE.sciplot --expected-generation GENERATION --json
 sciplot plot open FILE.sciplot --figure NEW_PLOT_ID --scope summary --json
 ```
 
-Use `generation` from the summary, or `repair.generation` when open asks which
-saved figure to select. Use `plot_id` from the append receipt as `NEW_PLOT_ID`.
-Append saves the new figure with its bound sources and preserves the existing
-figures and their revisions. A stale generation is refused. After a lost reply,
-retry the same request and generation. An already-saved append returns the same
-plot ID.
+Use `generation` from the open summary, or `repair.generation` when open asks which
+saved figure to select. Use `result.plot_id` from the append receipt. Resolve any
+ambiguity with the same task's returned response template; selection follows
+ordinary XY, including explicit original headers or source blocks.
 
-In daily or expert MCP, call `sciplot_project_open`, then
-`sciplot_project_file_append` with `target` (the absolute `.sciplot` filename),
-`expected_generation`, and `request` (the frozen `managed_request` object).
-Pass the append receipt's `next_step.arguments` to `sciplot_project_open`.
+In daily or expert MCP, call `sciplot_project_open`, then `sciplot_task_start` with
+a version 1 create request containing your `sources` and `intent`, and the fields
+`append_to` (absolute .sciplot filename) and `expected_generation`. Pass the
+receipt's `next_step.arguments` to `sciplot_project_open`.
+
+Append modifies only the selected project file, preserves prior figures and
+revisions, and creates no export. For a lost reply, repeat the same command or
+resume the saved task with `--retry`. A new operation needs the current
+generation. The older `plot append --request` and `sciplot_project_file_append`
+interfaces still accept a previously frozen ordinary XY request.
 
 ## Make a new, independently editable copy
 

@@ -136,6 +136,44 @@ def test_append_keeps_original_points_and_history_and_reopens_each_exact_plot(or
         assert session.store.resolve_source(source_id, version).read_bytes() == incoming_bytes
 
 
+def test_task_create_appends_from_original_without_a_request_file(ordinary_archive, tmp_path, monkeypatch, capsys):
+    from sciplot_core.cli import main
+
+    archive, first_id, incoming, _ = ordinary_archive
+    state_root = tmp_path / "application state"
+    monkeypatch.setattr("platformdirs.user_state_path", lambda _: state_root)
+    monkeypatch.setattr(managed_creation, "export_head", lambda *_args: pytest.fail("append rendered a native derivative"))
+    with project_file_figure(archive, first_id) as (session, owner, before):
+        generation = session.opened_generation
+        original = _coordinates(owner, before)
+    args = ["task", "create", str(incoming), "--x", "temperature", "--y", "heat_flow",
+            "--append-to", str(archive), "--expected-generation", generation, "--json"]
+    before_files = set(tmp_path.iterdir())
+    assert main(args) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["status"] == "complete" and result["result"]["status"] == "saved"
+    new_id = result["result"]["plot_id"]
+    assert result["next_step"]["arguments"]["figure_id"] == new_id != first_id
+    assert set(tmp_path.iterdir()) == before_files | {state_root}
+    assert "evidence" not in result["source_plan"]
+
+    saved = archive.read_bytes()
+    assert main([*args, "--label", "Distinct operation"]) == 1
+    stale = json.loads(capsys.readouterr().out)
+    assert stale["blocker"]["reason_code"] == "project_file_generation_conflict"
+    assert archive.read_bytes() == saved
+
+    incoming.unlink()
+    assert main(args) == 0
+    replay = json.loads(capsys.readouterr().out)
+    assert replay["task_dir"] == result["task_dir"] and replay["result"] == result["result"]
+    assert archive.read_bytes() == saved
+    with project_file_figure(archive, first_id) as (_, owner, current):
+        assert current == before and _coordinates(owner, current) == original
+    with project_file_figure(archive, new_id) as (_, owner, current):
+        assert _coordinates(owner, current) == {"x": [40., 46., 55.], "y": [.4, -.1, .2]}
+
+
 def test_append_rejects_stale_generation_source_failure_and_old_format(ordinary_archive, tmp_path):
     archive, first_id, incoming, request = ordinary_archive
     original = archive.read_bytes()

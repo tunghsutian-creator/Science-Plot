@@ -24,7 +24,15 @@ def task_path(path: Path) -> Path:
 
 
 def task_location(request: dict[str, Any], supplied: Path | None) -> Path:
-    if request["action"] == "create":
+    if "append_to" in request:
+        from platformdirs import user_state_path
+
+        protected = [Path(request["append_to"]), *(Path(value) for value in request["sources"])]
+        # The same public request can find its frozen task even after a lost
+        # response or after the input moves. A new generation is a new request.
+        parent = user_state_path("SciPlot") / "tasks"
+        supplied = supplied or parent / ("append-" + canonical_json_sha256(request))
+    elif request["action"] == "create":
         raw_sources = request["sources"] if "sources" in request else [request["source"]]
         sources = [canonical_path(Path(value)) for value in raw_sources]
         layout = resolve_user_output_layout(
@@ -105,8 +113,10 @@ def task_summary(state: dict[str, Any]) -> dict[str, Any]:
     if isinstance(handles, list):
         summary["plot_objects"] = handles
     if "intent" in state["request"] and "semantic_plan" in state:
-        summary["source_plan"] = {"evidence": {"path": str(Path(state["task_dir"]) / "task.json"), "json_pointer": "/semantic_plan"},
-                                  "sources": [{key: source[key] for key in ("source_id", "path", "sha256")}
+        evidence = {} if "append_to" in state["request"] else {
+            "evidence": {"path": str(Path(state["task_dir"]) / "task.json"), "json_pointer": "/semantic_plan"},
+        }
+        summary["source_plan"] = {**evidence, "sources": [{key: source[key] for key in ("source_id", "path", "sha256")}
                                               for source in state["semantic_plan"].get("sources", [])],
                                   "confirmation": state.get("plan_confirmation", {"mode": "explicit_source_bound_answers"})}
         if "selection" in state["semantic_plan"]:
@@ -152,6 +162,7 @@ def task_summary(state: dict[str, Any]) -> dict[str, Any]:
         "readiness_evaluated": False,
         "completion_scope": (
             "prepared_project" if prepared else
+            "Saved one figure in the project file without exporting." if "append_to" in state["request"] and state["status"] == "complete" else
             "Requested styles already matched; no document write or export. See current_project for fresh evidence."
             if unchanged else
             "Saved edit only; export was deferred. See current_project for fresh evidence."

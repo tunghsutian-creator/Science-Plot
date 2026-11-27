@@ -102,7 +102,15 @@ def _start_task(
         exc.repair = request_repair(original_request, exc)
         raise
     source_hashes = None
-    if "intent" in request:
+    append = "append_to" in request
+    if append:
+        target = canonical_path(Path(request["append_to"]))
+        if target.suffix != ".sciplot":
+            raise TaskControlError("invalid_project_file_append", "Choose an existing .sciplot file for append.")
+        request["append_to"] = str(target)
+        request["sources"] = [str(canonical_path(Path(value))) for value in request["sources"]]
+        digest = None
+    elif "intent" in request:
         from sciplot_core.task_semantic_creation import normalize_sources
 
         source_hashes = normalize_sources(request)
@@ -126,7 +134,7 @@ def _start_task(
     if not root.exists():
         from sciplot_core.foundation.research_destination import require_data_destination
         require_data_destination(root, existing_namespace=_owned_namespace)
-        if request["action"] == "create":
+        if request["action"] == "create" and not append:
             layout = resolve_user_output_layout(request.get("source", request.get("sources", [None])[0]),
                                                 requested_delivery_root=request.get("out"))
             for destination in (layout.delivery_root, layout.workspace_root):
@@ -147,6 +155,13 @@ def _start_task(
             if state["request"] != request and state.get("initial_request") != request:
                 raise TaskControlError("task_already_exists", "此任务目录已用于其他请求。")
             return _current_result(state) if state["status"] == "complete" else task_summary(state)
+        if append:
+            from sciplot_core.task_semantic_creation import normalize_sources
+
+            target = Path(request["append_to"])
+            if not target.is_file():
+                raise TaskControlError("path_not_found", "Append needs an existing .sciplot file; no project was created.")
+            source_hashes = normalize_sources(request)
         root.mkdir(parents=True, mode=0o700)
         state = {
             "kind": "sciplot_task", "version": 1, "task_dir": str(root),

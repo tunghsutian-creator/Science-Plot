@@ -84,6 +84,8 @@ def register_task_commands(subparsers: Any) -> None:
     create.add_argument("--choose-columns", action="store_true", help="Review original pair/sample groups in the same task before plotting.")
     create.add_argument("--xscale", choices=("log", "linear"), help="Explicit stress-relaxation time scale; keep source normalization and zero-time evidence.")
     create.add_argument("--out", type=Path)
+    create.add_argument("--append-to", type=Path, help="Save one independent ordinary XY figure into this existing .sciplot file; no export.")
+    create.add_argument("--expected-generation", help="Required with --append-to; use the generation returned by plot open.")
     create.add_argument("--task-dir", type=Path)
     create.add_argument("--json", action="store_true")
     create.add_argument("--full", action="store_true", help="Return the detailed task response.")

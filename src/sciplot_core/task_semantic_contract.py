@@ -66,10 +66,18 @@ def semantic_request_schema() -> dict[str, Any]:
                    "intent": intent_schema(), **presentation_requirement_properties(), "out": {"type": "string", "minLength": 1},
                    "formats": {**figure_formats_schema(),
                                "description": "Deliver only the selected files (PDF, optionally 300 dpi TIFF); omitted retains the native snapshot."},
+                   "append_to": {"type": "string", "minLength": 1,
+                                 "description": "Existing .sciplot file for one independent ordinary XY figure. Save only; does not export."},
+                   "expected_generation": {"type": "string", "minLength": 1,
+                                            "description": "Generation read from project_open for the existing .sciplot file."},
                    "choose_columns": {"const": True, "description": "Ask which exact observed FTIR blocks to overlay before creating a plot."},
                    "task_dir": {"type": "string", "minLength": 1, "deprecated": True}},
                   ["version", "action", "sources", "intent"])
-    schema["dependentSchemas"] = {"choose_columns": {
+    schema["dependentRequired"] = {"append_to": ["expected_generation"], "expected_generation": ["append_to"]}
+    schema["dependentSchemas"] = {"append_to": {
+        "not": {"anyOf": [{"required": [key]} for key in ("out", "formats", "choose_columns")]},
+        "properties": {"intent": {"properties": {"rule_id": {"const": "ordinary_xy"}}}},
+    }, "choose_columns": {
         "required": ["curve_display"],
         "properties": {"sources": {"maxItems": 1}, "curve_display": {"const": "raw_overlay"}, "intent": {
             "required": ["rule_id"],

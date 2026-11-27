@@ -144,9 +144,9 @@ only after the file is replaced.
 Saving audits the figure without rendering PDF or TIFF. To deliver PDF alone
 or PDF with 300 dpi TIFF, select the saved revision with the separate
 `plot export` command. To add a separate figure to the same file, use
-[`plot append` / `sciplot_project_file_append`](skill/references/saved-work-continuation.md#append-an-independent-ordinary-xy-figure)
-with the confirmed ordinary XY request and current project generation. The
-append receipt opens the new figure by its own ID; existing figures are unchanged.
+[`task create --append-to` / `sciplot_task_start`](skill/references/saved-work-continuation.md#append-an-independent-ordinary-xy-figure)
+with the original data, ordinary XY intent and current project generation. This
+append creates no exports and preserves all existing figures and revisions.
 
 On a Qt desktop, `sciplot plot editor PLOT` opens the exact Managed FigureSpec v2
 `plot` path from that summary. The native view is read-only. Choose an axis,
