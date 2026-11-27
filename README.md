@@ -152,6 +152,8 @@ or PDF with 300 dpi TIFF, select the saved revision with the separate
 [`task create --append-to` / `sciplot_task_start`](skill/references/saved-work-continuation.md#append-an-independent-ordinary-xy-figure)
 with the original data, ordinary XY intent and current project generation. This
 append creates no exports and preserves all existing figures and revisions.
+To add an original curve to an existing figure instead, use
+[`plot add-series` / `sciplot_project_file_add_series`](skill/references/saved-work-continuation.md#add-one-original-curve-to-an-existing-figure).
 
 On a Qt desktop, `sciplot plot editor PLOT` opens the exact Managed FigureSpec v2
 `plot` path from that summary. The native view is read-only. Choose an axis,

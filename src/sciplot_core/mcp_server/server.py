@@ -82,6 +82,7 @@ DAILY_INSTRUCTIONS = (
     "Pass the file as plot and choose from its edit_targets for an axis title, major tick, legend display name or ordinary XY line color edit via plot_intent. "
     "To save the first ordinary XY figure, use task_start with sources, intent and project_file. To append to an existing .sciplot, "
     "use append_to and expected_generation from project_open instead. No request file or export is needed. Open the new figure using next_step.arguments. "
+    "To add a curve to that same saved figure instead, use project_file_add_series: plan, inspect the exact source selection, then apply. "
     "For a selected PDF/TIFF handoff use plot_export. "
     "If it returns an archived read_only native figure, call sciplot_project_legacy_redraw with its target and a new output directory; "
     "for an edit, use sciplot_project_legacy_convert to create a separate supported XY copy first. "

@@ -225,6 +225,28 @@ resume the saved task with `--retry`. A new operation needs the current
 generation. The older `plot append --request` and `sciplot_project_file_append`
 interfaces still accept a previously frozen ordinary XY request.
 
+### Add one original curve to an existing figure
+
+For a saved ordinary XY figure in one `.sciplot`, open the exact figure first
+and retain its plot ID, revision and project generation. Use the physical column
+indices (zero-based; Excel column C is 2), not a repeated heading. Specify the
+exact worksheet when the workbook has more than one matching table.
+
+```bash
+sciplot plot add-series FILE.sciplot MEASURED.xlsx --plot-id PLOT_ID \
+  --revision REVISION --expected-generation GENERATION --sheet Measured \
+  --x-column 0 --y-column 2 --sample 'Run B' --json
+```
+
+Read the planned selection. To confirm it, repeat the command with `--apply`,
+`--plan-id` and `--source-sha256` from `apply_request`. MCP users call
+`sciplot_project_file_add_series` with the same `target` and `request`, first
+in `plan` mode and then passing the returned `apply_request`. The incoming
+curve uses its own observed X grid. This saves one revision of the selected
+figure without altering other figures or exporting. If the data or archive
+changed, reopen and plan again. The exact applied request can be retried after
+reply loss, even once the source is no longer at its original location.
+
 ## Make a new, independently editable copy
 
 Use Save As for **one current Managed plot**, not for moving a whole project or

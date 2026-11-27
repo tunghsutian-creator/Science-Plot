@@ -41,10 +41,16 @@ def dispatch_plot(args: Any, argv: list[str] | None = None) -> int | None:
     selected_export = action == "export" and (args.tiff or args.tiff_only or args.plotted_csv or args.editable_vsz
         or any(value is not None for value in (args.output_dir, args.plot_id, args.revision)))
     params: dict[str, Any] = {}
-    if action in {"open", "append"}:
+    if action in {"open", "append", "add-series"}:
         params["target"] = str(args.target.expanduser().absolute())
         if action == "append":
             params["expected_generation"] = args.expected_generation
+        elif action == "add-series":
+            params["request"] = {"mode": "apply" if args.apply else "plan",
+                "source": str(args.source.expanduser().resolve()), "plot_id": args.plot_id,
+                "base_revision": args.revision, "expected_generation": args.expected_generation,
+                **{key: getattr(args, key) for key in ("sheet", "x_column", "y_column", "sample", "label", "plan_id", "source_sha256")
+                   if getattr(args, key) is not None}}
         elif args.figure_id is not None:
             params["figure_id"] = args.figure_id
     elif action not in {"create", "deliver"}:
@@ -77,7 +83,7 @@ def dispatch_plot(args: Any, argv: list[str] | None = None) -> int | None:
         else:
             formats = ["pdf", "tiff_300"] if args.tiff else ["pdf"]
         params["handoff"] = {"output_dir": destination, "plot_id": args.plot_id, "revision": args.revision, "formats": formats}
-    method = {"open": "project.open", "append": "project.file-append"}.get(action, f"plot.{action}")
+    method = {"open": "project.open", "append": "project.file-append", "add-series": "project.file-add-series"}.get(action, f"plot.{action}")
     result = call(method, params, socket_path=args.socket, direct=args.direct, timeout=args.timeout)
     _print_json(result)
     return 1 if result.get("status") in {"error", "blocked", "partial"} else 0

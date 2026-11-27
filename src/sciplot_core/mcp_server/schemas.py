@@ -19,7 +19,7 @@ _DAILY_TOOLS = frozenset({
     "capabilities", "task_capabilities", "task_start", "task_continue",
     "task_edit", "task_inspect", "task_table_region", "task_find", "task_resume",
     "project_open", "project_legacy_redraw", "project_legacy_convert", "project_inspect",
-    "project_bundle_export", "project_bundle_import", "project_save_as", "project_file_save_as", "project_file_append", "plot_describe", "plot_patch", "plot_intent",
+    "project_bundle_export", "project_bundle_import", "project_save_as", "project_file_save_as", "project_file_append", "project_file_add_series", "plot_describe", "plot_patch", "plot_intent",
     "plot_decide", "plot_resume", "plot_export", "plot_deliver", "preview", "annotation_inspect", "export",
     "compose_capabilities", "compose", "pdf_review_create", "pdf_review_read", "read_result",
 })
@@ -147,6 +147,10 @@ def tool_definitions(profile: ToolProfile = "expert") -> list[Tool]:
         {"target": {**semantic_path, "description": "Exact existing .sciplot file."},
          "request": create_schema(), "expected_generation": {**string, "description": "Generation returned by project_open for this file."}},
         ["target", "request", "expected_generation"], idempotent=True, destructive=True)
+    from sciplot_core.project_lifecycle.project_file_series import project_file_series_schema
+
+    add("project_file_add_series", "Add one original XY curve within the exact saved .sciplot figure, not a second figure. Use plot ID, current revision and generation from project_open, plus an absolute original source, exact worksheet if needed, zero-based physical X/Y indices and sample. First use mode plan; only send its exact apply_request when confirmed. Saves one revision and does not export.",
+        {"target": semantic_path, "request": project_file_series_schema()}, ["target", "request"], idempotent=True, destructive=True)
     add("project_file_save_as", "Copy all current figures and sealed originals in a supported standalone Managed project to an unused .sciplot file with independent project and figure IDs. Use project_open for the expected project ID and generation. Unknown assets are refused; no old history or permissions transfer. Never replaces a destination. Use the returned figure open_arguments.",
         {"target": semantic_path, "output_file": semantic_path, "expected_project_id": string,
          "expected_generation": string}, ["target", "output_file", "expected_project_id", "expected_generation"])

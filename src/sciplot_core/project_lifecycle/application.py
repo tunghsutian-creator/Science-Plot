@@ -299,6 +299,11 @@ class ProjectApplication(ManagedPlotApplication, CommandDispatch):
 
         return project_file_append_xy(path, request, expected_generation=expected_generation, capabilities=self.capabilities)
 
+    def add_series_project_file(self, path: Path, request: dict[str, Any]) -> dict[str, Any]:
+        from .project_file_series import add_project_file_series
+
+        return add_project_file_series(self, path, request)
+
     def _template_creation_owner(self) -> "ProjectApplication":
         return self
 
