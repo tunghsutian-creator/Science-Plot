@@ -1,5 +1,6 @@
 """A saved project exports its current native bytes through the existing owner."""
 import json
+import hashlib
 
 import pytest
 
@@ -48,6 +49,8 @@ def test_saved_export_never_reprepares_the_observed_native(publication, monkeypa
     assert result["primary_figure_id"] == "primary"
     assert [item["figure_id"] for item in result["figures"]] == list(identifiers)
     assert [item["title"] for item in result["figures"]] == [name.title() for name in identifiers]
+    assert result["figures"][0]["document_sha256"] == hashlib.sha256(observed).hexdigest()
+    assert result["figures"][0]["spec_sha256"] == hashlib.sha256(scientific[1]).hexdigest()
     assert all(item["exports"] == [{"format": "pdf", "path": str(project / "delivery/delivered.pdf")}]
                for item in result["figures"])
     assert [call[0] for call in calls] == ["export", "publish"]

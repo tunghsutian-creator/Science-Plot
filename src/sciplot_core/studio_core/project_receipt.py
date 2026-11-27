@@ -35,6 +35,9 @@ def project_receipt(payload: dict[str, Any], returncode: int) -> dict[str, Any]:
                 "figure_id": item.get("figure_id"),
                 "title": item.get("title"),
                 "document": item.get("document"),
+                # Actual document/spec identities from this committed export,
+                # not from a later inspection of the same paths.
+                **{name: item[name] for name in ("document_sha256", "spec_sha256") if item.get(name)},
                 "exports": [
                     {"format": artifact.get("format"), "path": artifact.get("path")}
                     for artifact in artifacts

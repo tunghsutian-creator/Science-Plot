@@ -95,8 +95,8 @@ def _selected_publication(
         receipt["studio_run"].get("manifest") == publication["manifest"]
         and all(
             export_keys(figure) == export_keys(historical[figure["figure_id"]])
-            and historical[figure["figure_id"]].get("document_sha256", figure["document_sha256"])
-            == figure["document_sha256"]
+            and all(historical[figure["figure_id"]].get(key) == figure[key]
+                    for key in ("document_sha256", "spec_sha256") if key in figure)
             for figure in figures
         )
     )

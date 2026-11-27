@@ -459,9 +459,9 @@ def test_current_handoff_reviews_exports_without_rewriting_old_deliveries(
         launcher.write_text("existing launcher")
     before = {p.name: p.read_bytes() for p in delivery.iterdir()}
     image = {"format": "tiff", "path": str(delivery / "secondary.tiff")}
-    past = {"figure_id": "secondary", "exports": [image]}
+    past = {"figure_id": "secondary", "document_sha256": "d" * 64, "exports": [image]}
     witness = {"manifest": str(project / "runs/studio_001/manifest.json"),
-               "figures": [{**past, "document_sha256": "d" * 64, "exports": [{**image, "sha256": "e" * 64}]}]}
+               "figures": [{**past, "exports": [{**image, "sha256": "e" * 64}]}]}
     current = {"project": str(project), "figures": [{"figure_id": "secondary"}], "source": {"current": True},
                "qa": {"current": True}, "delivery": {"current": True, "path": str(delivery), "publication": witness}}
     monkeypatch.setattr(control, "inspect_project", lambda _: current)
@@ -483,6 +483,16 @@ def test_current_handoff_reviews_exports_without_rewriting_old_deliveries(
     state["request"]["figure_id"] = "primary"
     assert control._current_result(state)["next_step"]["evidence_gaps"] == ["task_publication"]
     state["request"]["figure_id"] = "secondary"
+    # Same run and artifact locators do not let a receipt borrow today's revision.
+    previous = past.pop("document_sha256")
+    assert control._current_result(state)["next_step"]["evidence_gaps"] == ["task_publication"]
+    past["document_sha256"] = "f" * 64
+    assert control._current_result(state)["next_step"]["evidence_gaps"] == ["task_publication"]
+    past["document_sha256"] = previous
+    witness["figures"][0]["spec_sha256"] = "1" * 64
+    assert control._current_result(state)["next_step"]["evidence_gaps"] == ["task_publication"]
+    past["spec_sha256"] = witness["figures"][0]["spec_sha256"]
+    assert control._current_result(state)["next_step"]["action"] == "review_exports_and_deliver"
     witness["manifest"] = str(project / "runs/studio_002/manifest.json")
     newer = control._current_result(state)
     assert newer["next_step"]["evidence_gaps"] == ["task_publication"]
