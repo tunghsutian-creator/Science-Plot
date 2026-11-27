@@ -289,6 +289,12 @@ class ProjectApplication(ManagedPlotApplication, CommandDispatch):
     def _allow_new_legacy_template(self) -> bool:
         return True
 
+    def append_project_file_xy(self, path: Path, request: dict[str, Any], *, expected_generation: str) -> dict[str, Any]:
+        """Append one resolved ordinary XY figure to an existing .sciplot file."""
+        from .project_file_append import project_file_append_xy
+
+        return project_file_append_xy(path, request, expected_generation=expected_generation, capabilities=self.capabilities)
+
     def _template_creation_owner(self) -> "ProjectApplication":
         return self
 

@@ -1,6 +1,7 @@
 """Managed creation persists scientific authority before building disposable native files."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from .context import exists, prepare_namespace, has_head, require_empty_output
@@ -47,6 +48,18 @@ def bind_managed_member(
 
 @with_table_reads
 def create_managed(request: dict[str, Any], backend: PlotBackend, *, location: ManagedCreationLocation) -> dict[str, Any]:
+    with committed_managed_creation(request, location=location) as head:
+        result = export_head(location.root, head, backend)
+        result.update({"plot_type": "ManagedPlot", "ir_hash": head["binding"]["ir_hash"],
+                       "creation_evidence": str(location.root / "managed-creation.json")})
+        result["plot_objects"] = [plot_object_handle(result, document=head["document"],
+                                                    authority=authority_status("ManagedPlot"))]
+        return result
+
+
+@contextmanager
+def committed_managed_creation(request: dict[str, Any], *, location: ManagedCreationLocation) -> Iterator[dict[str, Any]]:
+    """Resolve and bind the canonical revision, then yield inside the creation lease."""
     root, output, identifier = location.root, location.output, location.plot_id
     path = root / "managed-creation.json"
     initial = None
@@ -88,10 +101,4 @@ def create_managed(request: dict[str, Any], backend: PlotBackend, *, location: M
             commit(root, document, prepared.binding, "managed_creation")
             state["phase"] = "committed"
             write(path, state)
-        head = load_head(root)
-        result = export_head(root, head, backend)
-        result.update({"plot_type": "ManagedPlot", "ir_hash": head["binding"]["ir_hash"],
-                       "creation_evidence": str(path)})
-        result["plot_objects"] = [plot_object_handle(result, document=head["document"],
-                                                    authority=authority_status("ManagedPlot"))]
-        return result
+        yield load_head(root)
