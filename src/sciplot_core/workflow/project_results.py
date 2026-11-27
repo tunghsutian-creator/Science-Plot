@@ -38,8 +38,7 @@ def project_workflow_result(payload: dict[str, Any], logical_path: Callable[[str
     project(result)
     # These are exported table/native/media records, not original scientific
     # source declarations. JSON round trips must not rely on shared dict aliases.
-    delivery = result.get("delivery_package")
-    if isinstance(delivery, dict):
+    def project_delivery(delivery: dict[str, Any]) -> None:
         for field in ("open_in_veusz", "open_in_sciplot", "identity", "data_dir", "pdf_dir", "tiff_dir", "project_file", "editable"):
             if isinstance(delivery.get(field), str):
                 delivery[field] = logical_path(delivery[field])
@@ -69,4 +68,9 @@ def project_workflow_result(payload: dict[str, Any], logical_path: Callable[[str
 
         if "verification" in delivery:
             delivery["verification"] = observation(delivery["verification"])
+
+    for owner in (result, result.get("one_step")):
+        delivery = owner.get("delivery_package") if isinstance(owner, dict) else None
+        if isinstance(delivery, dict):
+            project_delivery(delivery)
     return result

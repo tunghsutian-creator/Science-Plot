@@ -13,7 +13,11 @@ def test_project_artifacts_without_rewriting_scientific_identity_or_user_text():
         "qa": {"pdfs": [{"path": "/private-candidate/plot.pdf", "sha256": "actual-observed-bytes"}]},
         "publication_qa": {"document": "/private-candidate/doc.vsz", "status": "passed"},
         "label": "/private-candidate/explicit-user-label", "raw_archive": {"source": "/original/raw.csv", "path": "/private-candidate/raw/copy.csv"},
-        "delivery_package": {"path": "/private-candidate/delivery", "figures": [{"source": "/private-candidate/plot.pdf", "path": "/private-candidate/delivery/plot.pdf"}]}}
+        "delivery_package": {"path": "/private-candidate/delivery",
+            "data_dir": "/private-candidate/delivery/data",
+            "verification": {"recorded_root": "/private-candidate/delivery"},
+            "figures": [{"source": "/private-candidate/plot.pdf", "path": "/private-candidate/delivery/plot.pdf"}]}}
+    payload["one_step"] = {"delivery_package": deepcopy(payload["delivery_package"])}
     original = deepcopy(payload)
     def logical(path):
         return path.replace("/private-candidate/", "/original-project/", 1)
@@ -30,3 +34,5 @@ def test_project_artifacts_without_rewriting_scientific_identity_or_user_text():
     assert result["raw_archive"]["source"] == "/original/raw.csv"
     assert result["raw_archive"]["path"] == "/original-project/raw/copy.csv"
     assert result["delivery_package"]["figures"][0]["source"] == "/original-project/plot.pdf"
+    assert result["one_step"]["delivery_package"] == result["delivery_package"]
+    assert result["one_step"]["delivery_package"]["verification"]["recorded_root"] == "/original-project/delivery"

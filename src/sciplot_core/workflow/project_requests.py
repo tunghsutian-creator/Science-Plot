@@ -65,6 +65,7 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
     from sciplot_core.studio_core.preparation_commands import prepare_studio_candidate, audit_studio_candidate
     from sciplot_core.studio_core.project_command_scope import command_for_binding
     from sciplot_core.workflow.run_projection import _project_manifest_after_run
+    from sciplot_core.workflow.project_state import _write_one_step_status
     from sciplot_core.workflow.request_io import _resolve_request_path
     from sciplot_core.workflow.project_results import project_workflow_result
     from sciplot_core.workflow.errors import WorkflowIntervention
@@ -142,6 +143,10 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
                if observed_plan is not None and observed_plan.scientific_source is not None else {}))
         audits, sources = audit_studio_candidate(candidate, prepared)
         manifest = project_workflow_result(manifest, candidate.logical_path)
+        # The public status must describe the same committed paths as the run
+        # manifest, not the disposable delivery image prepared by the worker.
+        if isinstance(manifest.get("one_step"), dict):
+            _write_one_step_status(private_output, manifest["one_step"])
         (private_output / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         candidate.finalize()
         # Capture is already a delta, including actual missing members as None.

@@ -1,6 +1,7 @@
 """The real workflow/store composition publishes once after private preparation."""
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -39,9 +40,13 @@ def execution(events, project, original):
         private.mkdir(parents=True, exist_ok=True)
         (private / "incomplete.txt").write_bytes(b"not a usable delivery")
         events.append("analysis")
+        package = {"complete": False, "path": str(private), "data_dir": str(private / "data"),
+                   "verification": {"recorded_root": str(private)}}
+        status = {"delivery_package": dict(package)}
+        (output / "one_step_status.json").write_text(json.dumps(status))
         return {"created_at": "2026-10-25T20:00:00Z", "figures": [], "result": {},
                 "output": str(output), "request_path": str(kwargs["request_path"]),
-                "delivery_package": {"complete": False, "path": str(private)}, "ready_to_use": False}
+                "delivery_package": package, "one_step": status, "ready_to_use": False}
     return execute
 
 
@@ -69,6 +74,13 @@ def test_complete_workflow_generation_contains_native_run_manifest_and_matching_
     assert (project / "studio/document.vsz").read_bytes() == b"synthetic native candidate"
     assert not list((tmp_path / "delivery").iterdir())
     assert (project / "runs/run_001/run-evidence.txt").read_bytes() == b"prepared analysis"
+    installed = project / "runs/run_001"
+    manifest = json.loads((installed / "manifest.json").read_text())
+    status = json.loads((installed / "one_step_status.json").read_text())
+    assert status == manifest["one_step"]
+    assert status["delivery_package"] == manifest["delivery_package"]
+    assert (Path(status["delivery_package"]["path"]) / "incomplete.txt").is_file()
+    assert "sciplot-studio-candidate-" not in json.dumps(status)
     assert (project / "source.csv").read_bytes() == b"x,y\n1,2\n"
     import zipfile
     with zipfile.ZipFile(tmp_path / "project.zip") as archive:
