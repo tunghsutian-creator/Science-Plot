@@ -35,6 +35,7 @@ class RheologySweepSample:
     metric_conversions: dict[str, dict[str, Any]] | None = None
     source_interval: dict[str, Any] | None = None
     original_group_region: tuple[int, int, int] | None = None
+    source_rows: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)

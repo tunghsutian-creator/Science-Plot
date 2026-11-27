@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from dataclasses import replace
+import math
 import re
 from typing import Any
 import pandas as pd
@@ -162,6 +163,7 @@ def _read_rheology_sweep_sample(
     raw: pd.DataFrame | None = None,
     sample: str | None = None,
     source_regions: list[dict[str, Any]] | None = None,
+    tts_point_column: int | None = None,
 ) -> RheologySweepSample:
     raw = _read_raw_table_normalized(source) if raw is None else raw.copy()
     if source_regions is None:
@@ -246,19 +248,37 @@ def _read_rheology_sweep_sample(
         columns=(x_index, *metric_indexes.values()),
     )
     rows: list[dict[str, float]] = []
+    source_rows: list[int] = []
     for row_index in row_indexes:
+        source_row = int(raw.index[row_index])
+        if tts_point_column is not None:
+            point_no = _float(raw.iat[row_index, tts_point_column])
+            if point_no is None or not math.isfinite(point_no):
+                raise ValueError(
+                    f"Missing or invalid TTS Point No. at original row {source_row + 1} "
+                    f"in {source}. No points were dropped."
+                )
         x_value = _float(raw.iat[row_index, x_index], decimal_comma=decimal_comma)
-        if x_value is None:
+        if x_value is None and tts_point_column is None:
             continue
-        row: dict[str, float] = {"x": x_value * x_factor}
+        row = {} if x_value is None else {"x": x_value * x_factor}
         for key, metric_index in metric_indexes.items():
             y_value = _float(
                 raw.iat[row_index, metric_index], decimal_comma=decimal_comma
             )
             if y_value is not None:
                 row[key] = y_value * metric_factors.get(key, 1.0)
-        if any(key in row for key in metric_indexes):
+        if tts_point_column is not None and not all(
+            key in row and math.isfinite(row[key]) and row[key] > 0
+            for key in ("x", "storage_modulus", "loss_modulus")
+        ):
+            raise ValueError(
+                f"TTS requires finite positive frequency/G'/G''; original row "
+                f"{source_row + 1} in {source} is invalid. No points were dropped."
+            )
+        if x_value is not None and any(key in row for key in metric_indexes):
             rows.append(row)
+            source_rows.append(source_row)
     if not rows:
         raise ValueError(f"No numeric rheology sweep points found in {source}.")
     complete_sweep_metrics(rows, metric_units, metric_conversions, x_label=x_label, x_unit=x_unit)
@@ -270,6 +290,7 @@ def _read_rheology_sweep_sample(
         x_unit=x_unit,
         metric_units=metric_units,
         rows=tuple(rows),
+        source_rows=tuple(source_rows),
         interval_count=len(header_indexes),
         selected_interval_index=(len(header_indexes) if select_last_interval else 1),
         interval_selection_policy=(
