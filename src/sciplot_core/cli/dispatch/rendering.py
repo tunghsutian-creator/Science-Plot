@@ -54,7 +54,8 @@ def _render_auto(source: Path, args: Any, options: dict[str, Any]) -> dict[str, 
     }
     if args.template is not None:
         request["explicit_template_selection"] = True
-    from sciplot_core.workflow.request_io import require_unclaimed_run_output
+    from sciplot_core.workflow.request_io import require_run_source_separation, require_unclaimed_run_output
+    require_run_source_separation(source, output)
     require_unclaimed_run_output(output)
     request_path = reserve_unique_file(output, "render_auto_request.json")
     atomic_write_json(request_path, request)

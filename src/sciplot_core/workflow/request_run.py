@@ -20,7 +20,7 @@ from sciplot_core.figure_plan import (
 )
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
+from sciplot_core.foundation.source_locations import literal_source_path
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.materials_rules.catalog import resolve_rule_template
 from sciplot_core.one_step import build_one_step_project
@@ -42,6 +42,7 @@ from sciplot_core.workflow.request_io import (
     _load_request,
     _managed_output_transaction,
     _resolve_request_path,
+    require_run_source_separation,
 )
 from sciplot_core.workflow.request_publish import publish_request_result
 from sciplot_core.workflow.request_rendering import execute_request_render
@@ -102,14 +103,8 @@ def run_request(
     delivery = require_data_destination(requested_delivery_root({"request": source_request}, run_output=output_dir))
     from .frequency_managed_workflow import managed_frequency_session, reuse_completed_frequency_run
 
-    source_path = resolve_source_path(_resolve_request_path(
-        source_request.get("input"), base_dir=base_dir, field="input",
-    )).resolve()
-    if source_path.is_dir():
-        for destination in (output_dir.resolve(), delivery):
-            if any(ancestor.is_dir() and ancestor.samefile(source_path)
-                   for ancestor in (destination, *destination.parents)):
-                raise ValueError(f"Output would write inside the original source: {destination}. Choose a new directory.")
+    source_path = _resolve_request_path(source_request.get("input"), base_dir=base_dir, field="input")
+    require_run_source_separation(source_path, output_dir, delivery)
 
     session, authority = managed_frequency_session(output_dir, source_request, new_creation=_new_creation)
     reference = _resolve_request_path(source_request["data_mapping_execution"], base_dir=base_dir,

@@ -176,6 +176,18 @@ def _extend_runtime_transform_steps(
         )
 
 
+def require_run_source_separation(source: Path, *destinations: Path) -> None:
+    source = resolve_source_path(source).resolve()
+    if not source.is_dir():
+        return
+    for destination in destinations:
+        destination = destination.resolve()
+        # Compare directory identity because the same volume can accept mixed case.
+        if any(ancestor.is_dir() and ancestor.samefile(source)
+               for ancestor in (destination, *destination.parents)):
+            raise ValueError(f"Output would write inside the original source: {destination}. Choose a new directory.")
+
+
 def require_unclaimed_run_output(output_dir: Path) -> None:
     require_clear_managed_output(output_dir, (*_MANAGED_OUTPUT_DIRECTORIES, *_MANAGED_OUTPUT_FILES))
 
