@@ -78,12 +78,9 @@ def load_heatmap_table_from_frame(
             role_index["y"],
             role_index["z"],
         ],
-    ]
+    ].copy()
     ordered.columns = ["x", "y", "z"]
     ordered["z"] = pd.to_numeric(ordered["z"], errors="coerce")
-    ordered = ordered.dropna(subset=["z"])
-    if ordered.empty:
-        raise ValueError("Heatmap table does not contain any numeric Z values.")
     ordered["x"] = coerce_axis_series(ordered["x"])
     ordered["y"] = coerce_axis_series(ordered["y"])
     ordered = ordered[
@@ -91,6 +88,8 @@ def load_heatmap_table_from_frame(
     ].reset_index(drop=True)
     if ordered.empty:
         raise ValueError("Heatmap table does not contain any valid X/Y coordinates.")
+    if not ordered["z"].notna().any():
+        raise ValueError("Heatmap table does not contain any numeric Z values.")
 
     return HeatmapTable(
         x_label=normalize_label(label_row.iloc[role_index["x"]]) or "X",
@@ -122,14 +121,14 @@ def _load_heatmap_matrix(raw: pd.DataFrame) -> HeatmapTable:
         raise ValueError("Heatmap matrix table does not contain numeric Z values.")
     x_values = [float(normalize_cell(value)) for value in x_cells]
     y_values = [float(normalize_cell(value)) for value in y_cells]
-    rows: list[dict[str, float]] = []
+    rows: list[dict[str, float | None]] = []
     for y_index, y_value in enumerate(y_values):
         for x_index, x_value in enumerate(x_values):
             z_value = value_block.iat[y_index, x_index]
-            if not pd.isna(z_value):
-                rows.append({"x": x_value, "y": y_value, "z": float(z_value)})
-    if not rows:
-        raise ValueError("Heatmap matrix table does not contain finite X/Y/Z cells.")
+            rows.append({
+                "x": x_value, "y": y_value,
+                "z": None if pd.isna(z_value) else float(z_value),
+            })
     return HeatmapTable(
         x_label="X",
         y_label=normalize_label(raw.iat[0, 0]) or "Y",

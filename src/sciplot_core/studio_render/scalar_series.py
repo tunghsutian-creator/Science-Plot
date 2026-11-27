@@ -104,8 +104,10 @@ def _scalar_field_from_frames(
         frame, render_options=render_options
     )
     numeric = _coerced_numeric_frame(frame)
-    field = numeric[[x_column, y_column, z_column]].dropna().copy()
-    if field.empty:
+    # Declared coordinates define the grid even if an entire row or column
+    # has no measured Z; a real Z=0 is still an observation.
+    field = numeric[[x_column, y_column, z_column]].dropna(subset=[x_column, y_column])
+    if not field[z_column].notna().any():
         raise StudioPreparationBlocked(
             "scalar_field_has_no_finite_rows",
             "Scalar-field X/Y/Z columns contain no complete numeric rows.",
@@ -123,10 +125,18 @@ def _scalar_field_from_frames(
             "Scalar-field rendering needs at least two unique X and two unique Y coordinates.",
         )
     expected_rows = len(x_values) * len(y_values)
-    if len(field) != expected_rows:
+    missing = field[z_column].isna()
+    observed_rows = len(field) - int(missing.sum())
+    if observed_rows != expected_rows:
+        detail = ""
+        if missing.any():
+            cell = field.loc[missing].iloc[0]
+            detail = f" Missing or nonnumeric Z at (X={cell[x_column]:g}, Y={cell[y_column]:g})."
         raise StudioPreparationBlocked(
             "scalar_field_incomplete_grid",
-            f"Scalar-field grid is incomplete: expected {expected_rows} unique X/Y cells, found {len(field)}.",
+            f"Scalar-field grid is incomplete: expected {expected_rows} unique X/Y cells "
+            f"({len(x_values)} X × {len(y_values)} Y); found {observed_rows} numeric Z values."
+            + detail,
         )
     pivot = field.pivot(index=y_column, columns=x_column, values=z_column).reindex(
         index=y_values,
