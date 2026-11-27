@@ -9,6 +9,7 @@ from sciplot_core.plot_engine.description_scope import edit_target_summary
 from sciplot_core.plot_engine.figure_updates import figure_property_names
 from sciplot_core.plot_engine.typed_intent import DISPLAY_LABEL, LINE_COLOR, display_label_targets, line_color_targets
 from sciplot_core.plot_ir.figure_document import figure_spec, is_figure
+from sciplot_core.project_store.errors import ProjectConflict
 
 from .attached_repository import AttachedProjectRepository
 from .attachment_index import Attachment, read_index
@@ -24,15 +25,23 @@ PROJECT_FILE_EDIT_PROPERTIES = PROJECT_FILE_AXIS_PROPERTIES | {LINE_COLOR, DISPL
 @contextmanager
 def project_file_read_session(path: Path) -> Iterator[ProjectFileSession]:
     """Open a verified project file using the public read diagnostics."""
+    public_path = str(path.expanduser().absolute())
     with ExitStack() as stack:
         try:
             session = stack.enter_context(open_project_file(path))
         except FileNotFoundError as exc:
-            raise EngineError("path_not_found", "The specified .sciplot file or its saved state was not found.",
-                              action="check_project_file") from exc
+            raise EngineError("path_not_found", "The .sciplot file or its saved state was not found. If it was moved, open its new location.",
+                              action="check_project_file", project_file=public_path) from exc
+        except PermissionError as exc:
+            raise EngineError("project_file_access_denied",
+                              "Check that the file can be read and SciPlot can use its temporary workspace.",
+                              action="check_project_file_access", project_file=public_path) from exc
+        except ProjectConflict as exc:
+            raise EngineError("project_file_open_conflict", "The file changed while opening. Open the latest saved file again.",
+                              action="project.open", target=public_path) from exc
         except (OSError, ValueError, KeyError, TypeError) as exc:
             raise EngineError("project_file_invalid", "Open a valid, regular .sciplot project file, not a symbolic alias.",
-                              action="check_project_file") from exc
+                              action="check_project_file", project_file=public_path) from exc
         yield session
 
 

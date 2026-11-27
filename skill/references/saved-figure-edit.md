@@ -23,8 +23,11 @@ Choose the first read from authority already established for this figure:
   axis ID. Plan first; apply the same axis request. For `axis.ticks`, pass an array
   of numbers, or `{"mode":"automatic"}` on current-view figures. Use
   `plot intent FILE.sciplot --request REQUEST.json --json` from the CLI.
-  For an unconfirmed save, retry the identical request and key. For a selected
-  PDF or PDF/TIFF export, use the [figure handoff](managed-delivery.md).
+  For an unconfirmed save, use the returned `plot.resume` step with the
+  original plot ID, base revision and key. This checks what the standalone file
+  has already saved without editing or exporting. An unconfirmed key does not
+  prove that the original request failed; keep the original request and key.
+  For a selected PDF or PDF/TIFF export, use the [figure handoff](managed-delivery.md).
 - **Known ManagedPlot:** call `skill/scripts/sciplot plot open TARGET --scope
   summary --json`, or `sciplot_project_open` with `{"target":"/absolute/target",
   "description":{"scope":"summary"}}`. This returns `plot`, `plot_id`,

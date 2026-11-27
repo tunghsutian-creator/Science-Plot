@@ -783,3 +783,17 @@ def test_memory_exchange_keeps_total_deadline_and_unknown_sent_outcome(monkeypat
     assert failed.value.repair["request_sent"] is True
     assert failed.value.repair["automatic_retry"] is False
     assert failed.value.repair["idempotency_key"] == "known"
+
+
+def test_unknown_project_file_intent_outcome_offers_read_only_saved_key_lookup():
+    from sciplot_core.plot_protocol.socket_client import _recovery
+
+    original = {"plot_id": "one", "base_revision": 0, "idempotency_key": "keep",
+                "mode": "apply", "property": "axis.label"}
+    request = {"id": "existing", "method": "plot.intent",
+               "params": {"plot": "/tmp/work.sciplot", "request": original}}
+    sent = _recovery(request, request_sent=True)
+    assert sent["automatic_retry"] is False and sent["action"] == "plot.resume"
+    assert sent["next_step"] == {"action": "plot.resume", "plot": "/tmp/work.sciplot",
+                                 "request": {"plot_id": "one", "base_revision": 0, "idempotency_key": "keep"}}
+    assert _recovery(request, request_sent=False)["next_step"]["action"] == "project.open"

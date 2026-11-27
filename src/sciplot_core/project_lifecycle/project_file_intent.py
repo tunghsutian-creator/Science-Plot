@@ -21,7 +21,9 @@ if TYPE_CHECKING:
     from .application import ProjectApplication
 
 
-def _published_intent(owner: AttachedProjectRepository, request: dict[str, Any]) -> dict[str, Any] | None:
+def _published_intent(
+    owner: AttachedProjectRepository, request: dict[str, Any], *, lookup_only: bool = False,
+) -> dict[str, Any] | None:
     """Validate the original command against the archive journal without re-running it."""
     root = owner.attachment.root
     journal = transaction_path(root, request["idempotency_key"])
@@ -30,8 +32,13 @@ def _published_intent(owner: AttachedProjectRepository, request: dict[str, Any])
             return None
         tx = owner.read(journal)
         command = saved_command(tx)
-        if command is None or command.kind != "intent" or command.original_payload != request:
+        original = command.original_payload if command is not None and command.kind == "intent" else {}
+        if not original or (not lookup_only and original != request):
             raise EngineError("document_idempotency_conflict", "This key identifies another original command.",
+                              action="use_original_request")
+        if lookup_only and any(original.get(key) != value for key, value in request.items()):
+            raise EngineError("document_revision_conflict",
+                              "Use the original plot ID and base revision for this saved key.",
                               action="use_original_request")
         if tx["phase"] != "complete":
             raise EngineError("project_file_intent_unconfirmed",
@@ -51,6 +58,31 @@ def _receipt(status: str, locator: dict[str, Any], document: dict[str, Any], *,
     return {"kind": "sciplot_project_file_intent", "version": 1, "status": status,
             **locator, "current_revision": current_revision,
             **{key: document[key] for key in ("revision", "scientific_hash", "presentation_hash")}, **details}
+
+
+def resume_project_file_intent(path: Path, request: dict[str, Any]) -> dict[str, Any]:
+    """Confirm an original edit using the archive as the sole publication witness."""
+    from sciplot_core.plot_engine.contracts import validate_resume
+
+    request = validate_resume(request)
+    with project_file_figure(path, request["plot_id"], exact_plot_id=True) as (session, owner, before):
+        locator = {"project_file": str(session.path), "project_id": session.project_id,
+                   "plot_id": before["plot_id"], "idempotency_key": request["idempotency_key"]}
+        try:
+            published = _published_intent(owner, request, lookup_only=True)
+        except EngineError:
+            raise
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise EngineError("project_file_intent_unconfirmed",
+                              "The existing key cannot be confirmed as a saved edit.",
+                              action="inspect_project_file", **locator) from exc
+        if published is None:
+            raise EngineError(
+                "project_file_intent_unconfirmed",
+                "This project file does not record the key as saved. This lookup did not repeat the edit.",
+                action="retry_same_request", automatic_retry=False, **locator,
+            )
+        return _receipt("already_saved", locator, published, current_revision=before["revision"], saved=True)
 
 
 def project_file_intent(service: "ProjectApplication", path: Path, request: dict[str, Any], *,
@@ -116,8 +148,11 @@ def project_file_intent(service: "ProjectApplication", path: Path, request: dict
             session.save(expected_generation=generation)
         except ProjectFileSaveUnconfirmed as exc:
             raise EngineError("project_file_save_unconfirmed",
-                              "The project file may contain this edit. Retry this exact request to check its saved key.",
-                              action="retry_same_request", revision=document["revision"], **locator) from exc
+                              "The project file may contain this edit. Check the saved key before repeating it.",
+                              action="plot.resume", revision=document["revision"], **locator,
+                              next_step={"action": "plot.resume", "plot": locator["project_file"],
+                                         "request": {key: request[key] for key in
+                                             ("plot_id", "base_revision", "idempotency_key")}}) from exc
         except (ProjectConflict, WriterLeaseBusy, WriterLeaseChanged) as exc:
             raise EngineError("project_file_save_conflict", "The current project file was not replaced by this edit.",
                               action="inspect_project_file", **locator) from exc

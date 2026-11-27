@@ -21,6 +21,24 @@ from .errors import EngineError
 from .prepared_routing import native_dispatch
 
 
+def _standalone_archive(path: Path) -> bool:
+    return path.suffix == ".sciplot" and (path.is_symlink() or not path.is_dir())
+
+
+def _require_directory_plot(path: Path, operation: str, *, next_action: str = "project.open") -> None:
+    path = path.expanduser()
+    if _standalone_archive(path):
+        message = {
+            "patch": "Use plot.intent for an advertised edit on a standalone project file.",
+            "rollback": "Standalone project files do not yet support rollback.",
+            "decide": "Standalone project files have no generic change-review decision to accept.",
+            "render": "Use plot.export with a plot ID, current revision and output directory.",
+            "export": "Provide a plot ID, current revision and output directory for a standalone project export.",
+        }[operation]
+        raise EngineError("project_file_operation_unsupported", message, action=next_action,
+                          project_file=str(path.absolute()), operation=operation)
+
+
 class PlotService(ProjectApplication):
     def __init__(self, backend: PlotBackend | None = None, *, repository: ProjectRepository | None = None,
                  capabilities: dict[str, Any] | None = None, resolve_figure: Any = None, targets: ProjectTargets | None = None,
@@ -51,12 +69,12 @@ class PlotService(ProjectApplication):
              description: dict[str, Any] | None = None) -> dict[str, Any]:
         description = require_selector(description)
         target = target.expanduser()
-        if target.suffix == ".sciplot" and (target.is_symlink() or not target.is_dir()):
+        if _standalone_archive(target):
             from sciplot_core.project_lifecycle.project_file_summary import project_file_summary
 
             if description is not None and description["scope"] != "summary":
                 raise EngineError("project_file_summary_only", ".sciplot files currently support read-only open summaries.",
-                                  action="project.open", description={"scope": "summary"})
+                                  action="project.open", target=str(target.absolute()), description={"scope": "summary"})
             return project_file_summary(target, figure_id)
         target = canonical_path(target)
         native = native_dispatch("describe", target, figure_id=figure_id, description=description)
@@ -114,6 +132,8 @@ class PlotService(ProjectApplication):
 
     def describe(self, plot: Path, *, description: dict[str, Any] | None = None) -> dict[str, Any]:
         description = require_selector(description)
+        if _standalone_archive(plot.expanduser()):
+            return self.open(plot, description=description)
         target = canonical_path(plot)
         native = native_dispatch("describe", target, description=description)
         if native is not None:
@@ -127,6 +147,7 @@ class PlotService(ProjectApplication):
         return super().describe(plot, description=description)
 
     def patch(self, plot: Path, request: RequestInput) -> dict[str, Any]:
+        _require_directory_plot(plot, "patch", next_action="plot.intent")
         request = admit_patch(request)
         native = native_dispatch("patch", canonical_path(plot), request=request)
         if native is not None:
@@ -137,6 +158,7 @@ class PlotService(ProjectApplication):
     def decide(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
         from .contracts import validate_decide
 
+        _require_directory_plot(plot, "decide")
         request = validate_decide(request)
         native = native_dispatch("decide", canonical_path(plot), request=request)
         if native is not None:
@@ -145,6 +167,11 @@ class PlotService(ProjectApplication):
         return super().decide(plot, request)
 
     def resume(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
+        plot = plot.expanduser()
+        if _standalone_archive(plot):
+            from sciplot_core.project_lifecycle.project_file_intent import resume_project_file_intent
+
+            return resume_project_file_intent(plot, request)
         native = native_dispatch("resume", canonical_path(plot), request=request)
         if native is not None:
             return native
@@ -157,11 +184,12 @@ class PlotService(ProjectApplication):
     def export(self, plot: Path, *, handoff: dict[str, Any] | None = None) -> dict[str, Any]:
         if handoff is not None:
             plot = plot.expanduser()
-            if plot.suffix == ".sciplot" and (plot.is_symlink() or not plot.is_dir()):
+            if _standalone_archive(plot):
                 from sciplot_core.project_lifecycle.project_file_handoff import project_file_handoff
 
                 return project_file_handoff(self, plot, handoff)
             return super().export(plot, handoff=handoff)
+        _require_directory_plot(plot, "export", next_action="plot.export")
         native = native_dispatch("export", canonical_path(plot))
         if native is not None:
             return native
@@ -170,7 +198,7 @@ class PlotService(ProjectApplication):
 
     def intent(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
         plot = plot.expanduser()
-        if plot.suffix == ".sciplot" and (plot.is_symlink() or not plot.is_dir()):
+        if _standalone_archive(plot):
             from sciplot_core.project_lifecycle.project_file_intent import project_file_intent
 
             return project_file_intent(self, plot, request)
@@ -183,10 +211,12 @@ class PlotService(ProjectApplication):
         return super().intent(plot, request)
 
     def rollback(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
+        _require_directory_plot(plot, "rollback")
         self.require_editable(plot)
         return super().rollback(plot, request)
 
     def render(self, plot: Path) -> dict[str, Any]:
+        _require_directory_plot(plot, "render", next_action="plot.export")
         self.require_editable(plot)
         return super().render(plot)
 

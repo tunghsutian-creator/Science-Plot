@@ -186,6 +186,12 @@ exports. Creation questions and native reimport retain their original decision
 entries. This is continuation of an existing semantic transaction, not a general
 process-crash or filesystem recovery service.
 
+For a standalone `.sciplot` file, the same request checks the exact saved
+typed-edit key and returns `already_saved` even if the current revision has
+since advanced. This lookup does not apply, retry, or export anything. Use the
+file's current location if it was moved. An unconfirmed key is not proof the
+original request failed.
+
 ## Complete local tasks and MCP
 
 Read `task capabilities --json` for the small capability index (version 2).

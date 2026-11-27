@@ -388,3 +388,91 @@ def test_relocated_semantic_xy_can_save_twice_across_installations(tmp_path):
         assert sorted(session.store.resolve_source(source_id, version).read_bytes()
                       for source_id, versions in session.store.snapshot()["sources"].items()
                       for version in versions) == sorted([raw, reference_raw])
+
+
+def test_public_resume_confirms_a_moved_archive_key_without_edit_or_export(tmp_path):
+    from sciplot_core.plot_protocol.client import call
+    from sciplot_core.plot_protocol.rpc import RemoteError
+    from sciplot_core.project_lifecycle.capabilities import COMPATIBILITY_CAPABILITIES
+    from sciplot_core.project_lifecycle.project_file_append import project_file_create_xy
+    from test_project_file_append import _ordinary_request, _save_axis_revision
+
+    original = tmp_path.resolve() / "original work"
+    original.mkdir()
+    source = original / "sample.csv"
+    source.write_text("Temperature,Heat Flow\nC,W/g\nSample,Sample\n66,-0.023\n61,0.008\n53,-0.016\n")
+    publication = original / "sample.sciplot"
+    project_file_create_xy(publication, _ordinary_request(source), capabilities=COMPATIBILITY_CAPABILITIES)
+    def operation(name, **params):
+        return call(name, params, direct=True)
+
+    opened = operation("project.open", target=str(publication))
+    target, axis = next(iter(opened["edit_targets"].items()))
+    lookup = {"plot_id": opened["plot_id"], "base_revision": opened["revision"], "idempotency_key": "saved-unchanged-axis"}
+    request = {**lookup, "mode": "apply", "target_id": target, "property": "axis.label", "value": axis["label"]}
+    assert operation("plot.intent", plot=str(publication), request=request)["status"] == "saved"
+    _save_axis_revision(publication, opened["plot_id"], "Revised temperature axis (C)")
+    moved = publication.rename(tmp_path / "moved.sciplot")
+    shutil.rmtree(original)
+    before = file_sha256(moved)
+
+    assert operation("plot.describe", plot=str(moved)) == operation("project.open", target=str(moved))
+    confirmed = operation("plot.resume", plot=str(moved), request=lookup)
+    assert confirmed["status"] == "already_saved"
+    assert confirmed["project_file"] == str(moved) and confirmed["project_id"] == opened["project_id"]
+    assert confirmed["plot_id"] == opened["plot_id"] and confirmed["revision"] == opened["revision"]
+    assert confirmed["current_revision"] == opened["revision"] + 1
+    lookup_file = tmp_path / "lookup.json"
+    lookup_file.write_text(json.dumps(lookup))
+    cli = subprocess.run(
+        [str(REPO_ROOT / "skill/scripts/sciplot"), "plot", "resume", moved.name,
+         "--request", lookup_file.name, "--direct", "--json"], cwd=tmp_path,
+        env={**os.environ, "SCIPLOT_PYTHON": sys.executable}, capture_output=True, text=True, timeout=30, check=False,
+    )
+    assert cli.returncode == 0, cli.stdout + cli.stderr
+    assert json.loads(cli.stdout) == confirmed
+
+    for changed, reason in (
+        ({"idempotency_key": "unknown"}, "project_file_intent_unconfirmed"),
+        ({"base_revision": 45}, "document_revision_conflict"),
+        ({"plot_id": "foreign"}, "project_file_figure_not_found"),
+    ):
+        with pytest.raises(RemoteError) as rejected:
+            operation("plot.resume", plot=str(moved), request={**lookup, **changed})
+        assert rejected.value.reason_code == reason
+    with pytest.raises(RemoteError) as rejected:
+        operation("plot.rollback", plot=str(moved),
+                  request={"base_revision": 0, "target_revision": 0, "idempotency_key": "no-rollback"})
+    assert rejected.value.reason_code == "project_file_operation_unsupported"
+    alias = tmp_path / "alias.sciplot"
+    alias.symlink_to(moved)
+    with pytest.raises(RemoteError) as rejected:
+        operation("plot.resume", plot=str(alias), request=lookup)
+    assert rejected.value.reason_code == "project_file_invalid"
+    assert file_sha256(moved) == before and not original.exists()
+
+
+def test_archive_open_reports_missing_invalid_and_denied_as_distinct_actions(tmp_path, monkeypatch):
+    from sciplot_core.plot_protocol.client import call
+    from sciplot_core.plot_protocol.rpc import RemoteError
+    from sciplot_core.project_lifecycle import project_file_summary
+
+    target = tmp_path / "sample.sciplot"
+    params = {"target": str(target)}
+    with pytest.raises(RemoteError) as missing:
+        call("project.open", params, direct=True)
+    assert missing.value.reason_code == "path_not_found" and missing.value.repair["project_file"] == str(target)
+    target.write_text("not a project archive")
+    with pytest.raises(RemoteError) as invalid:
+        call("project.open", params, direct=True)
+    assert invalid.value.reason_code == "project_file_invalid"
+
+    def blocked(_path):
+        raise PermissionError("/private/project temporary path")
+
+    monkeypatch.setattr(project_file_summary, "open_project_file", blocked)
+    with pytest.raises(RemoteError) as denied:
+        call("project.open", params, direct=True)
+    assert denied.value.reason_code == "project_file_access_denied"
+    assert denied.value.repair == {"action": "check_project_file_access", "project_file": str(target)}
+    assert "/private/project temporary path" not in str(denied.value)

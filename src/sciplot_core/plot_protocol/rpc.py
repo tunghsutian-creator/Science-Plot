@@ -157,7 +157,7 @@ def _invoke_validated(service: Service, method: str, params: dict[str, Any]) -> 
         return service.intent(plot, params["request"])
     if method == "plot.export" and "handoff" in params:
         return service.export(_project_target(plot, legacy_directories=True), handoff=params["handoff"])
-    plot = plot.resolve()
+    plot = _project_target(plot, legacy_directories=True)
     if method == "plot.describe":
         if "description" in params:
             return service.describe(plot, description=params["description"])

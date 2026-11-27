@@ -48,8 +48,7 @@ def dispatch_plot(args: Any, argv: list[str] | None = None) -> int | None:
         elif args.figure_id is not None:
             params["figure_id"] = args.figure_id
     elif action not in {"create", "deliver"}:
-        plot = args.plot.expanduser()
-        params["plot"] = str(plot.absolute() if action == "intent" or selected_export else plot.resolve())
+        params["plot"] = str(args.plot.expanduser().absolute())
     if action in {"open", "describe"} and any(value is not None for value in (args.scope, args.target_id, args.property)):
         params["description"] = {key: value for key, value in
             (("scope", args.scope), ("target", args.target_id), ("property", args.property)) if value is not None}
