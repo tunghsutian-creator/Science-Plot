@@ -252,3 +252,22 @@ project. For a standalone old VSZ, use the explicit legacy conversion if the
 old figure is supported. Moving an entire project with its history and same
 identity is a different operation. In daily or expert MCP,
 `sciplot_project_save_as` takes `plot`, `plot_id`, `revision` and `output_dir`.
+
+### Save a separate standalone project
+
+Use `project save-as-file` to give all current figures in a supported standalone
+Managed project a new, independent home. Use the project ID and generation
+from `plot open` (MCP `sciplot_project_open`):
+
+```bash
+skill/scripts/sciplot project save-as-file ORIGINAL.sciplot --project-id ID --expected-generation GENERATION --out COPY.sciplot --json
+```
+
+The new file contains the current figure state and all sealed source versions,
+with fresh IDs and revision zero. Open any figure using its returned
+`open_arguments`. Old revisions, permissions and regenerable render caches
+stay behind. A project with unsupported assets or pending edits is refused as
+a whole, and an existing destination is never overwritten. If a reply was lost, inspect the
+destination before trying a different name. In daily or expert MCP use
+`sciplot_project_file_save_as` with `target`, `output_file`,
+`expected_project_id` and `expected_generation`.

@@ -67,6 +67,12 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
         return save_managed_as(Path(arguments["plot"]), Path(arguments["output_dir"]),
                                plot_id=arguments["plot_id"], revision=arguments["revision"])
+    if name == "sciplot_project_file_save_as":
+        from sciplot_core.project_lifecycle.project_file_save_as import save_project_file_as
+
+        return save_project_file_as(Path(arguments["target"]), Path(arguments["output_file"]),
+                                    expected_project_id=arguments["expected_project_id"],
+                                    expected_generation=arguments["expected_generation"])
     if name == "sciplot_task_capabilities":
         from sciplot_core.task_capabilities import task_capabilities
 

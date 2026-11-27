@@ -22,12 +22,13 @@ PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4
 
 def test_tool_discovery_uses_closed_shared_operation_schema():
     tools = {item.name: item for item in tool_definitions()}
-    assert len(tools) == 54
+    assert len(tools) == 55
     daily = {item.name: item for item in tool_definitions("daily")}
     for operation, required in {
         "bundle_export": {"project", "output_dir"},
         "bundle_import": {"bundle", "output_dir"},
         "save_as": {"plot", "plot_id", "revision", "output_dir"},
+        "file_save_as": {"target", "output_file", "expected_project_id", "expected_generation"},
         "file_append": {"target", "request", "expected_generation"},
     }.items():
         name = f"sciplot_project_{operation}"

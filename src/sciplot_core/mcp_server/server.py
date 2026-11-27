@@ -93,6 +93,7 @@ DAILY_INSTRUCTIONS = (
     "project_bundle_export with single_file true saves the same whole project in one .sciplot file; "
     "for a directory bundle use project_bundle_export then project_bundle_import. "
     "project_save_as makes one selected Managed figure an independent editable copy. "
+    "project_file_save_as creates a new independently editable .sciplot with all supported current figures. "
     "For existing PDF diagrams use compose with "
     "export-pdf for a standalone PDF. Resources are scoped to this server connection. "
     "For specialized workflows or the full upfront schemas reconnect with --profile expert."

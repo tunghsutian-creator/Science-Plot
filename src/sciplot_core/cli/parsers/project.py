@@ -74,6 +74,12 @@ def register_project_commands(subparsers: Any) -> None:
     save_as.add_argument("--revision", required=True, type=int)
     save_as.add_argument("--out", required=True, type=Path, help="An unused project path outside the original project.")
     save_as.add_argument("--json", action="store_true")
+    whole = actions.add_parser("save-as-file", help="Copy a supported standalone project into a new independent .sciplot file.")
+    whole.add_argument("target", type=Path, help="Exact existing .sciplot file.")
+    whole.add_argument("--project-id", required=True, help="Project ID from the current open result.")
+    whole.add_argument("--expected-generation", required=True, help="Generation from the current open result.")
+    whole.add_argument("--out", required=True, type=Path, help="Unused .sciplot filename.")
+    whole.add_argument("--json", action="store_true")
     for name in ("annotations", "operations-preview", "peaks"):
         action = actions.add_parser(name)
         action.add_argument("target", type=Path)

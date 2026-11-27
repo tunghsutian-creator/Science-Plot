@@ -26,6 +26,12 @@ def dispatch_project_control(args: Any) -> int:
         from sciplot_core.cli.dispatch.project_create import dispatch_project_create
 
         return dispatch_project_create(args)
+    if action == "save-as-file":
+        from sciplot_core.project_lifecycle.project_file_save_as import save_project_file_as
+
+        _print_json(save_project_file_as(args.target, args.out, expected_project_id=args.project_id,
+                                         expected_generation=args.expected_generation))
+        return 0
     if action in {"pdf-review-create", "pdf-review-read"}:
         from sciplot_core.cli.dispatch.pdf_review import dispatch_pdf_review
 

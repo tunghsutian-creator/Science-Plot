@@ -126,11 +126,11 @@ def _attachment(store: FileProjectStore, project_id: str, key: str) -> Attachmen
                                        plot_id=plot_id, managed_output=str(output)))
 
 
-def _prepare(store: FileProjectStore, owner: "ProjectApplication", snapshot: dict[str, Any], key: str,
-             captured: _Captured) -> PreparedMutation:
-    if (set(snapshot["files"]) != {MANAGED_STORE_CLAIM} or snapshot["sources"] or snapshot["commands"]
-            or any(path.name not in {MANAGED_STORE_CLAIM, STORE} for path in store.root.iterdir())):
-        raise EngineError("save_as_destination_claimed", "Save As cannot add or replace members in an existing project.")
+def prepare_forked_member(
+    store: FileProjectStore, snapshot: dict[str, Any], key: str,
+    captured: _Captured, sources: tuple[PreparedSource, ...], *, capabilities: dict[str, Any] | None,
+) -> tuple[Attachment, dict[str, Any], dict[str, bytes | None]]:
+    """Build one independent current revision, without publishing it."""
     attachment = _attachment(store, snapshot["project_id"], key)
     if snapshot["project_id"] == captured.project_id or attachment.entry["plot_id"] == captured.revision.plot_id:
         raise EngineError("save_as_identity_conflict", "The new file must receive a different project and plot identity.")
@@ -138,9 +138,6 @@ def _prepare(store: FileProjectStore, owner: "ProjectApplication", snapshot: dic
     if any(document[name] != captured.document[name] for name in ("scientific", "presentation", "scientific_hash", "presentation_hash")):
         raise EngineError("save_as_science_changed", "Save As cannot reinterpret the saved scientific or presentation domains.")
 
-    sources = tuple(PreparedSource(digest([snapshot["project_id"], "source", item.literal])[:32],
-                                   item.literal, item.sha256, item.data, item.aliases, 0o600)
-                    for item in captured.raw)
     # These private source views are only for the first binding admission.
     # Normal later operations resolve the new Store's own sealed source versions.
     with TemporaryDirectory(prefix=".save-as-sources-", dir=store.root / STORE) as temporary:
@@ -156,7 +153,7 @@ def _prepare(store: FileProjectStore, owner: "ProjectApplication", snapshot: dic
         output = attachment.output
         assert output is not None
         with repository.backend_scope(), repository.prepare_new_member(snapshot) as writes, repository_scope(
-                repository, capabilities=owner.capabilities):
+                repository, capabilities=capabilities):
             for name, data in captured.content.items():
                 path = attachment.root / "content" / name
                 publish_content(path, data, lambda: None)  # Fresh, validated CAS bytes; never recanonicalize.
@@ -166,6 +163,19 @@ def _prepare(store: FileProjectStore, owner: "ProjectApplication", snapshot: dic
                                   "The current runtime does not reproduce the exact saved PlotIR; no replacement figure was committed.")
             commit(attachment.root, document, prepared.binding, SAVE_AS_ADAPTER)
 
+    return attachment, document, writes
+
+
+def _prepare(store: FileProjectStore, owner: "ProjectApplication", snapshot: dict[str, Any], key: str,
+             captured: _Captured) -> PreparedMutation:
+    if (set(snapshot["files"]) != {MANAGED_STORE_CLAIM} or snapshot["sources"] or snapshot["commands"]
+            or any(path.name not in {MANAGED_STORE_CLAIM, STORE} for path in store.root.iterdir())):
+        raise EngineError("save_as_destination_claimed", "Save As cannot add or replace members in an existing project.")
+    sources = tuple(PreparedSource(digest([snapshot["project_id"], "source", item.literal])[:32],
+                                   item.literal, item.sha256, item.data, item.aliases, 0o600)
+                    for item in captured.raw)
+    attachment, document, writes = prepare_forked_member(
+        store, snapshot, key, captured, sources, capabilities=owner.capabilities)
     index = read_index(store, snapshot)
     register_entry(index, attachment)
     writes[INDEX] = encode(index)

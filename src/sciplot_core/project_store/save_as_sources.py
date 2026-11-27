@@ -6,6 +6,7 @@ from .errors import ProjectConflict
 from .repository import FileProjectStore
 
 SAVE_AS_ADAPTER = "managed_save_as_v1"
+FILE_SAVE_AS_ADAPTER = "project_file_save_as_v1"
 
 
 def bind_staged_source_copies(store: FileProjectStore, command: ProjectCommand) -> None:
@@ -15,11 +16,12 @@ def bind_staged_source_copies(store: FileProjectStore, command: ProjectCommand) 
     This is only the host locator binding; source IDs, versions and bytes still
     enter the new Store's canonical generation through the existing publisher.
     """
+    adapter = command.to_payload()["request"].get("adapter")
     with store._locked(allow_pending=True, writer=True) as (io, current):
         record = state.command(io, command.key, command.command_digest)
         if (record is None or record["phase"] not in {"needs_review", "accepted"}
                 or record.get("metadata") != command.to_payload()
-                or record["metadata"]["request"].get("adapter") != SAVE_AS_ADAPTER
+                or adapter not in {SAVE_AS_ADAPTER, FILE_SAVE_AS_ADAPTER}
                 or record["metadata"]["request"].get("save_as", {}).get("destination") != str(store.root)
                 or record["project_id"] != current["project_id"]
                 or record["generation"] != current["generation"]):
@@ -27,17 +29,21 @@ def bind_staged_source_copies(store: FileProjectStore, command: ProjectCommand) 
         frozen = state.sealed_draft(io, record)
         record_sources = frozen.get("sources")
         if (not isinstance(record_sources, dict) or not record_sources
-                or current["sources"] or current["commands"]):
+                or current["sources"] or current["commands"]
+                or adapter == FILE_SAVE_AS_ADAPTER and current["files"]):
             raise ProjectConflict("Save As source copies belong only to this new empty project.")
         versions = {}
         for identity, entries in record_sources.items():
-            if len(entries) != 1:
+            if adapter == SAVE_AS_ADAPTER and len(entries) != 1:
                 raise ProjectConflict("Save As includes one selected version per source.")
-            (version, entry), = entries.items()
-            if entry["source_id"] != identity or entry["sha256"] != version:
-                raise ProjectConflict("A Save As source lost its exact version identity.")
-            io.get(entry)
-            versions[identity] = {version: entry["sha256"]}
+            if not entries:
+                raise ProjectConflict("Each copied original needs at least one sealed version.")
+            versions[identity] = {}
+            for version, entry in entries.items():
+                if entry["source_id"] != identity or entry["sha256"] != version:
+                    raise ProjectConflict("A Save As source lost its exact version identity.")
+                io.get(entry)
+                versions[identity][version] = entry["sha256"]
         binding = {"versions": versions}
         prior = io.read("local_sources.json")
         if prior is not None and prior != binding:

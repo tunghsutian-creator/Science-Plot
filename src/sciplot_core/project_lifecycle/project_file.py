@@ -276,8 +276,18 @@ class ProjectFileSession:
         self.project_id = manifest.project_id
         self.opened_generation = manifest.generation
         self._version = version
+        self._manifest = manifest
         self._pending: _Candidate | None = None
         self._closed = False
+
+    def opened_member_hashes(self) -> dict[str, str]:
+        """Verified portable Store inventory from the opening snapshot."""
+        return {name.removeprefix("store/"): info[0] for name, info in self._manifest.members.items()}
+
+    def matches_saved(self, receipt: ProjectFileSave) -> bool:
+        """Confirm a possibly published archive from this exact opening snapshot."""
+        return (self.project_id, self.opened_generation, self._version.sha256) == (
+            receipt.project_id, receipt.generation, receipt.sha256)
 
     def matches_path(self, path: Path) -> bool:
         """Cheap view-cache check only. Saves still verify the exact bytes."""
