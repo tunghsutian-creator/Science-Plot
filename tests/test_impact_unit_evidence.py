@@ -112,3 +112,50 @@ def test_unitless_impact_analysis_keeps_counts_and_skips_statistics(
     assert rows["impact_group_iqr[A]"]["unit"] == ""
     assert rows["impact_group_iqr[A]"]["status"] == "skipped"
     assert rows["impact_group_median[B]"]["status"] == "ok"
+
+
+def test_impact_same_sample_mixed_notch_conditions_do_not_become_replicates(tmp_path, capsys):
+    import json
+
+    from sciplot_core.cli import main
+    from sciplot_core.data_mapping.table_choice import replicate_proposal_contents, select_table, source_table_snapshot
+    from sciplot_core.semantic_sources.impact_replicate_disclosure import wide_replicate_evidence
+    from sciplot_core.semantic_sources.impact_sources import ImpactConditionConflict
+
+    source = tmp_path / "impact.xlsx"
+
+    def write_headers(first, second):
+        pd.DataFrame(
+            [[first, None, second], ["kJ/m²", None, "kJ/m²"], ["E2", None, "E2"],
+             [7, None, 22], [8, None, 23]]
+        ).to_excel(source, sheet_name="23 C", header=False, index=False)
+
+    write_headers("Notched impact", "Unnotched impact")
+    original = source.read_bytes()
+    status = main(["plan", str(source), "--rule", "impact_metric", "--template", "bar", "--json"])
+    report = json.loads(capsys.readouterr().out)
+    assert status != 0 and report["status"] == "blocked"
+    assert report["blocker"]["reason_code"] == "impact_condition_conflict"
+    message = report["blocker"]["message"]
+    assert "'23 C'" in message or "impact:23 C" in message
+    assert "'E2'" in message and "columns 1 ('Notched impact') and 3 ('Unnotched impact')" in message
+    with pytest.raises(ImpactConditionConflict, match="no values were pooled"):
+        wide_replicate_evidence(source)
+    with pytest.raises(ImpactConditionConflict, match="no values were pooled"):
+        _impact_metrics(source)
+    selection = {"sheet": "23 C", "header_rows": [0], "unit_row": 1,
+                 "sample_row": 2, "data_start_row": 3, "data_end_row": 5}
+    snapshot = source_table_snapshot(source, rule_id="impact_metric", sheets=["23 C"])
+    facts = select_table(snapshot, selection)
+    with pytest.raises(ImpactConditionConflict):
+        replicate_proposal_contents(facts, [{"column_index": 0}, {"column_index": 2}])
+    for index in (0, 2):
+        selected = replicate_proposal_contents(facts, [{"column_index": index}])
+        assert selected["columns"][0].source_column_index == index
+    assert source.read_bytes() == original
+
+    write_headers("Re", "Impact strength (kJ/m²)")
+    assert main(["plan", str(source), "--rule", "impact_metric", "--template", "bar", "--json"]) == 0
+    plan = json.loads(capsys.readouterr().out)["resolved_figure_plan"]
+    assert plan["tasks"][0]["replicate_counts"] == [{"sample": "E2", "count": 4}]
+    assert read_impact_condition_payloads(source)[0][1].values == ((7.0, 8.0, 22.0, 23.0),)

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from pathlib import Path
+
+import pandas as pd
 
 from sciplot_core.foundation.source_locations import literal_source_path, resolve_source_path
 from sciplot_core.foundation.text_values import (
@@ -113,32 +116,73 @@ def _impact_payload(
     )
 
 
+class ImpactConditionConflict(_ImpactDataValidationError):
+    """A proposed sample group includes differently declared original metrics."""
+
+
+def _impact_metric_identity(header: str) -> str:
+    unit = _impact_unit_candidate_from_header(header)
+    if unit is not None and _canonical_impact_unit(unit) is not None:
+        head, _, tail = header.rpartition(unit)
+        if not tail.strip(" ])") and head:
+            header = head.rstrip(" ([")
+    label = " ".join(header.casefold().split())
+    if _token(label) in {"re", "impact", "impactstrength", "冲击", "冲击强度"}:
+        return "impact strength"
+    return label
+
+
+def require_same_impact_metric(
+    selected: dict[str, tuple[str, int]],
+    *,
+    table: str,
+    sample: str,
+    header: str,
+    column: int,
+) -> None:
+    """Use original metric evidence without inferring condition equivalence."""
+    previous_header, previous_column = selected.setdefault(sample, (header, column))
+    if _impact_metric_identity(previous_header) != _impact_metric_identity(header):
+        raise ImpactConditionConflict(
+            f"Impact table {table!r}, sample {sample!r}: original columns "
+            f"{previous_column + 1} ({previous_header!r}) and {column + 1} ({header!r}) "
+            "declare different metrics or conditions. Select compatible original "
+            "replicate columns separately; no values were pooled."
+        )
+
+
+def _wide_impact_columns(
+    table_name: str, raw_table: pd.DataFrame,
+) -> Iterator[tuple[str, list[float], object]]:
+    if raw_table.shape[0] < 4:
+        return
+    selected: dict[str, tuple[str, int]] = {}
+    for column in range(raw_table.shape[1]):
+        header = _clean_text(raw_table.iat[0, column])
+        sample = _clean_text(raw_table.iat[2, column])
+        if not sample or not _is_impact_metric(_token(header)):
+            continue
+        values = [
+            value
+            for row_index in range(3, raw_table.shape[0])
+            if (value := _float(raw_table.iat[row_index, column])) is not None
+        ]
+        if values:
+            require_same_impact_metric(selected, table=table_name, sample=sample,
+                                       header=header, column=int(raw_table.columns[column]))
+            yield sample, values, raw_table.iat[1, column]
+
+
 def _read_impact_canonical_tables(source: Path) -> ImpactReplicatePayload:
     """Read three-label-row impact tables, preserving every workbook sheet."""
 
     parsed: list[tuple[str, str, list[float]]] = []
     unit_candidates: list[object] = []
     for table_name, raw_table in _read_candidate_tables(source):
-        table = raw_table.dropna(axis=1, how="all")
-        if table.shape[0] < 4:
-            continue
         sheet_label = table_name.split(":", 1)[-1] if ":" in table_name else ""
-        for column in range(table.shape[1]):
-            metric_token = _token(table.iat[0, column])
-            if not _is_impact_metric(metric_token):
-                continue
-            sample = _clean_text(table.iat[2, column])
-            if not sample:
-                continue
-            values = [
-                value
-                for row_index in range(3, table.shape[0])
-                if (value := _float(table.iat[row_index, column])) is not None
-            ]
-            if not values:
-                continue
+        for sample, values, unit in _wide_impact_columns(table_name, raw_table):
             parsed.append((sheet_label, sample, values))
-            unit_candidates.append(table.iat[1, column])
+            unit_candidates.append(unit)
     if not parsed:
         raise ValueError("Could not find a three-label-row impact table.")
 
@@ -175,26 +219,11 @@ def read_impact_condition_payloads(
         return []
     conditions: list[tuple[str, ImpactReplicatePayload]] = []
     for table_name, raw_table in _read_candidate_tables(source):
-        table = raw_table.dropna(axis=1, how="all")
-        if table.shape[0] < 4:
-            continue
         groups: dict[str, list[float]] = {}
         unit_candidates: list[object] = []
-        for column in range(table.shape[1]):
-            metric_token = _token(table.iat[0, column])
-            if not _is_impact_metric(metric_token):
-                continue
-            sample = _clean_text(table.iat[2, column])
-            if not sample:
-                continue
-            values = [
-                value
-                for row_index in range(3, table.shape[0])
-                if (value := _float(table.iat[row_index, column])) is not None
-            ]
-            if values:
-                groups.setdefault(sample, []).extend(values)
-                unit_candidates.append(table.iat[1, column])
+        for sample, values, unit in _wide_impact_columns(table_name, raw_table):
+            groups.setdefault(sample, []).extend(values)
+            unit_candidates.append(unit)
         if not groups:
             continue
         condition = table_name.split(":", 1)[-1] if ":" in table_name else table_name

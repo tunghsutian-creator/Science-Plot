@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 
 from sciplot_core.source_tables import read_raw_table
+from sciplot_core.foundation.text_values import token
+from sciplot_core.semantic_sources.impact_sources import _is_impact_metric, require_same_impact_metric
 
 from sciplot_core.materials_rules.metric_tables import (
     _metric,
@@ -44,6 +46,7 @@ def _impact_metrics(processed_source: Path) -> list[dict[str, Any]]:
     for table_name, raw in _impact_metric_tables(processed_source):
         if raw.shape[0] < 4:
             continue
+        selected: dict[str, tuple[str, int]] = {}
         for column in range(raw.shape[1]):
             sample = str(raw.iat[2, column]).strip()
             if not sample or sample.casefold() == "nan":
@@ -58,6 +61,10 @@ def _impact_metrics(processed_source: Path) -> list[dict[str, Any]]:
             )
             if values.size == 0:
                 continue
+            header = str(raw.iat[0, column]).strip()
+            if _is_impact_metric(token(header)):
+                require_same_impact_metric(selected, table=table_name, sample=sample,
+                                           header=header, column=int(raw.columns[column]))
             key = (table_name, sample)
             existing_unit, existing_values = grouped_values.setdefault(key, (unit, []))
             existing_values.extend(float(value) for value in values)

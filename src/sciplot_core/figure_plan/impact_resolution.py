@@ -35,10 +35,14 @@ def resolve_impact_plan(
             source_sha256,
         )
     from sciplot_core.semantic_sources.impact_sources import (
+        ImpactConditionConflict,
         read_impact_condition_payloads,
     )
 
-    available = read_impact_condition_payloads(workbook)
+    try:
+        available = read_impact_condition_payloads(workbook)
+    except ImpactConditionConflict as exc:
+        raise FigurePlanResolutionError("impact_condition_conflict", str(exc)) from exc
     return resolve_impact_plan_from_payloads(
         available,
         template=template,

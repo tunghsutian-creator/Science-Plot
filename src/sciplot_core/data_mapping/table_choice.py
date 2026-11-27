@@ -30,7 +30,7 @@ from sciplot_core.mapping_contract.source_identity import source_view_id
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.semantic_sources.paired_curve_table_metadata import explicit_header_unit
 from sciplot_core.source_tables.read_session import read_table_once
-from sciplot_core.semantic_sources.impact_sources import _is_impact_metric, _validated_impact_unit
+from sciplot_core.semantic_sources.impact_sources import _is_impact_metric, _validated_impact_unit, require_same_impact_metric
 
 
 # Retained first-party compatibility name; new consumers use the original-table port.
@@ -234,6 +234,7 @@ def replicate_proposal_contents(snapshot: dict[str, Any], replicates: list[dict[
     labels: dict[str, str] = {}
     display_labels: dict[str, str] = {}
     occupied: dict[tuple[str | None, int], list[tuple[int, int]]] = {}
+    metrics_by_sheet: dict[str | None, dict[str, tuple[str, int]]] = {}
     for index, choice in enumerate(replicates):
         if (not isinstance(choice, dict) or "column_index" not in choice
                 or set(choice) - {"column_index", "table_selection", "metadata_confirmations", "label"}
@@ -253,6 +254,12 @@ def replicate_proposal_contents(snapshot: dict[str, Any], replicates: list[dict[
         if not _is_impact_metric(metric):
             raise ValueError("The selected column must identify the existing replicate metric in original metadata.")
         _validated_impact_unit([column["unit"]])
+        if numeric_contract == MAPPING_NUMERIC_V3:
+            require_same_impact_metric(
+                metrics_by_sheet.setdefault(selection["sheet"], {}),
+                table=selection["sheet"] or source.name, sample=column["sample"],
+                header=column["header"], column=column["index"],
+            )
         bounds = selection["data_start_row"], selection["data_end_row"]
         key = selection["sheet"], column["index"]
         if any(max(bounds[0], start) < min(bounds[1], end) for start, end in occupied.get(key, [])):
