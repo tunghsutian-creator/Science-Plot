@@ -179,3 +179,46 @@ def test_native_audit_rejects_external_missing_and_escaping_dependencies(tmp_pat
     library.write_bytes(b"library fixture")
     monkeypatch.setattr(macho, "load_commands", lambda path: (["@loader_path/../lib/Python", "/usr/lib/libSystem.B.dylib"], [], None))
     assert macho.audit_runtime(tmp_path) == {"mach_o_count": 1, "external_non_system_dependencies": 0}
+
+
+def test_reopening_project_focuses_editor_until_it_is_closed() -> None:
+    driver = """
+import sys, types
+from pathlib import Path
+from PyQt6.QtCore import QCoreApplication, QEvent
+from PyQt6.QtWidgets import QWidget
+from distribution.macos.finder import FinderApplication, main
+
+created = []
+class Editor(QWidget):
+    def __init__(self, path, **kwargs):
+        super().__init__()
+        created.append(self)
+        self.activations = 0
+    def activateWindow(self):
+        self.activations += 1
+
+stub = types.ModuleType("sciplot_core.plot_editor")
+stub.PlotEditor = Editor
+sys.modules[stub.__name__] = stub
+def exercise(self):
+    self._open_document(Path("first.sciplot"))
+    first, = created
+    first.showMinimized()
+    self._open_document(Path("first.sciplot").absolute())
+    assert created == [first] and first.activations == 2 and not first.isMinimized()
+    self._open_document(Path("second.sciplot"))
+    assert len(created) == 2
+    first.close()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    self._open_document(Path("first.sciplot"))
+    assert len(created) == 3
+    return 0
+FinderApplication.exec = exercise
+assert main() == 0
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", driver], capture_output=True, text=True, timeout=10,
+        env=os.environ | {"QT_QPA_PLATFORM": "offscreen"},
+    )
+    assert result.returncode == 0, result.stderr

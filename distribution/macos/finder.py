@@ -63,7 +63,7 @@ def main() -> int:
     """Open its saved figure editor, or the connection guide without a file."""
     command = Path(__file__).resolve().parents[2] / "MacOS" / "sciplot"
     dialogs: list[QMessageBox] = []
-    windows: set[QWidget] = set()
+    windows: dict[Path, QWidget] = {}
 
     def message(title: str, detail: str, icon: QMessageBox.Icon) -> None:
         dialog = QMessageBox()
@@ -83,6 +83,14 @@ def main() -> int:
         message("无法打开", "请选择本机的 .sciplot 项目文件。", QMessageBox.Icon.Warning)
 
     def open_document(path: Path) -> None:
+        key = path.absolute()
+        existing = windows.get(key)
+        if existing is not None:
+            if existing.isMinimized():
+                existing.showNormal()
+            existing.raise_()
+            existing.activateWindow()
+            return
         if path.is_dir() and not path.is_symlink():
             rejected()
             return
@@ -100,9 +108,9 @@ def main() -> int:
         except (ImportError, OSError, ValueError, RuntimeError, KeyError):
             message("无法打开", "无法显示所选项目中已保存的图。", QMessageBox.Icon.Warning)
             return
-        windows.add(window)
+        windows[key] = window
         window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        window.destroyed.connect(lambda: windows.discard(window))
+        window.destroyed.connect(lambda: windows.pop(key, None))
         window.show()
         window.raise_()
         window.activateWindow()
