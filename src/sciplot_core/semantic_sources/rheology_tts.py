@@ -171,14 +171,15 @@ def analyze_tts_request(request: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(
             "One original frequency Test cannot represent multiple sample identities."
         )
-    paths = [str(Path(request["frequency_source"]).expanduser().resolve())]
-    paths += [
-        str(Path(s["tts_source"]).expanduser().resolve())
-        for s in selections
-        if "tts_source" in s
-    ]
-    sources = {p: read_tts_blocks(p) for p in dict.fromkeys(paths)}
-    frequency_source = sources[paths[0]]
+    frequency_path = str(Path(request["frequency_source"]).expanduser().resolve())
+    selected_tests = {frequency_path: {s["frequency_test"] for s in selections}}
+    for selection in selections:
+        if "tts_source" in selection:
+            path = str(Path(selection["tts_source"]).expanduser().resolve())
+            selected_tests.setdefault(path, set()).add(selection["tts_test"])
+    sources = {path: read_tts_blocks(path, selected_tests=tests)
+               for path, tests in selected_tests.items()}
+    frequency_source = sources[frequency_path]
     frequency_samples = []
     tts_samples = []
     selected_keys: set[tuple[str, int]] = set()
@@ -226,34 +227,25 @@ def analyze_tts_request(request: dict[str, Any]) -> dict[str, Any]:
                 if corrected_method
                 else legacy
             )
-    excluded = [
-        {
-            "source": b["source"],
-            "test": b["test"],
-            "result": b["result"],
-            "header_row": b["header_row"],
-            "point_count": b["point_count"],
-            "reason": "Original Test/interval is outside the explicit requested sample selection; source bytes retained.",
-        }
-        for source in sources.values()
-        for b in source["blocks"]
-        if (b["source"], b["header_row"]) not in selected_keys
-    ]
-    if corrected_method:
-        original_blocks = {
-            (b["source"], b["header_row"]): b
-            for source in sources.values()
-            for b in source["blocks"]
-        }
-        for entry in excluded:
-            block = original_blocks[(entry["source"], entry["header_row"])]
-            entry.update(
-                data_start_row=block["data_start_row"],
-                data_end_row=block["data_end_row"],
-                source_rows=[p["source_row"] for p in block["points"]],
-                nominal_temperature_C=block["nominal_temperature_C"],
-                actual_temperature_C=block["actual_temperature_C"],
-            )
+    excluded = []
+    for source in sources.values():
+        for block in source["blocks"]:
+            if (block["source"], block["header_row"]) in selected_keys:
+                continue
+            entry = {key: block[key] for key in ("source", "test", "result", "header_row", "point_count")}
+            entry["reason"] = "Original Test/interval is outside the explicit requested sample selection; source bytes retained."
+            if "validation_error" in block:
+                entry["reason"] += f" Invalid excluded interval: {block['validation_error']}"
+            if corrected_method or "validation_error" in block:
+                source_rows = block.get("source_rows", [p["source_row"] for p in block["points"]])
+                entry.update(
+                    data_start_row=block["data_start_row"],
+                    data_end_row=block["data_end_row"],
+                    source_rows=source_rows,
+                    nominal_temperature_C=block["nominal_temperature_C"],
+                    actual_temperature_C=block["actual_temperature_C"],
+                )
+            excluded.append(entry)
     # Rehash after all numerical work to keep analysis bound to current originals.
     for path, source in sources.items():
         if hashlib.sha256(Path(path).read_bytes()).hexdigest() != source["sha256"]:
