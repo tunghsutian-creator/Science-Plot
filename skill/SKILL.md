@@ -86,7 +86,7 @@ Managed Template/Binding/Theme creation uses document authority. FigureTemplate 
 For directory-based raw-input plotting, omit `--out` by default. Deliveries belong beside the original source in `SOURCE_SciPlot/`; hidden `.sciplot/` holds internal evidence.
 Do not put user plotting deliveries inside the SciPlot repository or its `outputs/`.
 Development evidence belongs under ignored `.tmp_verify/`; its name never authorizes deletion (see Development).
-Require Doctor `status=ready` before artifact handoff; reuse current readiness. For directory packages, deliver plotting CSVs, PDF/TIFF and editable VSZ. Continue changes through the current AI task/document commands; do not launch the retired browser editor. Keep PDF review marks on a separate copy. Use the registered-project PDF reference route for a trusted current binding; a standalone parser result or an unknown PDF is not such a binding.
+For directory packages, reuse Doctor `status=ready` before handing off plotting CSVs, PDF/TIFF and editable VSZ. Portable archive export uses its own native checks; do not add a separate Doctor call. Continue changes through the current AI task/document commands; do not launch the retired browser editor. Keep PDF review marks on a separate copy. Use the registered-project PDF reference route for a trusted current binding; a standalone parser result or an unknown PDF is not such a binding.
 
 ## Authority
 
