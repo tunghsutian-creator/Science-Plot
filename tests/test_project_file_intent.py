@@ -1,6 +1,7 @@
-"""A relocation-safe typed text edit publishes once through public transports."""
+"""Relocation-safe typed edits publish through the public transports."""
 
 from contextlib import closing
+from copy import deepcopy
 import json
 import os
 from pathlib import Path
@@ -15,6 +16,7 @@ from sciplot_core._paths import REPO_ROOT
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_engine.errors import EngineError
 from sciplot_core.plot_engine.service import PlotService
+from sciplot_core.plot_ir.figure_document import figure_spec
 from sciplot_core.plot_protocol.paths import read_owner
 from sciplot_core.project_lifecycle import project_file
 from sciplot_core.project_lifecycle.attachment_index import INDEX, Attachment, encode, read_index
@@ -224,11 +226,19 @@ def test_relocated_project_file_axis_edit_is_saved_once_through_cli_and_daily_mc
 
 @pytest.mark.comprehensive
 def test_relocated_semantic_xy_can_save_twice_across_installations(tmp_path):
+    import anyio
+    from mcp import Client
+    from socket_fixture_helpers import socket_directory
+    from test_mcp_stdio import _parameters
+
     original = tmp_path.resolve() / "original analysis"
     original.mkdir()
     source = original / "experiment.csv"
     raw = b"Temperature,Heat Flow\nC,W/g\nSample,Sample\n66,-0.023\n61,0.008\n61,\n53,-0.016\n"
     source.write_bytes(raw)
+    reference = original / "reference.csv"
+    reference_raw = b"Temperature,Heat Flow\nC,W/g\nReference,Reference\n66,0.026\n60,0.010\n53,-0.013\n"
+    reference.write_bytes(reference_raw)
     # Run the producer and first edit from a genuinely distinct, byte-identical
     # source installation. No old paths or user project will exist on the second edit.
     old_install = tmp_path / "prior installation"
@@ -237,18 +247,19 @@ def test_relocated_semantic_xy_can_save_twice_across_installations(tmp_path):
                     ignore=shutil.ignore_patterns("__pycache__"))
     env = {**os.environ, "SCIPLOT_PYTHON": sys.executable, "MPLCONFIGDIR": str(tmp_path / "mpl")}
 
-    def cli(*args, previous=False):
+    def cli(*args, previous=False, code=0):
         run = subprocess.run(
             [str(REPO_ROOT / "skill/scripts/sciplot"), *map(str, args), "--json"],
             env={**env, **({"SCIPLOT_SOURCE_ROOT": str(old_source)} if previous else {})},
             cwd=tmp_path, capture_output=True, text=True, timeout=120, check=False,
         )
-        assert run.returncode == 0, run.stdout + run.stderr
+        assert run.returncode == code, run.stdout + run.stderr
         return json.loads(run.stdout)
 
     request = original / "plot.json"
-    request.write_text(json.dumps({"version": 1, "action": "create", "sources": [str(source)],
-                                   "intent": {"x": {"quantity": "temperature"}, "y": {"quantity": "heat_flow"}},
+    request.write_text(json.dumps({"version": 1, "action": "create", "sources": [str(source), str(reference)],
+                                   "intent": {"x": {"quantity": "temperature"}, "y": {"quantity": "heat_flow"},
+                                              "labels": ["Selected", "Reference"]},
                                    "out": str(original / "delivery"), "formats": ["pdf"]}))
     created = cli("task", "start", "--request", request, "--task-dir", original / "task", previous=True)
     assert created["status"] == "complete" and created["scientific_presentation"]["rule_id"] == "ordinary_xy"
@@ -277,9 +288,9 @@ def test_relocated_semantic_xy_can_save_twice_across_installations(tmp_path):
             assert document["revision"] == revision
             pins = owner.read(attached / "revisions" / f"{revision:08d}.json")["binding"]["fingerprint"]["files"]
             assert any(Path(name).is_relative_to(old_source) for name in pins) == (revision == 1)
-            [(source_id, versions)] = session.store.snapshot()["sources"].items()
-            [version] = versions
-            assert session.store.resolve_source(source_id, version).read_bytes() == raw
+            assert sorted(session.store.resolve_source(source_id, version).read_bytes()
+                          for source_id, versions in session.store.snapshot()["sources"].items()
+                          for version in versions) == sorted([raw, reference_raw])
         before = applied
         if revision == 1:
             shutil.rmtree(old_install)
@@ -287,3 +298,67 @@ def test_relocated_semantic_xy_can_save_twice_across_installations(tmp_path):
     current = cli("plot", "open", target, "--direct")
     assert current["revision"] == 2 and current["edit_targets"]["axis:x"]["label"] == title
     assert current["scientific_hash"] == saved["scientific_hash"] and current["plot_id"] == saved["plot_id"]
+
+    targets = {item["label"]: identifier for identifier, item in current["edit_targets"].items()
+               if item["properties"] == ["style.line.color"]}
+    assert set(targets) == {"Selected", "Reference"}
+    color = "#ab147c"
+    intent = {"mode": "apply", "plot_id": current["plot_id"], "base_revision": current["revision"],
+              "idempotency_key": "selected-color", "property": "style.line.color",
+              "target_id": targets["Selected"], "value": color}
+    original_archive = file_sha256(target)
+    request.write_text(json.dumps({**intent, "mode": "plan"}))
+    plan = cli("plot", "intent", target, "--request", request, "--direct")
+    assert plan["status"] == "ready" and not plan["saved"] and file_sha256(target) == original_archive
+    assert plan["target"] == {"id": targets["Selected"], "kind": "layer", "label": "Selected"}
+    assert plan["before"] != color and plan["after"] == color
+
+    with socket_directory(prefix="sp-file-color-", dir="/tmp") as directory:
+        socket = Path(directory) / "engine.sock"
+        parameters = _parameters(cli=True, profile="daily")
+        parameters.env = {**(parameters.env or {}), **env, "SCIPLOT_ENGINE_SOCKET": str(socket)}
+
+        async def apply_color():
+            async with Client(parameters, read_timeout_seconds=90) as client:
+                opened = await client.call_tool("sciplot_project_open", {"target": str(target)})
+                assert not opened.is_error and opened.structured_content == current
+                result = await client.call_tool("sciplot_plot_intent", {"plot": str(target), "request": intent})
+                assert not result.is_error, result.content
+                return result.structured_content
+
+        try:
+            changed = anyio.run(apply_color)
+        finally:
+            if socket.exists():
+                os.kill(read_owner(socket)["pid"], signal.SIGTERM)
+
+    assert changed["status"] == "saved" and changed["revision"] == 3
+    assert changed["scientific_hash"] == saved["scientific_hash"]
+    assert changed["presentation_hash"] != current["presentation_hash"]
+    with project_file_figure(target, current["plot_id"]) as (session, owner, document):
+        attached = owner.attachment.root
+        old = owner.load_revision(attached, 2)["document"]
+        assert old["scientific"] == document["scientific"]
+        expected = deepcopy(figure_spec(old))
+        line, = [mark for view in expected["views"] for layer in view["layers"]
+                 if layer["id"] == targets["Selected"] for mark in layer["marks"] if mark["type"] == "line"]
+        assert line["id"] == plan["target_context"]["mark_id"]
+        line["style"]["line_color"] = color
+        assert figure_spec(document) == expected
+        old_audit = owner.read(transaction_path(attached, "edit-2"))["review"]["scientific_audit"]
+        new_audit = owner.read(transaction_path(attached, "selected-color"))["review"]["scientific_audit"]
+        assert new_audit["status"] == "passed"
+        assert {key: new_audit[key] for key in ("datasets", "layers", "scales")} == {
+            key: old_audit[key] for key in ("datasets", "layers", "scales")}
+        assert sorted(session.store.resolve_source(source_id, version).read_bytes()
+                      for source_id, versions in session.store.snapshot()["sources"].items()
+                      for version in versions) == sorted([raw, reference_raw])
+
+    published = file_sha256(target)
+    assert published != original_archive
+    request.write_text(json.dumps(intent))
+    assert cli("plot", "intent", target, "--request", request, "--direct") == {**changed, "status": "already_saved"}
+    request.write_text(json.dumps({**intent, "idempotency_key": "stale-color", "value": "#112233"}))
+    stale = cli("plot", "intent", target, "--request", request, "--direct", code=1)
+    assert stale["reason_code"] == "document_revision_conflict"
+    assert file_sha256(target) == published

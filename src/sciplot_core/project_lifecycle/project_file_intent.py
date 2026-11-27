@@ -15,7 +15,7 @@ from .errors import EngineError
 from .head_observation import observe_plot_head
 from .journal_identity import saved_command
 from .project_file import ProjectFileSaveUnconfirmed
-from .project_file_summary import PROJECT_FILE_EDIT_PROPERTIES, project_file_figure
+from .project_file_summary import PROJECT_FILE_AXIS_PROPERTIES, PROJECT_FILE_EDIT_PROPERTIES, project_file_figure
 
 if TYPE_CHECKING:
     from .application import ProjectApplication
@@ -56,11 +56,27 @@ def _receipt(status: str, locator: dict[str, Any], document: dict[str, Any], *,
 def project_file_axis_intent(service: "ProjectApplication", path: Path, request: dict[str, Any], *,
                              expected_project_id: str | None = None,
                              expected_revision: RevisionToken | None = None) -> dict[str, Any]:
-    """Only the archive owner may acknowledge a saved edit, not its disposable Store."""
+    request = validate_intent(request)
+    if request["property"] not in PROJECT_FILE_AXIS_PROPERTIES:
+        raise EngineError("project_file_intent_unsupported", "Choose an axis title or major tick edit.",
+                          action="choose_axis_property")
+    return _project_file_intent(service, path, request, expected_project_id=expected_project_id,
+                                expected_revision=expected_revision)
+
+
+def project_file_intent(service: "ProjectApplication", path: Path, request: dict[str, Any]) -> dict[str, Any]:
     request = validate_intent(request)
     if request["property"] not in PROJECT_FILE_EDIT_PROPERTIES:
-        raise EngineError("project_file_intent_unsupported", "A .sciplot file supports axis titles and major ticks here.",
-                          action="choose_axis_property")
+        raise EngineError("project_file_intent_unsupported",
+                          "Choose an advertised axis title, major tick list, or ordinary XY line color.",
+                          action="inspect_project_file")
+    return _project_file_intent(service, path, request)
+
+
+def _project_file_intent(service: "ProjectApplication", path: Path, request: dict[str, Any], *,
+                         expected_project_id: str | None = None,
+                         expected_revision: RevisionToken | None = None) -> dict[str, Any]:
+    """Only the archive owner may acknowledge a saved edit, not its disposable Store."""
     with project_file_figure(path, request["plot_id"]) as (session, owner, before):
         if expected_project_id is not None and session.project_id != expected_project_id:
             raise EngineError("project_file_identity_conflict", "This path no longer contains the original project file.",
@@ -96,7 +112,7 @@ def project_file_axis_intent(service: "ProjectApplication", path: Path, request:
             with project_runtime(session.store):
                 result = service._apply_intent(owner.attachment.root, request, defer_export=True)
             if result.get("status") != "complete":
-                raise EngineError("project_file_edit_not_saved", "The axis edit could not complete; no file was replaced.")
+                raise EngineError("project_file_edit_not_saved", "The edit could not complete; no file was replaced.")
             edited = observe_plot_head(owner.attachment.root, owner=owner)
             if (edited is None or edited["document"]["scientific_hash"] != before["scientific_hash"]
                     or edited["document"]["revision"] != before["revision"] + bool(result.get("changed"))):
@@ -107,7 +123,7 @@ def project_file_axis_intent(service: "ProjectApplication", path: Path, request:
                 cache.unlink(missing_ok=True)
             generation = session.store.snapshot()["generation"]
         except (OSError, ValueError, KeyError, TypeError) as exc:
-            raise EngineError("project_file_edit_not_saved", "The axis edit could not complete; no file was replaced.",
+            raise EngineError("project_file_edit_not_saved", "The edit could not complete; no file was replaced.",
                               action="inspect_project_file", **locator) from exc
 
         document = edited["document"]
@@ -121,6 +137,6 @@ def project_file_axis_intent(service: "ProjectApplication", path: Path, request:
             raise EngineError("project_file_save_conflict", "The current project file was not replaced by this edit.",
                               action="inspect_project_file", **locator) from exc
         except (OSError, ValueError) as exc:
-            raise EngineError("project_file_save_failed", "The axis edit was not saved; no file was replaced.",
+            raise EngineError("project_file_save_failed", "The edit was not saved; no file was replaced.",
                               action="retry_same_request", **locator) from exc
         return _receipt("saved", locator, document, current_revision=document["revision"], saved=True)

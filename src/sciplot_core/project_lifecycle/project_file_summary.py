@@ -7,6 +7,7 @@ from typing import Any
 
 from sciplot_core.plot_engine.description_scope import edit_target_summary
 from sciplot_core.plot_engine.figure_updates import figure_property_names
+from sciplot_core.plot_engine.typed_intent import LINE_COLOR, line_color_targets
 from sciplot_core.plot_ir.figure_document import figure_spec, is_figure
 
 from .attached_repository import AttachedProjectRepository
@@ -16,7 +17,8 @@ from .head_observation import observe_plot_head
 from .project_file import ProjectFileSession, open_project_file
 
 
-PROJECT_FILE_EDIT_PROPERTIES = {"axis.label", "axis.ticks"}
+PROJECT_FILE_AXIS_PROPERTIES = {"axis.label", "axis.ticks"}
+PROJECT_FILE_EDIT_PROPERTIES = PROJECT_FILE_AXIS_PROPERTIES | {LINE_COLOR}
 
 
 @contextmanager
@@ -81,10 +83,12 @@ def project_file_summary(path: Path, figure_id: str | None) -> dict[str, Any]:
 
 def _summarize(session: ProjectFileSession, document: dict[str, Any]) -> dict[str, Any]:
     objects = document["presentation"]["objects"]
-    axes = {target: [prop for prop in properties if prop in PROJECT_FILE_EDIT_PROPERTIES]
-            for target, properties in figure_property_names(figure_spec(document)).items()
-            if "axis.label" in properties and objects[target]["kind"] == "axis"}
+    spec = figure_spec(document)
+    targets = {target: [prop for prop in properties if prop in PROJECT_FILE_AXIS_PROPERTIES]
+               for target, properties in figure_property_names(spec).items()
+               if "axis.label" in properties and objects[target]["kind"] == "axis"}
+    targets.update({target: [LINE_COLOR] for target in line_color_targets(document, spec)})
     return {"kind": "sciplot_project_file_summary", "version": 1, "read_only": True,
             "project_file": str(session.path), "project_id": session.project_id,
-            "edit_targets": edit_target_summary(objects, axes, {}),
+            "edit_targets": edit_target_summary(objects, targets, {}),
             **{key: document[key] for key in ("plot_id", "revision", "scientific_hash", "presentation_hash")}}

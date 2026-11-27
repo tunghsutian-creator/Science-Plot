@@ -286,7 +286,7 @@ def test_rpc_cli_mcp_parity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cap
     tool = tools["sciplot_plot_intent"]
     assert not tool.annotations.read_only_hint and tool.annotations.destructive_hint
     assert tool.input_schema["properties"]["request"]["properties"]["property"]["enum"] == [
-        "axis.label", "axis.ticks", "annotation.text"]
+        "axis.label", "axis.ticks", "annotation.text", "style.line.color"]
     monkeypatch.setattr("sciplot_core.plot_protocol.client.call", lambda method, params: forwarded.append((method, params)) or {"status": "ready"})
     assert services.invoke_owner("sciplot_plot_intent", call["params"]) == {"status": "ready"}
     assert forwarded[-1] == ("plot.intent", call["params"])

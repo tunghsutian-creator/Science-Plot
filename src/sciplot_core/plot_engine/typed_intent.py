@@ -12,12 +12,32 @@ from typing import Any
 from sciplot_core.plot_document.requests import PatchRequest, admit_patch
 from sciplot_core.plot_document.schema import IDENTIFIER, closed
 from sciplot_core.plot_document.validation import validate_wire
+from sciplot_core.plot_grammar.house import StyleResolver
+from sciplot_core.plot_grammar.styles import COLOR
 from sciplot_core.plot_ir.figure_document import figure_spec, is_figure
 
 from .errors import EngineError
 from .figure_updates import current_edit_value, patch_capabilities
 
-EDIT_KINDS = {"axis.label": "axis", "axis.ticks": "axis", "annotation.text": "annotation"}
+LINE_COLOR = "style.line.color"
+EDIT_KINDS = {"axis.label": "axis", "axis.ticks": "axis", "annotation.text": "annotation",
+              LINE_COLOR: "layer"}
+
+
+def line_color_targets(document: dict[str, Any], spec: dict[str, Any]) -> dict[
+        str, tuple[dict[str, Any], dict[str, Any], dict[str, Any]]]:
+    """Find ordinary XY measurement curves with one unambiguous line mark."""
+    if document["scientific"]["provenance"]["managed"].get("rule_id") != "ordinary_xy":
+        return {}
+    targets = {}
+    for view in spec["views"]:
+        for layer in view["layers"]:
+            marks = layer["marks"]
+            lines = [mark for mark in marks if mark["type"] == "line"]
+            if (layer["role"] == "measurement" and len(lines) == 1
+                    and all(mark["type"] in {"line", "point"} for mark in marks)):
+                targets[layer["id"]] = (view, layer, lines[0])
+    return targets
 
 
 def intent_schema() -> dict[str, Any]:
@@ -69,51 +89,73 @@ def compile_intent(document: dict[str, Any], request: dict[str, Any]) -> tuple[P
     kind = EDIT_KINDS[prop]
     objects = document["presentation"]["objects"]
     spec = figure_spec(document)
-    contracts = patch_capabilities(spec)
-    candidates = [identifier for identifier, obj in objects.items()
-                  if obj["kind"] == kind and prop in contracts.get(identifier, {})]
+    if prop == LINE_COLOR:
+        color_targets = line_color_targets(document, spec)
+        candidates = list(color_targets)
+        contexts = {target: {"view_id": view["id"], "mark_id": mark["id"]}
+                    for target, (view, _, mark) in color_targets.items()}
+    else:
+        contracts = patch_capabilities(spec)
+        candidates = [identifier for identifier, obj in objects.items()
+                      if obj["kind"] == kind and prop in contracts.get(identifier, {})]
+        contexts = {}
     if "target_id" in request:
         target = request["target_id"]
         if target not in candidates:
             raise EngineError("plot_intent_unknown_target", "Choose an exact stable ID for the requested edit type.",
-                              action="choose_target", candidates=_candidates(spec, objects, candidates, kind))
+                              action="choose_target", candidates=_candidates(spec, objects, candidates, kind, contexts))
     else:
         matches = [identifier for identifier in candidates if objects[identifier]["label"] == request["target_label"]]
         if len(matches) != 1:
             raise EngineError("plot_intent_ambiguous_target" if matches else "plot_intent_unknown_target",
                               "The target label does not identify exactly one editable object.",
-                              action="choose_target", candidates=_candidates(spec, objects, matches or candidates, kind))
+                              action="choose_target", candidates=_candidates(spec, objects, matches or candidates, kind, contexts))
         target = matches[0]
+    after = request["value"]
+    target_context: dict[str, Any] = {}
+    patch_target, patch_property, patch_value = target, prop, after
+    if prop == LINE_COLOR:
+        view, layer, mark = color_targets[target]
+        validate_wire(after, COLOR, code="plot_intent_invalid_value")
+        after = after.lower()
+        scopes = [spec["theme"]["project"], spec["theme"]["figure"], view["style"], layer["style"]]
+        before = StyleResolver(spec).resolve(mark["id"], "line", scopes, mark["style"],
+                                             index=view["layers"].index(layer))["line_color"]
+        patch_target, patch_property = mark["id"], "style"
+        patch_value = mark["style"] if before == after else {**mark["style"], "line_color": after}
+        risk = "presentation"
+        target_context = contexts[target]
+    else:
+        descriptor = contracts[target][prop]
+        validate_wire(after, descriptor["value_schema"], code="plot_intent_invalid_value")
+        risk = descriptor["risk"]
+        if risk != "presentation":
+            raise EngineError("plot_intent_scientific_change", "This edit cannot change scientific state.")
+        before = current_edit_value(spec, target, prop)
     patch = admit_patch({"plot_id": request["plot_id"], "base_revision": request["base_revision"],
              "idempotency_key": request["idempotency_key"], "intent_class": "presentation",
-             "changes": [{"op": "set", "target": [target], "property": prop, "value": request["value"]}]})
-    descriptor = contracts[target][prop]
-    validate_wire(request["value"], descriptor["value_schema"], code="plot_intent_invalid_value")
-    if descriptor["risk"] != "presentation":
-        raise EngineError("plot_intent_scientific_change", "This edit cannot change scientific state.")
-    before = current_edit_value(spec, target, prop)
-    target_context: dict[str, Any] = {}
+             "changes": [{"op": "set", "target": [patch_target], "property": patch_property, "value": patch_value}]})
     if kind == "axis":
         view, axis = next((view, axis) for view in spec["views"] for axis in view["axes"] if axis["id"] == target)
         scale = next(scale for scale in spec["scales"] if scale["id"] == axis["scale_id"])
         target_context = {"view_id": view["id"], "side": axis["side"], "scale_id": scale["id"],
                           **{field: scale[field] for field in
                           ("dimension", "quantity", "unit", "domain")}}
-    else:
+    elif kind == "annotation":
         annotation = next(item for item in spec["annotations"] if item["id"] == target)
         target_context = {field: annotation[field] for field in ("space", "view_id", "x_scale", "y_scale", "x", "y")
                           if field in annotation}
     plan = {"kind": "sciplot_plot_intent_plan", "version": 1,
-            "status": "no_change" if before == request["value"] else "ready", "plot_id": document["plot_id"],
+            "status": "no_change" if before == after else "ready", "plot_id": document["plot_id"],
             "base_revision": document["revision"], "target": {"id": target, "kind": kind,
                                                             "label": objects[target]["label"]},
-            "property": prop, "before": before, "after": request["value"],
-            "effective_risk": descriptor["risk"], "target_context": target_context, "patch_request": patch.to_payload()}
+            "property": prop, "before": before, "after": after,
+            "effective_risk": risk, "target_context": target_context, "patch_request": patch.to_payload()}
     return patch, plan
 
 
 def _candidates(spec: dict[str, Any], objects: dict[str, Any], ids: list[str],
-                kind: str) -> list[dict[str, Any]]:
+                kind: str, contexts: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
     """Return enough fixed context to make duplicate display labels actionable."""
     result = []
     scales = {item["id"]: item for item in spec["scales"]}
@@ -127,10 +169,12 @@ def _candidates(spec: dict[str, Any], objects: dict[str, Any], ids: list[str],
                     context = {"view_id": view["id"], "side": axis["side"], "scale_id": scale["id"],
                                "quantity": scale["quantity"], "unit": scale["unit"]}
                     break
-        else:
+        elif kind == "annotation":
             annotation = next(item for item in spec["annotations"] if item["id"] == identifier)
             context = {field: annotation[field] for field in
                        ("space", "view_id", "x_scale", "y_scale", "x", "y") if field in annotation}
+        else:
+            context = contexts[identifier]
         result.append({"id": identifier, "kind": kind, "label": objects[identifier]["label"],
                        "context": context})
     return result

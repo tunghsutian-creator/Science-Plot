@@ -171,10 +171,15 @@ class PlotService(ProjectApplication):
     def intent(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
         plot = plot.expanduser()
         if plot.suffix == ".sciplot" and (plot.is_symlink() or not plot.is_dir()):
-            from sciplot_core.project_lifecycle.project_file_intent import project_file_axis_intent
+            from sciplot_core.project_lifecycle.project_file_intent import project_file_intent
 
-            return project_file_axis_intent(self, plot, request)
+            return project_file_intent(self, plot, request)
         self.require_editable(plot)
+        from .typed_intent import LINE_COLOR
+
+        if isinstance(request, dict) and request.get("property") == LINE_COLOR:
+            raise EngineError("plot_intent_invalid", "Line color via plot intent requires a standalone .sciplot file.",
+                              action="inspect_project_file")
         return super().intent(plot, request)
 
     def rollback(self, plot: Path, request: dict[str, Any]) -> dict[str, Any]:
