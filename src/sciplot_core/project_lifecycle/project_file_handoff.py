@@ -46,7 +46,14 @@ def _has_deferred_export(owner: AttachedProjectRepository, root: Path) -> bool:
         if command.kind != "intent":
             changes = command.business_payload.get("changes", [])
             if (command.kind != "patch" or re.fullmatch(r"archive-series:[a-f0-9]{64}", command.idempotency_key) is None
-                    or len(changes) != 1 or changes[0].get("property") != "source.append"):
+                    or len(changes) != 1):
+                return False
+            change = changes[0]
+            replacement = change.get("value")
+            if change.get("property") != "source.append" and not (
+                    change.get("property") == "source.sha256" and isinstance(replacement, dict)
+                    and isinstance(replacement.get("replacement_path"), str)
+                    and Path(replacement["replacement_path"]).is_absolute()):
                 return False
         fallback_ir = owner.read(path)["export"].get("ir_hash")
         if not isinstance(fallback_ir, str):

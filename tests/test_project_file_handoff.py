@@ -241,10 +241,10 @@ def test_historical_fallback_only_allows_the_owned_completed_current_series_edit
     cache = root / "export-cache.json"
     current = document(1, "b")
 
-    def install_transaction(kind, key, operation, *, phase="complete"):
+    def install_transaction(kind, key, operation, *, phase="complete", value=None):
         request = {"idempotency_key": key, "intent_class": "scientific",
                    "plot_id": "plot:selected", "base_revision": 0,
-                   "changes": [{"op": "set", "target": ["view:main"], "property": operation, "value": {}}]}
+                   "changes": [{"op": "set", "target": ["view:main"], "property": operation, "value": value or {}}]}
         command = NormalizedCommand.create(kind, request, expected_revision=RevisionToken.of(prior["document"]))
         journal = transaction_path(root, key)
         tx = {"normalized_command": command.to_payload(), "request": request, "phase": phase,
@@ -273,6 +273,10 @@ def test_historical_fallback_only_allows_the_owned_completed_current_series_edit
     assert not owner_module._has_deferred_export(owner, root)
     install_transaction("patch", series_key, "series.display_label")
     assert not owner_module._has_deferred_export(owner, root)
+    install_transaction("patch", series_key, "source.sha256")
+    assert not owner_module._has_deferred_export(owner, root)
+    install_transaction("patch", series_key, "source.sha256", value={"replacement_path": str(tmp_path / "selected.csv")})
+    assert owner_module._has_deferred_export(owner, root)
     install_transaction("patch", series_key, "source.append", phase="prepared")
     assert not owner_module._has_deferred_export(owner, root)
     install_transaction("patch", series_key, "source.append")["document"]["scientific_hash"] = "f" * 64
