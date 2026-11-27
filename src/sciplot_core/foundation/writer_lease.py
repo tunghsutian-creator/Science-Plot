@@ -1,7 +1,8 @@
 """Nonblocking POSIX writer exclusion bound to a directory inode.
 
 The directory must already exist. Every cooperating writer in that directory
-uses this lease; separate files in one directory deliberately share exclusion.
+uses this lease. Archive writers can share it while coordinating on open
+files instead; either mode still excludes an exclusive directory writer.
 There is no lock pathname to unlink or reclaim. Closing the descriptor, including
 process termination, releases the kernel lock. This is not a distributed lease.
 """
@@ -27,14 +28,15 @@ class WriterLeaseChanged(RuntimeError):
 class DirectoryWriterLease:
     """Own one directory descriptor until close; publication may use its fd."""
 
-    def __init__(self, directory: Path) -> None:
+    def __init__(self, directory: Path, *, shared: bool = False) -> None:
         self.directory = directory.expanduser().resolve(strict=True)
         self._fd: int | None = os.open(
             self.directory,
             os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
         )
         try:
-            fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            mode = fcntl.LOCK_SH if shared else fcntl.LOCK_EX
+            fcntl.flock(self.fd, mode | fcntl.LOCK_NB)
             self.verify()
         except BlockingIOError as exc:
             self.close()

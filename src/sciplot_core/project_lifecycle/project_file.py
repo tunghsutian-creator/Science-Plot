@@ -2,15 +2,16 @@
 
 The ZIP64 envelope is exactly the existing portable Store bundle. A local
 session owns its private, disposable Store; the document changes only on
-explicit save. Directory leases coordinate cooperating local writers, not
-cloud replicas or an outside process racing the final check and rename.
+explicit save. Kernel leases coordinate cooperating local writers, not cloud
+replicas or an outside process racing the final check and rename.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import ExitStack, closing, contextmanager
 from dataclasses import dataclass
+import fcntl
 import hashlib
 import json
 import os
@@ -23,7 +24,7 @@ from zipfile import BadZipFile, ZIP_DEFLATED, ZipFile
 
 from sciplot_core.delivery.install import install_new_delivery
 from sciplot_core.foundation.research_destination import require_data_destination
-from sciplot_core.foundation.writer_lease import WriterLeaseChanged, exclusive_directory_lease
+from sciplot_core.foundation.writer_lease import DirectoryWriterLease, WriterLeaseBusy, WriterLeaseChanged
 from sciplot_core.project_store.errors import ProjectConflict, ProjectRecoveryRequired, ProjectStoreError
 from sciplot_core.project_store.io import parts
 from sciplot_core.project_store.repository import FileProjectStore
@@ -163,15 +164,21 @@ def _fingerprint(stream: BinaryIO) -> _FileVersion:
     return _FileVersion(info, sha)
 
 
-def _current(fd: int, name: str) -> _FileVersion | None:
-    try:
-        with _regular_file(name, dir_fd=fd) as stream:
-            version = _fingerprint(stream)
-        if version.identity != _identity(os.stat(name, dir_fd=fd, follow_symlinks=False)):
-            raise ProjectConflict("The .sciplot path changed while it was being checked.")
-        return version
-    except FileNotFoundError:
-        return None
+@contextmanager
+def _locked_archive_file(fd: int, name: str) -> Iterator[BinaryIO]:
+    with _regular_file(name, dir_fd=fd) as stream:
+        try:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise WriterLeaseBusy("Another writer owns this .sciplot file's save lease.") from exc
+        yield stream
+
+
+def _current(stream: BinaryIO, fd: int, name: str) -> _FileVersion:
+    version = _fingerprint(stream)
+    if version.identity != _identity(os.stat(name, dir_fd=fd, follow_symlinks=False)):
+        raise ProjectConflict("The .sciplot path changed while it was being checked.")
+    return version
 
 
 @dataclass(frozen=True)
@@ -208,7 +215,9 @@ def _candidate(
 
 
 def _publish(path: Path, stage: Path, candidate: _Candidate, baseline: _FileVersion | None) -> _FileVersion:
-    with exclusive_directory_lease(path.parent) as lease:
+    # Share the parent only with new archive writers. An older version using
+    # the exclusive parent flock still cannot enter this publication window.
+    with closing(DirectoryWriterLease(path.parent, shared=True)) as lease, ExitStack() as held:
         fd = lease.fd
         if baseline is None:
             try:
@@ -219,13 +228,18 @@ def _publish(path: Path, stage: Path, candidate: _Candidate, baseline: _FileVers
                 raise FileExistsError(path)
         else:
             try:
-                existing = _current(fd, path.name)
+                opened = held.enter_context(_locked_archive_file(fd, path.name))
+                existing = _current(opened, fd, path.name)
             except (OSError, ProjectStoreError) as exc:
                 raise ProjectConflict("The .sciplot save target changed since open.") from exc
             if existing != baseline:
                 raise ProjectConflict("The .sciplot save target changed since open.")
+        # Keep the old file locked and transfer another locked inode to the
+        # target at rename. Neither side of atomic replace admits a second save.
+        incoming = held.enter_context(_locked_archive_file(fd, stage.name))
         lease.verify()
-        if _identity(os.stat(stage.name, dir_fd=fd, follow_symlinks=False)) != candidate.version.identity:
+        if (_identity(os.fstat(incoming.fileno())) != candidate.version.identity
+                or _identity(os.stat(stage.name, dir_fd=fd, follow_symlinks=False)) != candidate.version.identity):
             raise ProjectConflict("The staged .sciplot candidate changed before save.")
         if baseline is None:
             # Existing portable path-based no-replace primitive. The verified
@@ -283,12 +297,15 @@ class ProjectFileSession:
             if expected_generation != pending.receipt.generation:
                 raise ProjectFileSaveUnconfirmed(pending.receipt)
             try:
-                with exclusive_directory_lease(self.path.parent) as lease:
-                    current = _current(lease.fd, self.path.name)
-                    if current is None or not current.matches_published(pending.version):
-                        raise ProjectConflict("The unconfirmed .sciplot candidate is no longer at the save target.")
-                    lease.verify()
-                    os.fsync(lease.fd)
+                with closing(DirectoryWriterLease(self.path.parent, shared=True)) as lease:
+                    with _locked_archive_file(lease.fd, self.path.name) as opened:
+                        current = _current(opened, lease.fd, self.path.name)
+                        if not current.matches_published(pending.version):
+                            raise ProjectConflict("The unconfirmed .sciplot candidate is no longer at the save target.")
+                        lease.verify()
+                        os.fsync(lease.fd)
+            except FileNotFoundError as exc:
+                raise ProjectConflict("The unconfirmed .sciplot candidate is no longer at the save target.") from exc
             except (OSError, WriterLeaseChanged) as exc:
                 raise ProjectFileSaveUnconfirmed(pending.receipt) from exc
             self._version = current
