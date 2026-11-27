@@ -142,15 +142,20 @@ def test_complete_portable_bundle_preserves_ids_native_history_and_source_versio
     assert (exported["project_id"], exported["generation"]) == (before["project_id"], store.snapshot()["generation"])
     assert exported["mode"] == "same_project_relocation" and exported["independent_project"] is False
     assert exported["host_grants_included"] is False
+    assert exported["next_step"] == {"action": "project.bundle-import", "arguments": {"bundle": str(bundle)},
+                                     "required_arguments": ["output_dir"]}
     original_source_id = next(iter(before["sources"]))
     version = next(iter(before["sources"][original_source_id]))
     locator = before["sources"][original_source_id][version]["locator"]
     moved_original = tmp_path / "original-offline"
     store.root.rename(moved_original)
     destination = tmp_path / "cold relocated"
-    imported = invoke_owner("sciplot_project_bundle_import", {"bundle": str(bundle), "output_dir": str(destination)})
+    imported = invoke_owner("sciplot_project_bundle_import",
+                            {**exported["next_step"]["arguments"], "output_dir": str(destination)})
     assert (imported["project_id"], imported["generation"]) == (exported["project_id"], exported["generation"])
     assert imported["project"] == str(destination) and imported["host_grants_included"] is False
+    assert imported["next_step"] == {"action": "project.open",
+                                     "arguments": {"target": str(destination), "description": {"scope": "summary"}}}
     relocated = FileProjectStore(destination)
     with pytest.raises(ValueError) as occupied:
         invoke_owner("sciplot_project_bundle_import", {"bundle": str(bundle), "output_dir": str(destination)})

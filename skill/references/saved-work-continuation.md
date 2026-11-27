@@ -130,7 +130,9 @@ In daily or expert MCP, call `sciplot_project_bundle_export` with
 `project` (the exact Store root) and `output_dir` (a new bundle directory).
 Then call `sciplot_project_bundle_import` with the returned `bundle` path and
 an unused `output_dir` for the project. Both tools use the same Store owner as
-the CLI.
+the CLI. The export receipt's `next_step` supplies the exact bundle argument;
+choose the new project directory yourself. The import receipt supplies the
+new project's `project.open` arguments.
 Compare returned `project_id` and `generation` before continuing at the new
 location. Use the returned `project` path to reopen it. Import preserves the
 project and admitted history, without granting executor permissions or external
@@ -174,7 +176,9 @@ and archive SHA-256. Open that file directly; `bundle-import` is for directory
 bundles. In daily or expert MCP, use the existing
 `sciplot_project_bundle_export` with `single_file: true`, the `.sciplot`
 filename in `output_dir` and optional `expected_generation`, then
-`sciplot_project_open` with the file. If there are multiple figures, specify the
+`sciplot_project_open` with the receipt's `next_step.arguments`. If you
+accidentally use bundle import on the file, the error gives the same direct-open
+arguments and leaves the destination untouched. If there are multiple figures, specify the
 exact plot ID when opening; saving does not select or discard any figure.
 
 ## Make a new, independently editable copy

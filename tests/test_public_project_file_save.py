@@ -62,7 +62,7 @@ def test_public_ordinary_xy_project_file_save_keeps_all_members_and_history(tmp_
     previous = cli("project", "bundle-export", store_root, "--out", directory)
     assert directory.is_dir() and (directory / "bundle.json").is_file()
     assert set(previous) == {"kind", "version", "status", "project", "bundle", "project_id", "generation",
-                             "mode", "independent_project", "host_grants_included"}
+                             "mode", "independent_project", "host_grants_included", "next_step"}
 
     second_request = original / "second.json"
     second_request.write_text(json.dumps(request_for_figure(original)))
@@ -98,7 +98,8 @@ def test_public_ordinary_xy_project_file_save_keeps_all_members_and_history(tmp_
         "project": str(plot), "bundle": str(archive), "project_id": snapshot["project_id"],
         "generation": snapshot["generation"], "mode": "same_project_relocation", "independent_project": False,
         "host_grants_included": False, "bundle_format": "single_file", "whole_project": True,
-        "project_file": str(archive), "sha256": file_sha256(archive)}
+        "project_file": str(archive), "sha256": file_sha256(archive),
+        "next_step": {"action": "project.open", "arguments": {"target": str(archive), "description": {"scope": "summary"}}}}
     cli("project", "bundle-export", plot, "--single-file", "--out", archive,
         failure="project_bundle_destination_exists")
     assert file_sha256(archive) == saved["sha256"] and source.read_bytes() == raw and store.snapshot() == snapshot
@@ -115,14 +116,22 @@ def test_public_ordinary_xy_project_file_save_keeps_all_members_and_history(tmp_
                     "output_dir": str(other_archive), "single_file": True, "expected_generation": snapshot["generation"]})
                 assert not packed.is_error, packed.content
                 assert packed.structured_content == {**saved, "bundle": str(other_archive),
-                    "project_file": str(other_archive), "sha256": file_sha256(other_archive)}
+                    "project_file": str(other_archive), "sha256": file_sha256(other_archive),
+                    "next_step": {"action": "project.open",
+                                  "arguments": {"target": str(other_archive), "description": {"scope": "summary"}}}}
                 shutil.rmtree(original)
-                no_selection = await client.call_tool("sciplot_project_open", {"target": str(other_archive)})
+                route = packed.structured_content["next_step"]
+                never_created = root / "wrong import"
+                mistaken_import = await client.call_tool("sciplot_project_bundle_import", {
+                    "bundle": str(other_archive), "output_dir": str(never_created)})
+                assert mistaken_import.is_error and mistaken_import.structured_content["error"]["code"] == "project_bundle_required"
+                assert mistaken_import.structured_content["repair"] == route
+                assert not never_created.exists()
+                no_selection = await client.call_tool("sciplot_project_open", route["arguments"])
                 assert no_selection.is_error
                 assert no_selection.structured_content["error"]["code"] == "project_file_figure_ambiguous"
                 for figure in (updated, second):
-                    opened = await client.call_tool("sciplot_project_open", {"target": str(other_archive),
-                                                                           "figure_id": figure["plot_id"]})
+                    opened = await client.call_tool("sciplot_project_open", {**route["arguments"], "figure_id": figure["plot_id"]})
                     assert not opened.is_error, opened.content
                     payload = opened.structured_content
                     assert payload["project_id"] == snapshot["project_id"] and payload["project_file"] == str(other_archive)

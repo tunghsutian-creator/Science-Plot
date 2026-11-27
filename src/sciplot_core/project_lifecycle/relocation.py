@@ -31,11 +31,21 @@ def _new_destination(value: Path, origin: Path) -> Path:
     return target
 
 
-def _result(operation: str, project: Path, bundle: Path, head: dict[str, Any]) -> dict[str, Any]:
+def _open_arguments(path: Path) -> dict[str, Any]:
+    return {"target": str(path), "description": {"scope": "summary"}}
+
+
+def _result(operation: str, project: Path, bundle: Path, head: dict[str, Any], *,
+            single_file: bool = False) -> dict[str, Any]:
+    if operation == "exported" and not single_file:
+        step = {"action": "project.bundle-import", "arguments": {"bundle": str(bundle)},
+                "required_arguments": ["output_dir"]}
+    else:
+        step = {"action": "project.open", "arguments": _open_arguments(bundle if single_file else project)}
     return {"kind": "sciplot_project_bundle_result", "version": 1, "status": operation,
             "project": str(project), "bundle": str(bundle), "project_id": head["project_id"],
             "generation": head["generation"], "mode": "same_project_relocation",
-            "independent_project": False, "host_grants_included": False}
+            "independent_project": False, "host_grants_included": False, "next_step": step}
 
 
 def _exact_member(path: Path) -> AttachedProjectRepository | None:
@@ -106,7 +116,7 @@ def export_project_bundle(project: Path, destination: Path, *, single_file: bool
                 raise EngineError("project_file_save_unconfirmed", "The .sciplot file may have been installed. Inspect that exact file before retrying.",
                                   action="project.open", project_file=str(out), project_id=exc.receipt.project_id,
                                   generation=exc.receipt.generation, sha256=exc.receipt.sha256) from exc
-            return {**_result("exported", target, out, head), "bundle_format": "single_file", "whole_project": True,
+            return {**_result("exported", target, out, head, single_file=True), "bundle_format": "single_file", "whole_project": True,
                     "project_file": str(out), "sha256": file.sha256}
         bundle = store.export_bundle(out)
     return _result("exported", root, bundle, head)
@@ -115,6 +125,9 @@ def export_project_bundle(project: Path, destination: Path, *, single_file: bool
 def import_project_bundle(bundle: Path, destination: Path) -> dict[str, Any]:
     """Rebind the same authoritative bundle in a new local directory without running it."""
     source = canonical_path(bundle)
+    if source.suffix == ".sciplot" and source.is_file():
+        raise EngineError("project_bundle_required", "Open the .sciplot file directly; bundle-import is for bundle directories.",
+                          action="project.open", arguments=_open_arguments(source))
     if not canonical_path(source / "bundle.json").is_file() or not canonical_path(source / "store").is_dir():
         raise EngineError("project_bundle_required", "Choose an exact Store bundle directory produced by project bundle-export.")
     out = _new_destination(destination, source)
