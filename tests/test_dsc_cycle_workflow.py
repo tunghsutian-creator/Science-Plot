@@ -139,3 +139,55 @@ def test_dsc_analysis_metrics_remain_algorithmic_without_transition_identity(
         f"maximum_absolute_heat_flow_temperature_C[{sample}]"
         for sample in ("UDC 2", "UDC 3", "UDC 4")
     }
+
+
+def test_dsc_explicit_physical_scan_feeds_plot_and_analysis_from_same_bound_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sciplot_core import task_control as control, task_execution as execution
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.materials_rules.analysis import compute_resolved_curve_metrics
+
+    source = tmp_path / "cycle.csv"
+    source.write_text("Temperature,Heat flow\n°C,W/g\nTrial,Trial\n"
+                      "90,0\n100,2\n110,0\n100,-3\n95,-7\n90,0\n")
+    original = source.read_bytes()
+    semantic = {"rule_id": "dsc_curve", "semantic_family": "dsc_curve", "axis_plan": {}}
+    unselected = compute_analysis_metrics(
+        source_path=source, processed_source=None, semantic=semantic,
+        output_dir=tmp_path / "full_cycle",
+    )
+    assert [value["status"] for value in unselected] == ["skipped", "skipped"]
+
+    admitted = []
+
+    def stop_before_native(_source, **options):
+        admitted.append(options["_observed_plan"])
+        return {"project_dir": str(tmp_path / "native"),
+                "studio_run": {"ready_to_use": True, "failure_reason": None}}
+
+    monkeypatch.setattr(execution, "create_project", stop_before_native)
+    monkeypatch.setattr(control, "inspect_project", lambda _: {"source": {"current": True}})
+    request = {"version": 1, "action": "create", "source": str(source), "rule_id": "dsc_curve"}
+    for name, start, end, points, peak in (
+        ("heat", 3, 6, ((90, 0), (100, 2), (110, 0)), 100),
+        ("cool", 5, 9, ((110, 0), (100, -3), (95, -7), (90, 0)), 95),
+    ):
+        selected = {"sheet": None, "header_rows": [0], "unit_row": 1, "sample_row": 2,
+                    "data_start_row": start, "data_end_row": end}
+        result = control.start_task(
+            {**request, "mapping": {"source_sha256": file_sha256(source),
+                                    "table_selection": selected,
+                                    "column_mapping": {"x_column": 0, "y_column": 1}}},
+            task_dir=tmp_path / name,
+        )
+        assert result["status"] == "complete"
+        observation = admitted[-1]
+        transform = observation.scientific_source.transform
+        assert len(transform.series) == 1
+        trace = transform.series[0]
+        assert trace.points == points
+        metrics = compute_resolved_curve_metrics(transform, semantic=semantic)
+        assert all(value["status"] == "ok" for value in metrics)
+        assert metrics[1]["value"] == peak
+    assert source.read_bytes() == original

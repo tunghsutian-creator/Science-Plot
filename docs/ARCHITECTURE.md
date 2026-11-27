@@ -2402,8 +2402,12 @@ project directory.
     identity-equivalent units yields exactly one v2 Cartesian `curve` task,
     `dsc_heat_flow_vs_temperature`; samples, order, coordinates, values, and
     source-tree identity all come from that input. More than one matching
-    worksheet is ambiguous and fails closed instead of choosing or inventing a
-    cooling/heating phase. The registered fixture's adjacent
+    worksheet without a selection is ambiguous. For a sheet containing a thermal
+    cycle, the existing structured task mapping can bind an exact worksheet
+    and original row range (`mapping.table_selection`, end exclusive) before
+    plotting and computing descriptors. An unsliced reversal/hold is retained
+    as acquired but does not produce single-scan descriptors. No phase is
+    inferred from temperature or heat-flow sign. The registered fixture's adjacent
     `digitization_provenance.json` remains fixture evidence only: ordinary DSC
     inputs require neither it nor DOI/publication metadata. Studio and Workflow
     then reuse the generic single-task registry/spec, Veusz, QA, exact-current,
