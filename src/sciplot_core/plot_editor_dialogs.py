@@ -14,6 +14,7 @@ from sciplot_core.archive_plot_view import export_archive_figure
 from sciplot_core.plot_engine.typed_intent import LINE_COLOR
 from sciplot_core.plot_grammar.styles import COLOR
 from sciplot_core.project_lifecycle.errors import EngineError
+from sciplot_core.project_lifecycle.project_file_intent import ProjectFileEdit
 
 
 class CurveColorEdit(QtWidgets.QGroupBox):
@@ -108,6 +109,24 @@ def _confirm_line_color(parent: QtWidgets.QWidget, *, label: str, before: str, a
             painter.setBrush(QtGui.QColor(color))
             painter.drawRect(x, 0, 113, 25)
     return confirm(parent, "核对曲线颜色", f"曲线：{label}\n现在：{before}\n改为：{after}", preview=swatches)
+
+
+def confirm_archive_save(plot: Path, edit: ProjectFileEdit, status: QtWidgets.QLabel) -> dict[str, Any] | None:
+    """Show the result of checking a receipt; never submit the edit."""
+    key = edit.request["idempotency_key"]
+    try:
+        return edit.confirm(plot)
+    except EngineError as exc:
+        if exc.repair.get("automatic_retry") is False:
+            status.setText("此文件没有记录这笔保存，未重新提交。若要重试，请重开项目并审核保存。"
+                           f"操作编号：{key}")
+        elif exc.reason_code == "project_file_identity_conflict":
+            status.setText(f"文件已被替换，不是原项目，未重新提交。操作编号：{key}")
+        else:
+            status.setText(f"未能确认这笔保存，未重新提交。{exc} 操作编号：{key}")
+    except (OSError, ValueError, RuntimeError, KeyError) as exc:
+        status.setText(f"未能确认这笔保存，未重新提交。{exc} 操作编号：{key}")
+    return None
 
 
 def archive_export_actions(window: QtWidgets.QMainWindow, plot: Path, status: QtWidgets.QLabel,

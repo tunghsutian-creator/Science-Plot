@@ -2,7 +2,7 @@
 
 from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from sciplot_core.foundation.writer_lease import WriterLeaseBusy, WriterLeaseChanged
 from sciplot_core.plot_engine.typed_intent import compile_intent, validate_intent
@@ -16,14 +16,32 @@ from .errors import EngineError
 from .head_observation import observe_plot_head
 from .journal_identity import saved_command
 from .project_file import ProjectFileSaveUnconfirmed, ProjectFileSession
-from .project_file_summary import PROJECT_FILE_EDIT_PROPERTIES, project_file_figure, saved_project_file_figure
+from .project_file_summary import (
+    PROJECT_FILE_EDIT_PROPERTIES, project_file_figure, project_file_read_session, saved_project_file_figure,
+)
 
 if TYPE_CHECKING:
     from .application import ProjectApplication
 
 
+class ProjectFileEdit(NamedTuple):
+    """The exact original archive intent and base revision, for receipt lookup."""
+
+    project_id: str
+    revision: RevisionToken
+    request: dict[str, Any]
+
+    def confirm(self, path: Path) -> dict[str, Any]:
+        return resume_project_file_intent(
+            path, {"plot_id": self.revision.plot_id, "base_revision": self.revision.revision,
+                   "idempotency_key": self.request["idempotency_key"]},
+            expected_project_id=self.project_id, expected_revision=self.revision,
+        )
+
+
 def _published_intent(
     owner: AttachedProjectRepository, request: dict[str, Any], *, lookup_only: bool = False,
+    expected_revision: RevisionToken | None = None,
 ) -> dict[str, Any] | None:
     """Validate the original command against the archive journal without re-running it."""
     root = owner.attachment.root
@@ -37,7 +55,9 @@ def _published_intent(
         if not original or (not lookup_only and original != request):
             raise EngineError("document_idempotency_conflict", "This key identifies another original command.",
                               action="use_original_request")
-        if lookup_only and any(original.get(key) != value for key, value in request.items()):
+        revision_mismatch = expected_revision is not None and (
+            command is None or command.expected_revision != expected_revision)
+        if lookup_only and (revision_mismatch or any(original.get(key) != value for key, value in request.items())):
             raise EngineError("document_revision_conflict",
                               "Use the original plot ID and base revision for this saved key.",
                               action="use_original_request")
@@ -61,16 +81,22 @@ def _receipt(status: str, locator: dict[str, Any], document: dict[str, Any], *,
             **{key: document[key] for key in ("revision", "scientific_hash", "presentation_hash")}, **details}
 
 
-def resume_project_file_intent(path: Path, request: dict[str, Any]) -> dict[str, Any]:
+def resume_project_file_intent(path: Path, request: dict[str, Any], *,
+                               expected_project_id: str | None = None,
+                               expected_revision: RevisionToken | None = None) -> dict[str, Any]:
     """Confirm an original edit using the archive as the sole publication witness."""
     from sciplot_core.plot_engine.contracts import validate_resume
 
     request = validate_resume(request)
-    with project_file_figure(path, request["plot_id"], exact_plot_id=True) as (session, owner, before):
+    with project_file_read_session(path) as session:
+        if expected_project_id is not None and session.project_id != expected_project_id:
+            raise EngineError("project_file_identity_conflict", "This path no longer contains the original project file.",
+                              action="inspect_project_file")
+        owner, before = saved_project_file_figure(session, request["plot_id"], exact_plot_id=True)
         locator = {"project_file": str(session.path), "project_id": session.project_id,
                    "plot_id": before["plot_id"], "idempotency_key": request["idempotency_key"]}
         try:
-            published = _published_intent(owner, request, lookup_only=True)
+            published = _published_intent(owner, request, lookup_only=True, expected_revision=expected_revision)
         except EngineError:
             raise
         except (OSError, ValueError, KeyError, TypeError) as exc:

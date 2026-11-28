@@ -13,16 +13,16 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from sciplot_core.archive_plot_view import archive_plot_view, editor_target_path, is_archive_target
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.plot_editor_dialogs import (
-    CurveColorEdit, add_axis_editor, approve_edit, archive_export_actions, confirm_native_preview, parse_major_ticks,
+    CurveColorEdit, add_axis_editor, approve_edit, archive_export_actions, confirm_archive_save,
+    confirm_native_preview, parse_major_ticks,
 )
 from sciplot_core.plot_engine.service import public_plot_service
 from sciplot_core.plot_engine.typed_intent import LINE_COLOR
 from sciplot_core.plot_protocol.client import call
 from sciplot_core.plot_protocol.paths import TransportError
-from sciplot_core.project_lifecycle.contracts import RevisionToken
 from sciplot_core.project_lifecycle.errors import EngineError
 from sciplot_core.project_lifecycle.project_file import ProjectFileSession
-from sciplot_core.project_lifecycle.project_file_intent import project_file_intent
+from sciplot_core.project_lifecycle.project_file_intent import ProjectFileEdit, project_file_intent
 from sciplot_core.project_lifecycle.project_file_summary import project_file_read_session
 from sciplot_core.studio_core.qt_compat import ensure_veusz_qsettings_compat
 from sciplot_core.studio_core.runtime import ensure_veusz_runtime_path
@@ -39,7 +39,7 @@ class PlotEditor(QtWidgets.QMainWindow):
         self._archive_session: ProjectFileSession | None = None
         self._archive_lifetime = ExitStack()
         self.destroyed.connect(self._archive_lifetime.close)
-        self.archive_request: tuple[RevisionToken, dict[str, Any]] | None = None
+        self.archive_request: ProjectFileEdit | None = None
         self.socket_path = socket_path
         self.timeout = timeout
         self.summary: dict[str, Any] = {}
@@ -60,7 +60,7 @@ class PlotEditor(QtWidgets.QMainWindow):
         self.figures.currentIndexChanged.connect(self._select_archive_plot)
         self.body_layout.addWidget(self.figures)
         (self.axes, self.edit_property, self.label, self.review, self.refresh, self.retry) = add_axis_editor(self.body_layout)
-        self.retry.clicked.connect(self._retry_archive)
+        self.retry.clicked.connect(self._confirm_archive)
         self.curve_colors = CurveColorEdit(self._edit_color)
         self.body_layout.addWidget(self.curve_colors)
         self.setCentralWidget(body)
@@ -128,14 +128,18 @@ class PlotEditor(QtWidgets.QMainWindow):
             if action is not None:
                 action.setEnabled(False)
 
-    def _refresh(self, initial: bool = False) -> None:
+    def _refresh(self, initial: bool = False, *, saved_revision: int | None = None) -> None:
         try:
             self._load_current()
         except (OSError, ValueError, RuntimeError, KeyError) as exc:
             self._disable_editing()
             if initial:
                 raise
-            self.status.setText(f"未能读取最新版本：{exc}")
+            context = "未能读取最新版本" if saved_revision is None else f"修订 {saved_revision} 已保存，但未能刷新窗口"
+            self.status.setText(f"{context}：{exc}")
+        else:
+            if saved_revision is not None:
+                self.status.setText(f"已确认保存修订 {saved_revision}。{self.status.text()}")
 
     def _load_current(self) -> None:
         if self.archive:
@@ -179,7 +183,7 @@ class PlotEditor(QtWidgets.QMainWindow):
         self.status.setText(f"修订 {summary['revision']} · {summary['plot_id']}。可修改{edits}。")
         self._selected_axis()
         if self.archive_request is not None:
-            self._show_archive_unconfirmed()
+            self._show_archive_unconfirmed(self.archive_request)
 
     def _select_archive_plot(self) -> None:
         plot_id = self.figures.currentData()
@@ -331,60 +335,57 @@ class PlotEditor(QtWidgets.QMainWindow):
 
     def _edit_archive(self, request: dict[str, Any]) -> None:
         expected = self.summary["revision_token"]
+        project_id = self.summary["project_id"]
         assert self._archive_service is not None
         try:
             plan = project_file_intent(self._archive_service, self.plot, {**request, "mode": "plan"},
-                                       expected_project_id=self.summary["project_id"], expected_revision=expected,
+                                       expected_project_id=project_id, expected_revision=expected,
                                        preview_session=self._archive_session)
         except (OSError, ValueError, RuntimeError, KeyError) as exc:
             self._disable_editing()
             self.status.setText(f"未保存：{exc} 请读取最新版本。")
             return
         if approve_edit(self, self.status, plan):
-            self._save_archive(expected, {**request, "mode": "apply"})
+            self._save_archive(ProjectFileEdit(project_id, expected, {**request, "mode": "apply"}))
 
-    def _retry_archive(self) -> None:
+    def _confirm_archive(self) -> None:
         if self.archive_request is not None:
-            self._save_archive(*self.archive_request)
+            receipt = confirm_archive_save(self.plot, self.archive_request, self.status)
+            if receipt is not None:
+                self._archive_saved(receipt)
 
-    def _show_archive_unconfirmed(self) -> None:
-        assert self.archive_request is not None
+    def _show_archive_unconfirmed(self, pending: ProjectFileEdit) -> None:
+        self.archive_request = pending
         self.figures.setEnabled(False)
         self._disable_editing()
         self.retry.show()
         self.status.setText("上一笔保存未确认。请确认原操作，不要重新提交。"
-                            f"操作编号：{self.archive_request[1]['idempotency_key']}")
+                            f"操作编号：{pending.request['idempotency_key']}")
 
-    def _save_archive(self, expected: RevisionToken, request: dict[str, Any]) -> None:
+    def _save_archive(self, pending: ProjectFileEdit) -> None:
         assert self._archive_service is not None
         try:
-            receipt = project_file_intent(self._archive_service, self.plot, request,
-                                          expected_project_id=self.summary["project_id"], expected_revision=expected)
+            receipt = project_file_intent(self._archive_service, self.plot, pending.request,
+                                          expected_project_id=pending.project_id, expected_revision=pending.revision)
         except EngineError as exc:
-            if exc.reason_code == "project_file_save_unconfirmed" or self.archive_request is not None:
-                self.archive_request = expected, request
-                self._show_archive_unconfirmed()
+            if exc.reason_code == "project_file_save_unconfirmed":
+                self._show_archive_unconfirmed(pending)
                 return
             self._disable_editing()
             self.status.setText(f"未保存：{exc} 请读取最新版本。")
             return
         except (OSError, ValueError, RuntimeError, KeyError):
-            self.archive_request = expected, request
-            self._show_archive_unconfirmed()
+            self._show_archive_unconfirmed(pending)
             return
-        if not (receipt.get("saved") is True and receipt.get("idempotency_key") == request["idempotency_key"]):
-            self.archive_request = expected, request
-            self._show_archive_unconfirmed()
+        if not (receipt.get("saved") is True and receipt.get("idempotency_key") == pending.request["idempotency_key"]):
+            self._show_archive_unconfirmed(pending)
             return
+        self._archive_saved(receipt)
+
+    def _archive_saved(self, receipt: dict[str, Any]) -> None:
         self.archive_request = None
         self.retry.hide()
-        try:
-            self._load_current()
-        except (OSError, ValueError, RuntimeError, KeyError) as exc:
-            self._disable_editing()
-            self.status.setText(f"修订 {receipt['revision']} 已保存，但未能刷新窗口：{exc}")
-        else:
-            self.status.setText(f"已确认保存修订 {receipt['revision']}。{self.status.text()}")
+        self._refresh(saved_revision=receipt["revision"])
 
     def _review_native(self, result: dict[str, Any]) -> dict[str, Any]:
         accepted = confirm_native_preview(self, result["preview"])
@@ -392,10 +393,8 @@ class PlotEditor(QtWidgets.QMainWindow):
 
 
 def run_editor(plot: Path, *, socket_path: Path | None, timeout: float, figure_id: str | None = None) -> int:
-    app: QtCore.QCoreApplication | None = QtCore.QCoreApplication.instance()
-    if app is None:
-        app = QtWidgets.QApplication([])
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     plot = editor_target_path(plot, figure_id)
     window = PlotEditor(plot, socket_path=socket_path, timeout=timeout, figure_id=figure_id)
     window.show()
-    return QtWidgets.QApplication.exec()
+    return app.exec()

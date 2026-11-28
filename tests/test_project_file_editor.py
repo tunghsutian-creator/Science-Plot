@@ -195,6 +195,9 @@ def test_project_file_editor_and_daily_mcp_share_one_archive(tmp_path, monkeypat
             assert stale.summary["revision"] == 2 and stale.summary["edit_targets"]["axis:xb"]["label"] == "MCP second"
             assert draw(stale) != before and not stale_native.exists()
 
+            old_file = moved.read_bytes()
+            with open_project_file(moved) as session:
+                old_generation = session.opened_generation
             original_publish = project_file._publish
 
             def lose_ack(path, stage, candidate, baseline):
@@ -204,10 +207,42 @@ def test_project_file_editor_and_daily_mcp_share_one_archive(tmp_path, monkeypat
             with monkeypatch.context() as fault:
                 fault.setattr(project_file, "_publish", lose_ack)
                 edit(stale, "Unconfirmed third")
-            expected, command = stale.archive_request
-            pending = expected, dict(command)
-            assert pending[1]["value"] == "Unconfirmed third" and not stale.review.isEnabled()
+            pending = stale.archive_request
+            assert pending is not None
+            command = dict(pending.request)
+            assert command["value"] == "Unconfirmed third" and not stale.review.isEnabled()
             assert "未确认" in stale.status.text()
+            confirmed_file = moved.read_bytes()
+            restored = root / "restored.sciplot"
+            restored.write_bytes(old_file)
+            os.replace(restored, moved)
+            click(stale.retry)
+            assert "没有记录这笔保存，未重新提交" in stale.status.text()
+            assert stale.archive_request == pending and not stale.review.isEnabled()
+            assert moved.read_bytes() == old_file
+            with open_project_file(moved) as session:
+                assert session.opened_generation == old_generation
+
+            other = root / "other"
+            other.mkdir()
+            other_store = FileProjectStore(other)
+            other_store.snapshot(import_legacy=True)
+            with closing(PlotService()) as service:
+                other_figure = service.create(request_for_figure(other), project=other)
+                assert other_figure["ready_to_use"]
+            other_file = root / "other.sciplot"
+            other_receipt = create_project_file(
+                other_file, other_store, expected_generation=other_store.snapshot()["generation"])
+            assert other_receipt.project_id != pending.project_id
+            os.replace(other_file, moved)
+            click(stale.retry)
+            assert "不是原项目，未重新提交" in stale.status.text()
+            assert stale.archive_request == pending and file_sha256(moved) == other_receipt.sha256
+            with open_project_file(moved) as session:
+                assert session.opened_generation == other_receipt.generation
+
+            restored.write_bytes(confirmed_file)
+            os.replace(restored, moved)
             # Advance the archive through a separate owner while this window
             # still holds the original unresolved request.
             with closing(PlotService()) as service:
@@ -215,11 +250,15 @@ def test_project_file_editor_and_daily_mcp_share_one_archive(tmp_path, monkeypat
                     "idempotency_key": "unrelated-edit", "value": "Frequency / Hz"})
             assert next_saved["saved"] and next_saved["revision"] == 4
             latest = file_sha256(moved)
+            with open_project_file(moved) as session:
+                latest_generation = session.opened_generation
             click(stale.refresh)
             assert stale.summary["revision"] == 4 and stale.archive_request == pending
             assert not stale.review.isEnabled()
             click(stale.retry)
             assert stale.archive_request is None and not stale.retry.isVisible() and file_sha256(moved) == latest
+            with open_project_file(moved) as session:
+                assert session.opened_generation == latest_generation
             assert stale.summary["edit_targets"]["axis:xb"]["label"] == "Frequency / Hz"
         finally:
             first.close()
