@@ -174,6 +174,10 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
         from sciplot_core.project_commands import ProjectCommand
 
         return dict(app.resume(ProjectCommand.from_payload(prior["metadata"]))["result"])
+    # Recover an existing receipt first; only fresh work must admit this preimage.
+    for name, actual in before.get("outside_changes", {}).items():
+        if name not in missing_names and (not name.endswith(".vsz") or not name.startswith("studio/") or actual is None):
+            raise ValueError("Publication found unregistered outside changes beyond audited native documents")
     run_relative = _next_run(before["files"])
     final_run = project / run_relative
     canonical_request = json.loads(repository.read_bytes(repository.logical_path(request), generation=before["generation"]))
@@ -289,8 +293,6 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
         for name, actual in before.get("outside_changes", {}).items():
             if name in missing_names:
                 continue  # Only the same authenticated typed absence is admitted by Core again below.
-            if not name.endswith(".vsz") or not name.startswith("studio/") or actual is None:
-                raise ValueError("Publication found unregistered outside changes beyond audited native documents")
             # Scientific verification above audited the exact current native
             # documents in this full publication; no generic drift bypass exists.
             writes[name] = project / name

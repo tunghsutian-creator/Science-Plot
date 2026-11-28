@@ -97,17 +97,21 @@ def test_foreign_present_output_is_never_classified_as_reconstructable(rendered,
     project, calls = rendered
     original = execute(owner, project, tmp_path)
     artifact = Path(original["exports"][0]["path"])
-    artifact.write_bytes(b"foreign manual output")
+    artifacts = [artifact]
+    if owner == "whole":
+        artifacts.append(Path(original["delivery_package"]["figures"][0]["path"]))
     before_calls = len(calls)
     store = FileProjectStore(tmp_path / "output") if owner == "standalone" else FileProjectStore(project)
     head = (store.root / ".sciplot_store/head.json").read_bytes()
-    with pytest.raises((ProjectConflict, ValueError)):
-        execute(owner, project, tmp_path)
-    assert artifact.read_bytes() == b"foreign manual output"
-    # Whole-publication calculation is disposable private work; its final
-    # unchanged CAS guard still refuses any active/canonical replacement.
-    assert len(calls) == before_calls + (1 if owner == "whole" else 0)
-    assert (store.root / ".sciplot_store/head.json").read_bytes() == head
+    for target in artifacts:
+        previous = target.read_bytes()
+        target.write_bytes(b"foreign manual output")
+        with pytest.raises((ProjectConflict, ValueError)):
+            execute(owner, project, tmp_path)
+        assert target.read_bytes() == b"foreign manual output"
+        assert len(calls) == before_calls
+        assert (store.root / ".sciplot_store/head.json").read_bytes() == head
+        target.write_bytes(previous)
 
 
 @pytest.mark.parametrize("owner", ["selected", "standalone", "whole"])
