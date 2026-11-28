@@ -387,6 +387,7 @@ def test_relocated_semantic_xy_can_save_twice_across_installations(tmp_path):
         attached = owner.attachment.root
         before = owner.load_revision(attached, 3)["document"]
         assert before["scientific"] == after["scientific"]
+        assert figure_spec(before)["layout"] == figure_spec(after)["layout"]
         prior_review = owner.read(transaction_path(attached, "selected-color"))["review"]
         after_review = owner.read(transaction_path(attached, "selected-alias"))["review"]
         assert after_review["scientific_audit"]["status"] == "passed"

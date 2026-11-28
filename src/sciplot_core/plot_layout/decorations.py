@@ -5,13 +5,18 @@ from __future__ import annotations
 import unicodedata
 from typing import Any
 
+from sciplot_core.rendering_contract.native_key_budget import native_key_budget
+
 PT_MM = 25.4 / 72.0
 
 
 def text_width_mm(text: str, font_size_pt: float) -> float:
     """An explicit conservative estimate, never presented as native text bounds."""
-    cells = sum(1.7 if unicodedata.east_asian_width(char) in {"W", "F"} else 1.0 for char in text)
-    return cells * font_size_pt * PT_MM * 0.72
+    return _text_cells(text) * font_size_pt * PT_MM * 0.72
+
+
+def _text_cells(text: str) -> float:
+    return sum(1.7 if unicodedata.east_asian_width(char) in {"W", "F"} else 1.0 for char in text)
 
 
 def suppression(layout: dict[str, Any], axes: list[dict[str, Any]]) -> set[str]:
@@ -77,5 +82,16 @@ def guide_size(guide: dict[str, Any]) -> tuple[float, float]:
     labels = [str(entry["label"]) for entry in guide.get("entries", [])]
     columns = int(guide["columns"])
     rows = (len(labels) + columns - 1) // columns
+    if guide.get("text_layout") == "legend-metric-flow":
+        # Flow keys use configured native chrome, not the placeholder symbols
+        # and 13 mm padding reserved for individually positioned labels.
+        style = guide["style"]
+        width, height, _ = native_key_budget(
+            label_cells=max((_text_cells(label) for label in labels), default=0),
+            font_size_pt=font, key_length_mm=float(style["key_length_mm"]),
+            columns=columns, rows=max(1, rows), frame_visible=bool(style["frame_visible"]),
+            margin_size=float(style["margin_size"]),
+        )
+        return width, height
     cell_width = max((text_width_mm(label, font) for label in labels), default=0.0) + 9.0
     return columns * cell_width + 4.0, rows * font * PT_MM * 1.8 + 4.0

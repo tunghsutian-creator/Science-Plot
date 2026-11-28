@@ -2,6 +2,8 @@
 import math
 from typing import Any
 
+from .native_key_budget import native_key_budget
+
 
 def inside_best_geometry(
     curves: list[tuple[str, list[tuple[float, float]]]],
@@ -55,15 +57,10 @@ def inside_best_geometry(
     longest = max((len(label) for label, _coordinates in curves), default=0)
     columns = 1 if count <= 4 or (width_mm <= 60.5 and longest >= 22) else 2
     rows = max(1, math.ceil(count / columns))
-    point_to_mm = 25.4 / 72.0
-    font_height = max(font_size_pt * 1.2 * point_to_mm, .1)
-    text_width = max(longest * font_size_pt * .56 * point_to_mm, .2)
-    box_width = (text_width + font_height + key_length_mm) * columns + font_height * (columns - 1)
-    box_height = rows * font_height
-    if frame_visible:
-        margin = .15 * font_height
-        box_width += 2.0 * margin
-        box_height += margin
+    box_width, box_height, font_height = native_key_budget(
+        label_cells=longest, font_size_pt=font_size_pt, key_length_mm=key_length_mm,
+        columns=columns, rows=rows, frame_visible=frame_visible, margin_size=.15,
+    )
     return samples, {"columns": columns, "rows": rows, "font_height_mm": font_height,
                      "graph_width_mm": graph_width, "graph_height_mm": graph_height,
                      "box_width_mm": min(box_width, graph_width * .92),
