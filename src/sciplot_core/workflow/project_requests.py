@@ -118,6 +118,9 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
             candidate.mapping_inputs[mapping_reads.execution] = mapping_reads
         private_output = candidate.resource_path((output_name + "/" if output_name else "") + "manifest.json").parent
         private_delivery = candidate.resource_path((delivery_name + "/" if delivery_name else "") + "delivery_manifest.json").parent
+        # Bind the delivery identity to an existing private root even on the
+        # first run. The separate stage still owns every newly rendered member.
+        private_delivery.mkdir(parents=True, exist_ok=True)
         # This is the committed registry copied into this exact private snapshot,
         # not a guessed manifest discovered from the visible delivery's shell.
         previous_registry = read_intake_project_manifest(candidate.project_dir)
