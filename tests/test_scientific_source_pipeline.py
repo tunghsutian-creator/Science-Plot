@@ -102,6 +102,17 @@ def test_workflow_rule_render_contract_overrides_only_nonexplicit_defaults() -> 
     assert explicit["render_options"]["x_label_override"] == "Source x"
 
 
+def test_workflow_replay_drops_old_hard_style_options_but_keeps_editable_intent() -> None:
+    bound = bind_workflow_semantic_render_options(
+        request={"render_options": {"font_size_pt": 7.0, "line_width_pt": 1.2, "y_label_override": "Saved label"},
+                 "explicit_render_option_keys": ["font_size_pt", "y_label_override"]},
+        semantic={"template": "point_line", "render_options": {"yscale": "log", "y_label_override": "Rule default"}},
+        figure_plan=None,
+    )
+    assert bound["render_options"] == {"yscale": "log", "y_label_override": "Saved label"}
+    assert bound["explicit_render_option_keys"] == ["y_label_override"]
+
+
 def test_workflow_single_curve_labels_come_from_the_resolved_source() -> None:
     transform = SimpleNamespace(
         contract=SimpleNamespace(

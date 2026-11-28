@@ -26,7 +26,7 @@ from sciplot_core.presentation_identity import (
     SelectedPresentationIdentity,
     resolve_selected_presentation_identity,
 )
-from sciplot_core.request_contract import project_semantic_render_options
+from sciplot_core.request_contract import normalize_render_options, project_semantic_render_options
 from sciplot_core.studio_render.domain_defaults import _explicit_render_options
 from sciplot_core.studio_render.spectral_axis_display import (
     freeze_new_spectral_axis_display,
@@ -266,10 +266,10 @@ def bind_workflow_semantic_render_options(
         else set(request_options)
     )
     merged.update({key: request_options[key] for key in explicit_keys})
-    effective["render_options"] = merged
+    effective["render_options"] = normalize_render_options(merged, template=template)
     # Persist the pre-merge intent: terminal family requests must not mistake
     # inherited scientific defaults for user overrides (or lose legacy ones).
-    effective["explicit_render_option_keys"] = sorted(explicit_keys)
+    effective["explicit_render_option_keys"] = sorted(explicit_keys & effective["render_options"].keys())
     if new_creation:
         transform = (
             resolved_scientific_source.transform

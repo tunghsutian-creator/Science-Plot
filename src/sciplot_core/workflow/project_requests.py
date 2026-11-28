@@ -138,6 +138,11 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
         if _package_snapshot(delivery) != delivery_before:
             raise ValueError("The visible delivery changed during private workflow preparation.")
         delivery_record = manifest.get("delivery_package", {})
+        if (previous_delivery is not None and previous_delivery.get("complete") is True
+                and manifest.get("ready_to_use") is False):
+            state = manifest["state"]
+            gates = ", ".join(manifest["publish_gates"]["failed_gates"])
+            raise ValueError(f"Project rerun is not ready ({state}: {gates}). The previous delivery was kept.")
         if delivery_record.get("complete") is True:
             namespace, _, relative = delivery_name.partition("/")
             delivery_namespace = namespace[1:] if namespace.startswith("@") else ""

@@ -193,6 +193,31 @@ def test_complete_workflow_installs_only_the_registered_delivery_delta(tmp_path,
     assert (project / "source.csv").read_bytes() == b"x,y\n1,2\n"
 
 
+def test_rerun_with_complete_render_but_failed_gate_keeps_last_delivery(tmp_path):
+    files = {"figures/good.pdf": b"last accepted figure"}
+    previous = {"kind": "sciplot_user_delivery_package", "version": 7,
+                "path": str(tmp_path / "delivery"), "complete": True}
+    project, request, store, before = prepared(tmp_path, previous_delivery=previous, delivery_files=files)
+    registry = (project / "intake_manifest.json").read_bytes()
+
+    def execute(**kwargs):
+        stage, _ = kwargs["staged_delivery"]
+        (stage / "replacement.pdf").write_bytes(b"not admitted")
+        return {"state": "needs_rule_repair", "ready_to_use": False,
+                "publish_gates": {"failed_gates": ["prerequisite_state_ready"]},
+                "delivery_package": {"complete": True, "path": str(stage)}}
+
+    with pytest.raises(ValueError, match="prerequisite_state_ready.*previous delivery was kept"):
+        run_project_request(project / "plot_request.json", request, execute=execute,
+                            classifier=lambda *_a, **_k: {}, new_creation=False, previous_request=None)
+    assert store.snapshot()["generation"] == before["generation"]
+    assert (project / "intake_manifest.json").read_bytes() == registry
+    assert not (project / "runs").exists()
+    root = tmp_path / "delivery"
+    assert {path.relative_to(root).as_posix(): path.read_bytes()
+            for path in root.rglob("*") if path.is_file()} == files
+
+
 @pytest.mark.parametrize("foreign", [False, True], ids=["registered-retirement", "foreign-file-preserved"])
 def test_two_figure_delivery_can_publish_one_figure_in_the_next_generation(tmp_path, monkeypatch, foreign):
     from copy import deepcopy
