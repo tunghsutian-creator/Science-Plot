@@ -15,7 +15,7 @@ import pytest
 
 from sciplot_core._paths import REPO_ROOT
 from sciplot_core.delivery.package_validation import verify_delivery_package
-from sciplot_core.delivery.package_transaction import _relocate_record
+from sciplot_core.delivery.package_transaction import _package_snapshot, _relocate_record
 from sciplot_core.delivery_identity import DELIVERY_IDENTITY, read_delivery_binding
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.source_locations import literal_source_path
@@ -204,6 +204,17 @@ def test_registered_legacy_delivery_survives_real_producers_cold_reopen_and_bund
         record["registration"] = registration
         historical_manifest = json.loads(store.read_bytes(store.logical_path(Path(first["output"]) / "manifest.json")))
         historical = _assert_retained(project, store, legacy, historical_manifest, version=6)
+        before_rerun = store.snapshot()
+        previous_package = _package_snapshot(delivery)
+        pending = json.loads(store.read_bytes("plot_request.json"))
+        changed = {**pending, "template": "scatter", "output": str(project / "runs/run_002")}
+        with pytest.raises(ValueError, match=r"needs_rule_repair: prerequisite_state_ready.*previous delivery was kept"):
+            run("changed_legacy_template_refused", lambda: run_request(
+                request, _classifier=direct_source, _incoming_request=changed))
+        assert store.snapshot()["generation"] == before_rerun["generation"]
+        assert _package_snapshot(delivery) == previous_package
+        assert json.loads(store.read_bytes("plot_request.json")) == pending
+        assert not (project / "runs/run_002").exists()
         second = run("workflow_legacy_republication", lambda: run_request(request, _classifier=direct_source))
         assert second["delivery_package"]["complete"] is True
         _assert_retained(project, store, legacy, second)

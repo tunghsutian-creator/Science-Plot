@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from sciplot_core.data_mapping.execution_directories import mapping_tree_reads, mapping_immutable_reads
+from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.project_commands import PreparedFile, ProjectCommand, ProjectCommands, ProjectMutation
 from sciplot_core.project_manifest import read_intake_project_manifest, stage_intake_project_manifest
@@ -22,6 +23,7 @@ from sciplot_core.studio_core.preparation_original_sources import original_tree_
 
 if TYPE_CHECKING:
     from sciplot_core.plan_preview import PlanPreviewResolution
+    from sciplot_core.studio_core.preparation_candidate import StudioPreparationCandidate
 
 
 def recognized_project(request_path: Path) -> bool:
@@ -55,6 +57,64 @@ def next_project_run(project: Path) -> Path:
     while (project / "runs" / f"run_{index:03d}").exists():
         index += 1
     return project / "runs" / f"run_{index:03d}"
+
+
+def _same_legacy_science(candidate: StudioPreparationCandidate, previous: dict[str, Any],
+                         manifest: dict[str, Any]) -> bool:
+    """Prove this compatibility replacement belongs to the last committed delivery."""
+    store, snapshot = candidate.store, candidate.snapshot
+    try:
+        last = previous["last_run"]
+        prior_output = store.logical_path(Path(last["output"]))
+        before = json.loads(store.read_bytes(prior_output + "/manifest.json",
+                                             generation=snapshot["generation"]))
+        if before["delivery_package"] != previous["delivery_package"]:
+            return False
+        # Opening a legacy run in Studio can add these mirrors to the canonical
+        # request. Compare the executed selection and actual plotted tables below.
+        mirrors = {"output", "delivery_output", "review_notes", "series_order",
+                   "study_model", "publication_intent", "transform_ledger"}
+        for field in ("request", "source_request"):
+            old, new = before[field], manifest[field]
+            if not isinstance(old, dict) or not isinstance(new, dict) or not old.get("input"):
+                return False
+            if ({k: v for k, v in old.items() if k not in mirrors}
+                    != {k: v for k, v in new.items() if k not in mirrors}):
+                return False
+        old_data = [row["sha256"] for row in before["delivery_package"]["data_csvs"]]
+        new_data = [row["sha256"] for row in manifest["delivery_package"]["data_csvs"]]
+        if not old_data or not all(old_data) or old_data != new_data:
+            return False
+        if any(before[key] != manifest[key] for key in ("route", "final_recipe")):
+            return False
+        if any(before["semantic"].get(key) != manifest["semantic"].get(key) for key in ("rule_id", "template")):
+            return False
+        if any(result.get(key) is not None for result in (before, manifest)
+               for key in ("data_mapping_application", "cleanup_application")):
+            # Without a relocatable approved transformation identity the legacy
+            # exception does not authorize replacing a complete delivery.
+            return False
+        old_raw, new_raw = before["raw_archive"], manifest["raw_archive"]
+        kind = old_raw["kind"]
+        if kind != new_raw["kind"] or kind not in {"file", "directory"}:
+            return False
+        old_path = store.logical_path(Path(old_raw["path"]))
+        new_path = store.logical_path(Path(candidate.logical_path(new_raw["path"])))
+        new_output = store.logical_path(Path(candidate.logical_path(manifest["output"])))
+        if not old_path.startswith(prior_output + "/raw/") or not new_path.startswith(new_output + "/raw/"):
+            return False
+        new_copy = candidate.resource_path(new_path)
+        if kind == "file":
+            return file_sha256(new_copy) == snapshot["files"][old_path]["sha256"]
+        prefix = old_path + "/"
+        old_members = {name[len(prefix):]: entry["sha256"] for name, entry in snapshot["files"].items()
+                       if name.startswith(prefix)}
+        return bool(old_members) and old_members == {
+            path.relative_to(new_copy).as_posix(): file_sha256(path)
+            for path in new_copy.rglob("*") if path.is_file()
+        }
+    except (KeyError, OSError, TypeError, ValueError):
+        return False
 
 
 def run_project_request(request_path: Path, request: dict[str, Any], *,
@@ -155,7 +215,8 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
                 and failed_gates == ["prerequisite_state_ready"]
                 and "needs_rule_repair" == state == previous_step.get("state") == current_step.get("state")
                 and bool(previous_step.get("state_reasons"))
-                and previous_step["state_reasons"] == current_step.get("state_reasons"))
+                and previous_step["state_reasons"] == current_step.get("state_reasons")
+                and _same_legacy_science(candidate, previous_registry or {}, manifest))
             if not same_legacy_readiness:
                 gates = ", ".join(failed_gates)
                 raise ValueError(f"Project rerun is not ready ({state}: {gates}). The previous delivery was kept.")
