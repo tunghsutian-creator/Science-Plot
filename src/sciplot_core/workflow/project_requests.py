@@ -146,8 +146,19 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
         if (previous_delivery is not None and previous_delivery.get("complete") is True
                 and manifest.get("ready_to_use") is False):
             state = manifest["state"]
-            gates = ", ".join(manifest["publish_gates"]["failed_gates"])
-            raise ValueError(f"Project rerun is not ready ({state}: {gates}). The previous delivery was kept.")
+            failed_gates = manifest["publish_gates"]["failed_gates"]
+            previous_step = (previous_registry or {}).get("one_step") or {}
+            current_step = manifest.get("one_step") or {}
+            # An exact repeat of an already non-autonomous legacy delivery
+            # can refresh its exports without relabeling it ready.
+            same_legacy_readiness = (delivery_record.get("complete") is True
+                and failed_gates == ["prerequisite_state_ready"]
+                and state == previous_step.get("state") == current_step.get("state")
+                and bool(previous_step.get("state_reasons"))
+                and previous_step["state_reasons"] == current_step.get("state_reasons"))
+            if not same_legacy_readiness:
+                gates = ", ".join(failed_gates)
+                raise ValueError(f"Project rerun is not ready ({state}: {gates}). The previous delivery was kept.")
         if delivery_record.get("complete") is True:
             namespace, _, relative = delivery_name.partition("/")
             delivery_namespace = namespace[1:] if namespace.startswith("@") else ""
