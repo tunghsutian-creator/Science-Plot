@@ -172,11 +172,11 @@ def _project(store: FileProjectStore, *, output: Path, receipt: dict[str, Any],
     current = store.snapshot()
     if current["generation"] != generation or current["projection_status"] != "current":
         raise ValueError("The saved Managed frequency project has changed. Open its figures or choose a new run output.")
-    def project_file(target: Path, blob: bytes) -> None:
+    def project_file(target: Path, blob: bytes, *, sealed_sha256: str | None = None) -> None:
         if write:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(blob)
-        elif not target.is_file() or file_sha256(target) != hashlib.sha256(blob).hexdigest():
+        elif not target.is_file() or file_sha256(target) != (sealed_sha256 or hashlib.sha256(blob).hexdigest()):
             raise ValueError(f"Saved frequency output changed and was not replaced: {target}")
 
     attachments = {entry["figure_id"]: Attachment(store, entry)
@@ -197,8 +197,8 @@ def _project(store: FileProjectStore, *, output: Path, receipt: dict[str, Any],
             source = Path(value)
             logical = store.logical_path(source)
             blob = store.read_bytes(logical, generation=generation)
-            sha256 = result["artifacts"].get(logical)
-            if hashlib.sha256(blob).hexdigest() != sha256:
+            sha256 = hashlib.sha256(blob).hexdigest()
+            if sha256 != result["artifacts"].get(logical):
                 raise ValueError("Managed frequency publication does not match its sealed artifact receipt.")
             if source == native:
                 target = document
@@ -210,7 +210,7 @@ def _project(store: FileProjectStore, *, output: Path, receipt: dict[str, Any],
                                 "source": str(target), "figure_id": task.figure_id, "exists": True,
                                 "sha256": sha256, "document": str(document), "document_sha256": document_sha256,
                                 "size_bytes": len(blob), "dpi": None if suffix == ".pdf" else 300})
-            project_file(target, blob)
+            project_file(target, blob, sealed_sha256=sha256)
             delivered.append(str(target))
         outcomes.append(FigureOutcome(task.figure_id, "ready", tuple(delivered)))
     metrics = store.read_bytes("analysis/analysis_metrics.csv", generation=generation)
