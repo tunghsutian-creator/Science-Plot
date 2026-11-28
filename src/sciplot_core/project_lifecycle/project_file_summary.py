@@ -73,7 +73,11 @@ def saved_project_file_figure(
     attachment = Attachment(session.store, matches[0])
     owner = AttachedProjectRepository(attachment)
     try:
-        head = observe_plot_head(attachment.root, owner=owner)
+        # The standalone file has already been verified into this private
+        # Store. Group this finite pointer/envelope read, but still check
+        # each selected member and never carry the proof into a write.
+        with session.store._validation_window():
+            head = observe_plot_head(attachment.root, owner=owner)
         assert head is not None
         document = head["document"]
     except (OSError, ValueError, KeyError, TypeError) as exc:
