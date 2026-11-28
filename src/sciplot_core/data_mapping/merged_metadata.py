@@ -11,7 +11,7 @@ from zipfile import ZipFile
 
 import pandas as pd
 
-from sciplot_core.data_mapping.column_choice import _original_text
+from sciplot_core.data_mapping.raw_tables import _original_text
 from sciplot_core.foundation.source_locations import resolve_source_path
 from sciplot_core.source_tables.read_session import read_table_once
 

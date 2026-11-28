@@ -6,7 +6,7 @@ import pytest
 
 import sciplot_core.one_step.project as one_step_project
 import sciplot_core.one_step.readiness as one_step_readiness
-import sciplot_core.workflow.request_run as request_run
+import sciplot_core.workflow.request_intervention as request_intervention
 from sciplot_core.figure_plan import FigureOutcome, FigureTask, ResolvedFigurePlan
 from sciplot_core.policy import DEFAULT_LAYOUT_POLICY
 from sciplot_core.workflow.route_intent import resolve_workflow_route_intent
@@ -74,12 +74,12 @@ def test_intervention_passes_its_existing_typed_plan_to_one_step(
     output_dir.mkdir()
     captured: dict[str, object] = {}
     monkeypatch.setattr(
-        request_run,
+        request_intervention,
         "build_intervention_request",
         lambda **_kwargs: {"category": "ambiguous_source"},
     )
     monkeypatch.setattr(
-        request_run,
+        request_intervention,
         "write_cleanup_request",
         lambda *_args, **_kwargs: None,
     )
@@ -88,15 +88,15 @@ def test_intervention_passes_its_existing_typed_plan_to_one_step(
         captured.update(kwargs)
         return {}
 
-    monkeypatch.setattr(request_run, "build_one_step_project", capture_one_step)
+    monkeypatch.setattr(request_intervention, "build_one_step_project", capture_one_step)
     monkeypatch.setattr(
-        request_run,
+        request_intervention,
         "_write_one_step_status",
         lambda *_args, **_kwargs: None,
     )
 
     with pytest.raises(ValueError, match="could not auto-detect"):
-        request_run._enforce_intervention_gate(
+        request_intervention._enforce_intervention_gate(
             request_path=tmp_path / "plot_request.json",
             request={},
             route_intent=resolve_workflow_route_intent({}),

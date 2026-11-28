@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
-from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.foundation.source_locations import selected_source_resolver
 from sciplot_core.foundation.path_names import (
     slug,
@@ -22,13 +20,6 @@ def _object_field(payload: dict[str, Any], name: str) -> dict[str, Any]:
 def _array_field(payload: dict[str, Any], name: str) -> list[Any]:
     value = payload.get(name)
     return value if isinstance(value, list) else []
-
-
-def _write_one_step_status(output_dir: Path, payload: dict[str, Any]) -> None:
-    (output_dir / "one_step_status.json").write_text(
-        json.dumps(json_safe(payload), indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
 
 
 def _next_run_dir(project_dir: Path) -> Path:

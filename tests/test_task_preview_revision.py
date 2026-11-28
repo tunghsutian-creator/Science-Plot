@@ -28,7 +28,7 @@ def edits(tmp_path, monkeypatch):
     document.write_text("original saved document")
     digest = sha256(document.read_bytes()).hexdigest()
     (project / "plot_request.json").write_text(json.dumps({"delivery_output": str(tmp_path / "Visible")}))
-    monkeypatch.setattr(task_control, "resolve_project_path", lambda _: project)
+    monkeypatch.setattr("sciplot_core.task_request_paths.resolve_project_path", lambda _: project)
     monkeypatch.setattr(task_storage, "resolve_project_path", lambda _: project)
     calls, effects = [], []
 

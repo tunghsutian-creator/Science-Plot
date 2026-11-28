@@ -10,16 +10,17 @@ from sciplot_core.data_mapping.plan_binding import resolve_mapping_plan_request
 from sciplot_core.data_mapping.request_resolution import resolve_data_mapping_request
 from sciplot_core.data_mapping.execution_inputs import mapping_execution_is_sealed, mapping_input_reads
 from sciplot_core.delivery.package_validation import verify_delivery_package
-from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.project_store.runtime import (
-    inspect_runtime_source_file, inspect_runtime_source_tree, literal_runtime_path,
-    projected_runtime_directory, projected_runtime_artifact, projected_runtime_project_root,
+    inspect_runtime_source_file, inspect_runtime_source_tree,
+    projected_runtime_directory, projected_runtime_project_root,
 )
 from sciplot_core.source_coverage.managed_documents import source_records
 from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.project_lifecycle.figure_observation import bound_delivery_project, read_object
 
+
+from sciplot_core.studio_core.project_query_integrity import _documents_match, _exports_match
 
 def _indicator(current: bool | None, **fields: Any) -> dict[str, Any]:
     return {"status": "unknown" if current is None else "current" if current else "stale",
@@ -208,73 +209,6 @@ def latest_run(project: Path) -> tuple[Path | None, dict[str, Any], str | None]:
         return path, read_object(path), None
     except (OSError, ValueError) as exc:
         return path, {}, str(exc)
-
-
-def _documents_match(
-    project: Path, run: Path, manifest: dict[str, Any], figures: list[dict[str, Any]]
-) -> bool:
-    recorded = manifest.get("veusz_document_hashes")
-    if not isinstance(recorded, dict) or len(recorded) != len(figures):
-        return False
-    expected_paths = set()
-    for figure in figures:
-        document = canonical_path(run / Path(figure["document"]).relative_to(project))
-        spec = canonical_path(run / Path(figure["spec"]).relative_to(project))
-        literal = literal_runtime_path(document)
-        expected_paths.add(literal)
-        if (
-            figure["document_sha256"] is None
-            or recorded.get(literal) != figure["document_sha256"]
-            or existing_file_sha256(document) != figure["document_sha256"]
-            or existing_file_sha256(spec) != figure["spec_sha256"]
-        ):
-            return False
-    return set(recorded) == expected_paths
-
-
-def _exports_match(
-    run: Path, manifest: dict[str, Any], figures: list[dict[str, Any]]
-) -> bool:
-    qa = manifest.get("qa") or {}
-    exports = (manifest.get("result") or {}).get("exports")
-    if qa.get("status") != "passed" or not isinstance(exports, list) or not exports:
-        return False
-    qa_hashes = {
-        item.get("path"): item.get("sha256")
-        for category in ("pdfs", "tiffs")
-        for item in qa.get(category, [])
-        if isinstance(item, dict)
-    }
-    document_formats: dict[str, set[str]] = {}
-    seen = set()
-    for item in exports:
-        if not isinstance(item, dict) or not item.get("path") or not item.get("sha256"):
-            return False
-        fmt, digest = item.get("format"), item["sha256"]
-        if (not isinstance(fmt, str) or not isinstance(digest, str) or len(digest) != 64
-                or any(char not in "0123456789abcdef" for char in digest)):
-            return False
-        declared = Path(item["path"])
-        if not declared.suffix or (fmt == "pdf" and declared.suffix.casefold() != ".pdf"):
-            return False
-        path = canonical_path(projected_runtime_artifact(declared))
-        if not path.is_file():
-            return False
-        if not path.is_relative_to(run) or str(path) in seen:
-            return False
-        seen.add(str(path))
-        if existing_file_sha256(path) != digest:
-            return False
-        if fmt in {"pdf", "tiff_300"} and qa_hashes.get(item["path"]) != digest:
-            return False
-        document_formats.setdefault(str(item.get("document")), set()).add(fmt)
-    for figure in figures:
-        relative = Path(figure["document"]).relative_to(run.parent.parent)
-        if not {"pdf", "tiff_300"}.issubset(
-            document_formats.get(literal_runtime_path(run / relative), set())
-        ):
-            return False
-    return True
 
 
 def _optional_manifest_content_sha256(manifest: dict[str, Any]) -> str | None:

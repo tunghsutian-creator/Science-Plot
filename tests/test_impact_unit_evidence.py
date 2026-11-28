@@ -10,7 +10,7 @@ from sciplot_core.semantic_sources.impact_sources import _read_impact_source
 
 @pytest.mark.parametrize('unit', ['kJ/m2', 'kJ/m²', 'kJ/m^2', 'kJ m⁻²', 'kJ m^-2', 'kJ·m^{-2}', '[kJ/m²]', 'kJ/(m²)'])
 def test_complete_impact_identity_spellings_preserve_literal_numbers(unit):
-    from sciplot_core.semantic_sources.impact_sources import _validated_impact_unit
+    from sciplot_core.semantic_sources.impact_units import _validated_impact_unit
 
     assert _validated_impact_unit([unit]) == 'kJ/m2'
 

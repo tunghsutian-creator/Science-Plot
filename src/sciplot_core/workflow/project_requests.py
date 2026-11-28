@@ -67,7 +67,7 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
     from sciplot_core.studio_core.preparation_commands import prepare_studio_candidate, audit_studio_candidate
     from sciplot_core.studio_core.project_command_scope import command_for_binding
     from sciplot_core.workflow.run_projection import _project_manifest_after_run
-    from sciplot_core.workflow.project_state import _write_one_step_status
+    from sciplot_core.workflow.project_results import _write_one_step_status
     from sciplot_core.workflow.request_io import _resolve_request_path
     from sciplot_core.workflow.project_results import project_workflow_result
     from sciplot_core.workflow.errors import WorkflowIntervention

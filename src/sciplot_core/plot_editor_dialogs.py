@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from hashlib import sha256
+from math import isfinite
 from pathlib import Path
 from typing import Any, Literal
 
@@ -152,3 +154,44 @@ def archive_export_actions(window: QtWidgets.QMainWindow, plot: Path, status: Qt
     actions = (add_action("pdf", "PDF", (".pdf",), "PDF (*.pdf)"),
                add_action("tiff_300", "300 dpi TIFF", (".tiff", ".tif"), "TIFF (*.tiff *.tif)"))
     return actions
+
+
+def add_axis_editor(layout: QtWidgets.QVBoxLayout) -> tuple[QtWidgets.QComboBox, QtWidgets.QComboBox,
+        QtWidgets.QLineEdit, QtWidgets.QPushButton, QtWidgets.QPushButton, QtWidgets.QPushButton]:
+    """Create the shared label/tick form; the window owns all edit and retry actions."""
+    form = QtWidgets.QHBoxLayout()
+    axes = QtWidgets.QComboBox()
+    axes.setAccessibleName("坐标轴")
+    edit_property = QtWidgets.QComboBox()
+    edit_property.setAccessibleName("坐标轴属性")
+    edit_property.addItem("标题", "axis.label")
+    edit_property.addItem("主刻度", "axis.ticks")
+    label = QtWidgets.QLineEdit()
+    label.setAccessibleName("新坐标轴标题")
+    label.setPlaceholderText("新坐标轴标题")
+    review = QtWidgets.QPushButton("核对并保存…")
+    retry = QtWidgets.QPushButton("确认上一次保存")
+    retry.hide()
+    refresh = QtWidgets.QPushButton("读取最新版本")
+    for widget in (axes, edit_property, label, review, refresh, retry):
+        form.addWidget(widget)
+    layout.addLayout(form)
+    return axes, edit_property, label, review, refresh, retry
+
+
+def parse_major_ticks(text: str, *, automatic: bool) -> list[float] | dict[str, str]:
+    literal = text.strip()
+    if not literal:
+        return {"mode": "automatic"} if automatic else []
+    value = [float(part) for part in literal.replace("，", ",").split(",")]
+    if not all(isfinite(number) for number in value):
+        raise ValueError("Nonfinite axis ticks")
+    return value
+
+
+def confirm_native_preview(window: QtWidgets.QWidget, preview: dict[str, Any]) -> bool:
+    data = Path(preview["path"]).read_bytes()
+    image = QtGui.QPixmap()
+    if sha256(data).hexdigest() != preview["sha256"] or not image.loadFromData(data):
+        raise ValueError("待确认的原生预览已变更。")
+    return confirm(window, "审阅原生候选图", "请核对下面的原生预览，再决定是否保存。", preview=image)

@@ -30,7 +30,8 @@ from sciplot_core.mapping_contract.source_identity import source_view_id
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.semantic_sources.paired_curve_table_metadata import explicit_header_unit
 from sciplot_core.source_tables.read_session import read_table_once
-from sciplot_core.semantic_sources.impact_sources import _is_impact_metric, _validated_impact_unit, require_same_impact_metric
+from sciplot_core.semantic_sources.impact_sources import require_same_impact_metric
+from sciplot_core.semantic_sources.impact_units import _is_impact_metric, _validated_impact_unit
 
 
 # Retained first-party compatibility name; new consumers use the original-table port.

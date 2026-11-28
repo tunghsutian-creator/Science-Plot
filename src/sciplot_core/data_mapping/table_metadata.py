@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from sciplot_core.data_mapping.column_choice import _original_text
+from sciplot_core.data_mapping.raw_tables import _original_text
 from sciplot_core.mapping_contract.table_metadata import validate_metadata_confirmations
 from sciplot_core.materials_rules.models import SemanticRule
 from sciplot_core.semantic_sources.paired_curve_table_metadata import axis_match, explicit_header_unit

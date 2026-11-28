@@ -2,7 +2,11 @@
 
 from collections.abc import Callable
 from copy import deepcopy
+import json
+from pathlib import Path
 from typing import Any
+
+from sciplot_core.foundation.json_values import json_safe
 
 # These fields belong to local artifact/status contracts. Scientific models,
 # requests, source declarations and native audit evidence retain their bytes.
@@ -74,3 +78,10 @@ def project_workflow_result(payload: dict[str, Any], logical_path: Callable[[str
         if isinstance(delivery, dict):
             project_delivery(delivery)
     return result
+
+
+def _write_one_step_status(output_dir: Path, payload: dict[str, Any]) -> None:
+    (output_dir / "one_step_status.json").write_text(
+        json.dumps(json_safe(payload), indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )

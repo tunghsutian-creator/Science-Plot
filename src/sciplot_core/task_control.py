@@ -8,16 +8,13 @@ from pathlib import Path
 from subprocess import TimeoutExpired
 from typing import Any, Literal
 
-from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.output_contract import resolve_user_output_layout
 from sciplot_core.project_lifecycle.legacy_public_policy import require_public_editable
 from sciplot_core.source_tables.read_session import with_table_reads
 from sciplot_core.task_semantic_owner import managed_task_call
 from sciplot_core.task_timing import timed_task_call, finish_timing, observe_phase
 from sciplot_core.studio_core.annotation_schema import AnnotationOperationError, validate_operation_batch
-from sciplot_core.project_lifecycle.figure_observation import resolve_project_path
 from sciplot_core.studio_core.project_query import inspect_project
-from sciplot_core.foundation.canonical_paths import canonical_path
 from sciplot_core.studio_core.project_session import external_project_session
 from sciplot_core.task_contract import (
     TaskControlError, task_request_schema, task_response_schema, validate_task_request,
@@ -33,7 +30,7 @@ from sciplot_core.task_editing import begin_preview_revision, validate_preview_r
 from sciplot_core.task_repair import normalize_task_location, request_repair, response_repair
 from sciplot_core.task_result_projection import current_task_result
 from sciplot_core.task_output_choice import accept_output_response, creation_output
-from sciplot_core.task_semantic_contract import archive_task_target
+from sciplot_core.task_request_paths import normalize_task_paths
 from sciplot_core.task_storage import (
     load_task, save_task, task_location, task_path, task_summary,
 )
@@ -102,34 +99,7 @@ def _start_task(
     except (TaskControlError, AnnotationOperationError) as exc:
         exc.repair = request_repair(original_request, exc)
         raise
-    source_hashes = None
-    archive_target = archive_task_target(request)
-    if archive_target is not None:
-        target = canonical_path(Path(archive_target))
-        if target.suffix != ".sciplot":
-            raise TaskControlError("invalid_project_file_target", "Choose an exact .sciplot filename.")
-        request["append_to" if "append_to" in request else "project_file"] = str(target)
-        archive_target = str(target)
-        request["sources"] = [str(canonical_path(Path(value))) for value in request["sources"]]
-        digest = None
-    elif "intent" in request:
-        from sciplot_core.task_semantic_creation import normalize_sources
-
-        source_hashes = normalize_sources(request)
-        digest = None
-    elif request["action"] in {"create", "update_source"}:
-        source = canonical_path(Path(request["source"]))
-        digest = source_tree_sha256(source)
-        if digest is None:
-            raise TaskControlError("source_not_found", "未找到原始数据文件或目录。")
-        request["source"] = str(source)
-    else:
-        digest = None
-    if request["action"] != "create":
-        request["project"] = str(resolve_project_path(Path(request["project"])))
-    for key in ("out", "profile"):
-        if key in request:
-            request[key] = str(canonical_path(Path(request[key])))
+    archive_target, source_hashes, digest = normalize_task_paths(request)
     root = task_location(request, task_dir)
     if _public_mutation and request["action"] != "create" and not root.exists():
         require_public_editable(Path(request["project"]), figure_id=request.get("figure_id"))

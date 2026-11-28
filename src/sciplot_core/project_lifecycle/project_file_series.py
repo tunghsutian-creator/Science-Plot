@@ -1,6 +1,7 @@
 """Save one original XY change in an exact existing project-file figure."""
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+from typing import Any
 
 from sciplot_core.data_mapping.original_tables import source_table_snapshot
 from sciplot_core.foundation.canonical_paths import canonical_path
@@ -8,6 +9,7 @@ from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.writer_lease import WriterLeaseBusy, WriterLeaseChanged
 from sciplot_core.plot_document.schema import closed
 from sciplot_core.plot_document.validation import validate_wire
+from sciplot_core.plot_engine.backend import PlotBackend
 from sciplot_core.plot_engine.append_source_regions import append_source_candidates
 from sciplot_core.plot_engine.current_unit_admission import prepare_current_update
 from sciplot_core.plot_engine.managed_source_append import append_targets
@@ -22,13 +24,10 @@ from .errors import EngineError
 from .head_observation import observe_plot_head
 from .journal_identity import saved_command
 from .patch_execution import execute_patch
+from .ports import ProjectRepository
 from .project_file import ProjectFileSaveUnconfirmed
 from .project_file_summary import project_file_figure
 from .repository_router import ComposedProjectRepository
-
-if TYPE_CHECKING:
-    from .application import ProjectApplication
-
 
 def project_file_series_schema(*, replace: bool = False) -> dict[str, Any]:
     string = {"type": "string", "minLength": 1}
@@ -128,8 +127,9 @@ def _result(status: str, session: Any, document: dict[str, Any], generation: str
 
 
 @with_table_reads
-def add_project_file_series(service: "ProjectApplication", path: Path, request: dict[str, Any], *,
-                            replace: bool = False) -> dict[str, Any]:
+def add_project_file_series(path: Path, request: dict[str, Any], *, repository: ProjectRepository,
+                            capabilities: dict[str, Any] | None, backend: PlotBackend,
+                            decide: Callable[[Path, dict[str, Any]], dict[str, Any]], replace: bool = False) -> dict[str, Any]:
     """Plan against exact source bytes, then save the audited scientific delta."""
     validate_wire(request, project_file_series_schema(replace=replace), code="project_file_series_invalid_request")
     request = {**request, "source": str(canonical_path(Path(request["source"])))}
@@ -148,12 +148,12 @@ def add_project_file_series(service: "ProjectApplication", path: Path, request: 
             raise EngineError("project_file_series_revision_conflict", "Reopen the exact figure and plan against its current revision and project generation.",
                               action="inspect_project_file", current_revision=before["revision"],
                               current_generation=session.opened_generation)
-        with project_runtime(session.store), repository_scope(service.repository, capabilities=service.capabilities):
+        with project_runtime(session.store), repository_scope(repository, capabilities=capabilities):
             # The path-bound backend and transaction writer must share one
             # archive attachment and invocation-local source declarations.
-            if not isinstance(service.repository, ComposedProjectRepository):
+            if not isinstance(repository, ComposedProjectRepository):
                 raise EngineError("project_file_series_unsupported", "Adding a series requires the composed Managed runtime.")
-            owner = service.repository.select(opened_owner.attachment)
+            owner = repository.select(opened_owner.attachment)
             with owner.lease(root):
                 patch, plan_id, sha, selection = _patch(request, before, root, session.project_id)
                 with scientific_sources(owner, patch):
@@ -167,11 +167,11 @@ def add_project_file_series(service: "ProjectApplication", path: Path, request: 
                     # A confirmed exact source plan still requires the normal
                     # native scientific audit before acceptance.
                     with admitted(root, "patch", patch):
-                        prepared = execute_patch(root, patch, service.backend, defer_export=True)
+                        prepared = execute_patch(root, patch, backend, defer_export=True)
             if prepared.get("status") != "needs_review":
                 raise EngineError("project_file_series_not_saved", "The series change did not pass native preview; the file was not replaced.",
                                   native_error=(prepared.get("error") or {}).get("reason_code"))
-            edited = service.decide(root, {"decision_id": prepared["decision_id"],
+            edited = decide(root, {"decision_id": prepared["decision_id"],
                                            "base_revision": before["revision"], "accept": True})
         if edited.get("status") != "complete":
             raise EngineError("project_file_series_not_saved", "The series change did not pass native commit; the file was not replaced.",

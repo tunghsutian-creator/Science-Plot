@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
@@ -10,33 +9,26 @@ from typing import TYPE_CHECKING, Any
 
 from sciplot_core.assisted_cleanup import (
     consume_ready_cleanup_result,
-    write_cleanup_request,
 )
 from sciplot_core.data_mapping import resolve_data_mapping_request
 from sciplot_core.data_mapping.execution_inputs import mapping_input_reads
-from sciplot_core.figure_plan import (
-    FigurePlanResolutionError,
-    ResolvedFigurePlan,
-)
+from sciplot_core.figure_plan import FigurePlanResolutionError
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.foundation.source_locations import literal_source_path
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.materials_rules.catalog import resolve_rule_template
-from sciplot_core.one_step import build_one_step_project
 from sciplot_core.policy import layout_policy_for_semantic
 from sciplot_core.publication import (
     build_publication_intent,
     get_publication_profile,
 )
-from sciplot_core.semantic import build_intervention_request, classify_source
+from sciplot_core.semantic import classify_source
 from sciplot_core.semantic_sources.scientific_source import (
     ScientificSourceResolutionError,
 )
 from sciplot_core.study_model import study_model_from_request
 
-from sciplot_core.workflow.project_state import _write_one_step_status
-from sciplot_core.workflow.errors import WorkflowIntervention
+from sciplot_core.workflow.request_intervention import _enforce_intervention_gate
 from sciplot_core.workflow.request_io import (
     _archive_request_inputs,
     _load_request,
@@ -47,7 +39,6 @@ from sciplot_core.workflow.request_io import (
 from sciplot_core.workflow.request_publish import publish_request_result
 from sciplot_core.workflow.request_rendering import execute_request_render
 from sciplot_core.workflow.route_intent import (
-    WorkflowRouteIntent,
     resolve_workflow_route_intent,
 )
 from sciplot_core.workflow.source_binding import (
@@ -345,66 +336,3 @@ def _require_approved_original(observed: PlanPreviewResolution, original: Path) 
     identity = observed.payload["preview_identity"]
     if identity is None or source_tree_sha256(original) != identity["source_tree_sha256"]:
         raise ValueError("Original input changed after plan approval; make a new plan.")
-
-
-def _enforce_intervention_gate(
-    *,
-    request_path: Path,
-    request: dict[str, Any],
-    route_intent: WorkflowRouteIntent,
-    semantic: dict[str, Any],
-    input_path: Path,
-    output_dir: Path,
-    raw_archive: dict[str, Any],
-    study_model: dict[str, Any],
-    layout_policy: Any,
-    figure_plan: ResolvedFigurePlan | None = None,
-) -> None:
-    pending_rule_blocked = semantic.get("rule_readiness") == "pending"
-    if not (
-        semantic.get("needs_ai_intervention")
-        and (route_intent.uses_semantic_preparation or pending_rule_blocked)
-    ):
-        return
-    intervention = build_intervention_request(
-        input_path=input_path,
-        output_dir=output_dir,
-        semantic=semantic,
-        request=request,
-    )
-    intervention_path = output_dir / "intervention_request.json"
-    intervention_path.write_text(
-        json.dumps(json_safe(intervention), indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    write_cleanup_request(
-        output_dir,
-        _output_namespace=output_dir,
-        input_path=input_path,
-        reason=str(intervention.get("category") or "semantic_intervention"),
-        semantic=semantic,
-        request=request,
-        intervention_request=intervention_path,
-        provider="codex",
-    )
-    one_step_status = build_one_step_project(
-        input_path=input_path,
-        request_path=request_path,
-        request=request,
-        semantic=semantic,
-        raw_archive=raw_archive,
-        study_model=study_model,
-        layout_policy=layout_policy,
-        layout_quality={},
-        qa=None,
-        delivery_package=None,
-        intervention_request=intervention,
-        resolved_figure_plan=figure_plan,
-    )
-    _write_one_step_status(output_dir, one_step_status)
-    failure = (
-        f"Requested material rule `{semantic.get('rule_id')}` is pending fixture-backed acceptance."
-        if pending_rule_blocked
-        else "SciPlot could not auto-detect this input."
-    )
-    raise WorkflowIntervention(f"{failure} Intervention request written to {literal_source_path(intervention_path)}.")

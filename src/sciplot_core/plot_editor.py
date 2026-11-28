@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from contextlib import ExitStack
-from hashlib import sha256
 from importlib import import_module
-from math import isfinite
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -14,7 +12,9 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 from sciplot_core.archive_plot_view import archive_plot_view, editor_target_path, is_archive_target
 from sciplot_core.foundation.file_hashing import file_sha256
-from sciplot_core.plot_editor_dialogs import CurveColorEdit, approve_edit, archive_export_actions, confirm
+from sciplot_core.plot_editor_dialogs import (
+    CurveColorEdit, add_axis_editor, approve_edit, archive_export_actions, confirm_native_preview, parse_major_ticks,
+)
 from sciplot_core.plot_engine.service import public_plot_service
 from sciplot_core.plot_engine.typed_intent import LINE_COLOR
 from sciplot_core.plot_protocol.client import call
@@ -59,24 +59,8 @@ class PlotEditor(QtWidgets.QMainWindow):
         self.figures.hide()
         self.figures.currentIndexChanged.connect(self._select_archive_plot)
         self.body_layout.addWidget(self.figures)
-        form = QtWidgets.QHBoxLayout()
-        self.axes = QtWidgets.QComboBox()
-        self.axes.setAccessibleName("坐标轴")
-        self.edit_property = QtWidgets.QComboBox()
-        self.edit_property.setAccessibleName("坐标轴属性")
-        self.edit_property.addItem("标题", "axis.label")
-        self.edit_property.addItem("主刻度", "axis.ticks")
-        self.label = QtWidgets.QLineEdit()
-        self.label.setAccessibleName("新坐标轴标题")
-        self.label.setPlaceholderText("新坐标轴标题")
-        self.review = QtWidgets.QPushButton("核对并保存…")
-        self.retry = QtWidgets.QPushButton("确认上一次保存")
-        self.retry.hide()
+        (self.axes, self.edit_property, self.label, self.review, self.refresh, self.retry) = add_axis_editor(self.body_layout)
         self.retry.clicked.connect(self._retry_archive)
-        self.refresh = QtWidgets.QPushButton("读取最新版本")
-        for widget in (self.axes, self.edit_property, self.label, self.review, self.refresh, self.retry):
-            form.addWidget(widget)
-        self.body_layout.addLayout(form)
         self.curve_colors = CurveColorEdit(self._edit_color)
         self.body_layout.addWidget(self.curve_colors)
         self.setCentralWidget(body)
@@ -339,17 +323,11 @@ class PlotEditor(QtWidgets.QMainWindow):
             self.status.setText("操作尚未确认保存。请读取最新版本并按现有项目的继续提示操作。")
 
     def _ticks_value(self) -> list[float] | dict[str, str] | None:
-        literal = self.label.text().strip()
-        if not literal:
-            return {"mode": "automatic"} if self.summary.get("domain_semantics") else []
         try:
-            value = [float(part) for part in literal.replace("，", ",").split(",")]
-            if not all(isfinite(number) for number in value):
-                raise ValueError
+            return parse_major_ticks(self.label.text(), automatic=bool(self.summary.get("domain_semantics")))
         except ValueError:
             self.status.setText("主刻度须为逗号分隔的有限数字，例如 0, 5, 10。")
             return None
-        return value
 
     def _edit_archive(self, request: dict[str, Any]) -> None:
         expected = self.summary["revision_token"]
@@ -408,12 +386,7 @@ class PlotEditor(QtWidgets.QMainWindow):
             self.status.setText(f"已确认保存修订 {receipt['revision']}。{self.status.text()}")
 
     def _review_native(self, result: dict[str, Any]) -> dict[str, Any]:
-        preview = result["preview"]
-        data = Path(preview["path"]).read_bytes()
-        image = QtGui.QPixmap()
-        if sha256(data).hexdigest() != preview["sha256"] or not image.loadFromData(data):
-            raise ValueError("待确认的原生预览已变更。")
-        accepted = confirm(self, "审阅原生候选图", "请核对下面的原生预览，再决定是否保存。", preview=image)
+        accepted = confirm_native_preview(self, result["preview"])
         return self._call("plot.decide", request={**result["next_step"]["request"], "accept": accepted})
 
 

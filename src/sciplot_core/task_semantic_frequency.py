@@ -17,7 +17,7 @@ def frequency_condition(block: dict[str, Any]) -> dict[str, Any]:
     if not block.get("result"):
         return {}
     from copy import deepcopy
-    from sciplot_core.semantic_sources.rheology_sweep_sources import frequency_result_condition
+    from sciplot_core.semantic_sources.rheology_result_sections import frequency_result_condition
 
     sample = block.get("sample")
     condition = frequency_result_condition(block.get("result", ""))

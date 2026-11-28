@@ -302,7 +302,8 @@ class ProjectApplication(ManagedPlotApplication, CommandDispatch):
     def add_series_project_file(self, path: Path, request: dict[str, Any], *, replace: bool = False) -> dict[str, Any]:
         from .project_file_series import add_project_file_series
 
-        return add_project_file_series(self, path, request, replace=replace)
+        return add_project_file_series(path, request, repository=self.repository, capabilities=self.capabilities,
+                                       backend=self.backend, decide=self.decide, replace=replace)
 
     def _template_creation_owner(self) -> "ProjectApplication":
         return self

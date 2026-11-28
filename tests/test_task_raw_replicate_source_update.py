@@ -262,7 +262,7 @@ def test_fresh_mapping_reaches_real_private_native_boundary_with_old_raw_groups_
 
 
 def test_shared_metric_predicate_does_not_expand_legacy_duplicate_header_parsing(tmp_path):
-    from sciplot_core.semantic_sources.impact_sources import _is_impact_metric
+    from sciplot_core.semantic_sources.impact_units import _is_impact_metric
     from sciplot_core.semantic_sources import impact_sources, table_scanning
     from sciplot_core.foundation.text_values import token
     for metric in ("re", "impactstrength", "冲击强度", "re1", "other", ""):

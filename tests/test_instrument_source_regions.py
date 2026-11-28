@@ -266,7 +266,7 @@ def test_recipe_and_observer_share_bounds_without_changing_temperature_interval_
     ("Frequency Sweep -12.5℃", ("-12.5", -12.5)), ("fs +7 °C", ("+7", 7.)),
     ("Temperature ramp 1", None), ("FS 7 K", None), ("prefix FS 7 °C", None)])
 def test_registered_frequency_condition_text_parser_keeps_its_existing_semantics(text, expected):
-    from sciplot_core.semantic_sources.rheology_sweep_sources import frequency_result_condition
+    from sciplot_core.semantic_sources.rheology_result_sections import frequency_result_condition
     assert frequency_result_condition(text) == expected
 
 

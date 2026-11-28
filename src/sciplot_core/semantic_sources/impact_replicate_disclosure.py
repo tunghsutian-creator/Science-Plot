@@ -13,7 +13,8 @@ import pandas as pd
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.text_values import clean_text, token
-from sciplot_core.semantic_sources.impact_sources import _read_impact_source, _validated_impact_unit, _is_impact_metric
+from sciplot_core.semantic_sources.impact_sources import _read_impact_source
+from sciplot_core.semantic_sources.impact_units import _is_impact_metric, _validated_impact_unit
 from sciplot_core.semantic_sources.table_candidate_sources import read_candidate_tables
 from sciplot_core.semantic_sources.table_scanning import _float
 

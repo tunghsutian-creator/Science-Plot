@@ -28,9 +28,9 @@ from sciplot_core.study_model import (
 
 from sciplot_core.workflow.project_state import (
     _update_intake_project_after_run,
-    _write_one_step_status,
     _write_revision_brief,
 )
+from sciplot_core.workflow.project_results import _write_one_step_status
 from sciplot_core.workflow.reports import (
     _layout_quality_from_result,
     _write_review_html,

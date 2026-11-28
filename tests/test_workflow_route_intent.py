@@ -5,7 +5,7 @@ from typing import Any, cast
 
 import pytest
 
-from sciplot_core.workflow import request_rendering, request_run
+from sciplot_core.workflow import request_rendering, request_intervention
 from sciplot_core.workflow.request_rendering import RequestRenderResult
 from sciplot_core.workflow.route_intent import (
     WorkflowRoute,
@@ -159,28 +159,28 @@ def test_template_materialization_does_not_bypass_auto_intervention_gate(
         return {"category": "ambiguous_source"}
 
     monkeypatch.setattr(
-        request_run,
+        request_intervention,
         "build_intervention_request",
         fake_intervention,
     )
     monkeypatch.setattr(
-        request_run,
+        request_intervention,
         "write_cleanup_request",
         lambda *_args, **_kwargs: calls.append("cleanup"),
     )
     monkeypatch.setattr(
-        request_run,
+        request_intervention,
         "build_one_step_project",
         lambda **_kwargs: calls.append("one_step") or {},
     )
     monkeypatch.setattr(
-        request_run,
+        request_intervention,
         "_write_one_step_status",
         lambda *_args, **_kwargs: calls.append("status"),
     )
 
     with pytest.raises(ValueError, match="could not auto-detect"):
-        request_run._enforce_intervention_gate(
+        request_intervention._enforce_intervention_gate(
             request_path=tmp_path / "plot_request.json",
             request=request,
             route_intent=route_intent,
@@ -206,12 +206,12 @@ def test_direct_route_does_not_enter_auto_intervention_gate(
     request = {"template": "curve"}
     route_intent = resolve_workflow_route_intent(request)
     monkeypatch.setattr(
-        request_run,
+        request_intervention,
         "build_intervention_request",
         lambda **_kwargs: pytest.fail("direct route entered auto intervention"),
     )
 
-    request_run._enforce_intervention_gate(
+    request_intervention._enforce_intervention_gate(
         request_path=tmp_path / "plot_request.json",
         request=request,
         route_intent=route_intent,
