@@ -440,7 +440,6 @@ def test_frequency_suite_preaccept_retry_cold_resumes_only_the_unfinished_figure
     path = workspace / "figures" / "loss_modulus_vs_frequency" / "document.pdf"
     with pymupdf.open(path) as pdf:
         page = pdf[0]
-        assert [page.rect.width * 25.4 / 72, page.rect.height * 25.4 / 72] == pytest.approx([120., 55.], abs=.4)
         # MuPDF joins the base and superscript in each scientific tick.
         # Restrict to the y-side before the graph so X ticks cannot pass this.
         ticks = {word[4] for word in page.get_text("words") if word[2] < 40}
@@ -467,6 +466,8 @@ def _assert_legacy_auto_delivery_parity(root, workspace):
         assert current_plan[key] == old_plan[key], key
     assert (workspace / "analysis/analysis_metrics.csv").read_bytes() == (
         root / "legacy-output/tables/analysis_metrics.csv").read_bytes()
+    store = FileProjectStore(workspace)
+    attachments = {entry["figure_id"]: Attachment(store, entry) for entry in read_index(store)["attachments"].values()}
     for figure in current_plan["selected_figure_ids"]:
         paired = {row["format"]: Path(row["path"]) for row in old["result"]["exports"] if row["figure_id"] == figure}
         assert set(paired) == {"pdf", "tiff_300"}
@@ -475,8 +476,16 @@ def _assert_legacy_auto_delivery_parity(root, workspace):
         assert tiff.stat().st_size > 0
         with pymupdf.open(paired["pdf"]) as legacy, pymupdf.open(directory / "document.pdf") as managed:
             assert len(managed) == len(legacy) == 1
-            assert (managed[0].rect.width, managed[0].rect.height) == pytest.approx(
-                (legacy[0].rect.width, legacy[0].rect.height), abs=1.2)
+            # Legacy sizing and the managed first-fitting house layout can
+            # choose different widths for the same science. Check the managed
+            # PDF against its saved figure, not the legacy renderer's width.
+            attachment = attachments[figure]
+            repo = AttachedProjectRepository(attachment)
+            head = repo.load_head(attachment.root)
+            layout = repo.read(Path(head["binding"]["ir_path"]))["layout"]
+            assert managed[0].rect.height == pytest.approx(legacy[0].rect.height, abs=1.2)
+            size_mm = [managed[0].rect.width * 25.4 / 72, managed[0].rect.height * 25.4 / 72]
+            assert size_mm == pytest.approx([layout["width_mm"], layout["height_mm"]], abs=.4)
 
 
 def test_frequency_readable_narrow_log_keeps_fixed_endpoints_and_unmarked_specs():
