@@ -1,6 +1,7 @@
 """Separate original frequency Result blocks using literal temperature metadata."""
 
 import re
+from decimal import Decimal
 from typing import Any
 
 import pandas as pd
@@ -15,6 +16,14 @@ def frequency_result_condition(text: str) -> tuple[str, float] | None:
     """Read the registered frequency Result condition without reading a source."""
     temperature = re.fullmatch(r"(?:FS|Frequency\s+Sweep)\s+([+-]?\d+(?:\.\d+)?)\s*(?:°C|℃)", text, flags=re.IGNORECASE)
     return (temperature[1], float(temperature[1])) if temperature is not None else None
+
+
+def frequency_result_label(sample: str, nominal_text: str) -> str:
+    """Use one condition identity for equivalent literal decimal spellings."""
+    value = format(Decimal(nominal_text), "f")
+    if "." in value:
+        value = value.rstrip("0").rstrip(".")
+    return f"{sample} · {value if Decimal(value) else '0'} °C"
 
 
 def _frequency_result_sections(
@@ -39,7 +48,7 @@ def _frequency_result_sections(
     all_results = [index for index in range(len(raw)) if _token(raw.iat[index, 0]) == "result"]
     if results and len(all_results) != len(results):
         raise ValueError("Mixed frequency Result metadata cannot be silently merged; bind each original result explicitly.")
-    if len(results) <= 1:
+    if not results:
         return [(sample, raw, None)]
     sections: list[tuple[str, pd.DataFrame, dict[str, Any] | None]] = []
     for position, (start, text, nominal_text, nominal) in enumerate(results):
@@ -59,7 +68,7 @@ def _frequency_result_sections(
                                                if _float(block.iat[index, x_index]) is not None])
         if not records:
             raise ValueError("A temperature-labelled frequency Result contains no numeric observations.")
-        label = f"{sample} · {nominal_text} °C"
+        label = frequency_result_label(sample, nominal_text)
         sections.append((label, block, {"sample": sample, "result": text,
             "result_row": int(raw.index[start]), "nominal_temperature": nominal,
             "nominal_temperature_unit": "°C", "header_row": int(block.index[header]),

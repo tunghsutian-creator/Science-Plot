@@ -264,13 +264,11 @@ def test_automatic_frequency_groups_bind_original_regions_not_condition_display_
     spec = _grouped_request([first, second], resolved.domain, plan, plan.tasks[0],
                             resolved.domain.prepared_samples[0].metric_units, tmp_path / "task")
     layers = spec["template_definition"]["figure_spec"]["views"][0]["layers"]
-    # The existing explicit semantic display would suffix the single 210°C
-    # Result. Native automatic identity intentionally retains the short name.
-    assert [layer["label"] for layer in layers] == ["Anonymous material",
+    assert [layer["label"] for layer in layers] == ["Anonymous material · 210 °C",
         "Anonymous material · 170 °C", "Anonymous material · 150 °C"]
     assert not any(item["kind"] == "rheology_mean_exact_x" for item in spec["data_binding"]["transforms"])
     provenance = spec["data_binding"]["provenance"]["frequency_mean_original_blocks"]
-    [identity] = provenance["Anonymous material"]
+    [identity] = provenance["Anonymous material · 210 °C"]
     assert (identity["source_id"], identity["table_id"], identity["block_id"]) == ("source:0", "table:0", "block:0")
     assert (identity["path"], identity["result"]) == (str(first), "FS 210 °C")
     only = spec["data_binding"]["data_sources"][0]
@@ -593,3 +591,45 @@ def test_frequency_cli_does_not_fall_back_after_managed_science_replay_mismatch(
     assert "does not replay the selected original frequency arrays exactly" in capsys.readouterr().err
     assert not (output / ".sciplot-frequency").exists()
     assert not (output / "figures").exists()
+
+
+@pytest.mark.parametrize("split", [False, True])
+def test_frequency_group_identity_does_not_depend_on_file_boundaries(tmp_path, split):
+    from sciplot_core.semantic_sources.scientific_source import resolve_scientific_source
+
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    combined = instrument_source(raw / "a.csv", temperatures=(150, 210))
+    original = combined.read_text(encoding="utf-16")
+    if split:
+        before, block = original.split("Result:\tFS 210 °C")
+        combined.write_text(before, encoding="utf-16")
+        metadata = original.split("Result:", 1)[0]
+        (raw / "b.csv").write_text(metadata + "Result:\tFS 210 °C" + block, encoding="utf-16")
+    control = instrument_source(raw / "c.csv", temperatures=(150,))
+    lines = control.read_text(encoding="utf-16").replace("FS 150 °C", "Frequency Sweep +150.00℃").splitlines()
+    for i, line in enumerate(lines):
+        cells = line.split("\t")
+        if len(cells) == 12 and cells[1].isdigit():
+            cells[4] = str(float(cells[4]) + 100)
+            lines[i] = "\t".join(cells)
+    control.write_text("\n".join(lines), encoding="utf-16")
+    resolved = resolve_scientific_source(raw, rule_id="rheology_frequency_sweep", template="point_line", request={})
+    domain, plan = resolved.domain, resolved.figure_plan
+    low, high = "Anonymous material · 150 °C", "Anonymous material · 210 °C"
+    assert domain.facts.replicate_counts == ((low, 2), (high, 1))
+    assert [sample.source_interval["result"] for sample in domain.raw_samples] == [
+        "FS 150 °C", "FS 210 °C", "Frequency Sweep +150.00℃",
+    ]
+    assert [sample.source_interval["interval_count"] for sample in domain.raw_samples] == (
+        [1, 1, 1] if split else [2, 2, 1]
+    )
+    assert [sample.sample for sample in domain.prepared_samples] == [low, high]
+    # The mean groups by exact observed frequency; the singleton retains its source order.
+    prepared = prepare_frequency_requests(domain, plan, task_root=tmp_path / "task")
+    assert [name for name, _, _ in prepared.terminal_pairs] == [low, high]
+    for (_name, frequencies, moduli), start in zip(prepared.terminal_pairs, (550, 400), strict=True):
+        assert dict(zip(frequencies, moduli, strict=True)) == {100 / (i + 1): start + i for i in range(16)}
+    records = prepared.requests[0]["data_binding"]["provenance"]["frequency_mean_original_blocks"]
+    assert [item["result"] for item in records[low]] == ["FS 150 °C", "Frequency Sweep +150.00℃"]
+    assert records[high][0]["result"] == "FS 210 °C"

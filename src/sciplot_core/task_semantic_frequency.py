@@ -17,7 +17,7 @@ def frequency_condition(block: dict[str, Any]) -> dict[str, Any]:
     if not block.get("result"):
         return {}
     from copy import deepcopy
-    from sciplot_core.semantic_sources.rheology_result_sections import frequency_result_condition
+    from sciplot_core.semantic_sources.rheology_result_sections import frequency_result_condition, frequency_result_label
 
     sample = block.get("sample")
     condition = frequency_result_condition(block.get("result", ""))
@@ -26,7 +26,7 @@ def frequency_condition(block: dict[str, Any]) -> dict[str, Any]:
     nominal_text, nominal = condition
     interval = {**deepcopy(block.get("source_interval") or {}), "sample": sample, "result": block["result"],
                 "nominal_temperature": nominal, "nominal_temperature_unit": "°C", "basis": "literal original Result metadata; measured temperatures retained"}
-    return {"label": f"{sample} · {nominal_text} °C", "source_interval": interval}
+    return {"label": frequency_result_label(sample, nominal_text), "source_interval": interval}
 
 
 def frequency_coordinate(role: str, coordinate: dict[str, Any], unit: str) -> dict[str, Any]:
