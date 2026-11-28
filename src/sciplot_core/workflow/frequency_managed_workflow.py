@@ -189,21 +189,26 @@ def _project(store: FileProjectStore, *, output: Path, receipt: dict[str, Any],
         artifact = cache["export"]
         edits.append({"figure_id": task.figure_id, "plot": str(attachment.root),
                       "scientific_audit": artifact["scientific_audit"], "publication_qa": artifact["publication_qa"]})
+        native, = (Path(path) for path in outcome.artifacts if Path(path).suffix == ".vsz")
+        document = _visible_document(output, task.artifact_stem)
+        document_sha256 = result["artifacts"][store.logical_path(native)]
         delivered = []
         for value in outcome.artifacts:
             source = Path(value)
             logical = store.logical_path(source)
             blob = store.read_bytes(logical, generation=generation)
-            if hashlib.sha256(blob).hexdigest() != result["artifacts"].get(logical):
+            sha256 = result["artifacts"].get(logical)
+            if hashlib.sha256(blob).hexdigest() != sha256:
                 raise ValueError("Managed frequency publication does not match its sealed artifact receipt.")
-            if source.suffix == ".vsz":
-                target = _visible_document(output, task.artifact_stem)
+            if source == native:
+                target = document
                 documents.append(str(target))
             else:
                 suffix = {"pdf": ".pdf", "tiff": "_300dpi.tiff"}[source.suffix.lstrip(".")]
                 target = output / "figures" / (task.artifact_stem + suffix)
                 exports.append({"format": "pdf" if suffix == ".pdf" else "tiff_300", "path": str(target),
                                 "source": str(target), "figure_id": task.figure_id, "exists": True,
+                                "sha256": sha256, "document": str(document), "document_sha256": document_sha256,
                                 "size_bytes": len(blob), "dpi": None if suffix == ".pdf" else 300})
             project_file(target, blob)
             delivered.append(str(target))
