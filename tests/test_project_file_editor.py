@@ -40,8 +40,8 @@ def test_archive_window_owns_only_its_native_service(tmp_path, monkeypatch):
         calls.append(("view", worker, session, figure, expected_project_id))
         return {}, None, None
 
-    def intent(worker, path, request, *, expected_project_id, expected_revision):
-        calls.append((request["mode"], worker, path, expected_project_id, expected_revision))
+    def intent(worker, path, request, *, expected_project_id, expected_revision, preview_session=None):
+        calls.append((request["mode"], worker, path, expected_project_id, expected_revision, preview_session))
         return {"saved": True, "idempotency_key": request["idempotency_key"], "revision": 4}
 
     monkeypatch.setattr(plot_editor, "archive_plot_view", view)
@@ -54,13 +54,14 @@ def test_archive_window_owns_only_its_native_service(tmp_path, monkeypatch):
         one, two = first._archive_service, second._archive_service
         assert one is not two
         session, revision = object(), object()
+        first._archive_session = session
         first.archive_project_id = "project-one"
         first.summary = {"project_id": "project-one", "revision_token": revision}
         first._show_archive_view(session, "plot-one")
         first._edit_archive({"idempotency_key": "edit-this"})
         assert calls == [("view", one, session, "plot-one", "project-one"),
-                         ("plan", one, first_path, "project-one", revision),
-                         ("apply", one, first_path, "project-one", revision)]
+                         ("plan", one, first_path, "project-one", revision, session),
+                         ("apply", one, first_path, "project-one", revision, None)]
         first.close()
         assert one in closed and two not in closed
     finally:

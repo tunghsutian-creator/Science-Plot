@@ -1,5 +1,6 @@
 """Publish one supported typed edit back to its explicit standalone project file."""
 
+from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -14,8 +15,8 @@ from .contracts import RevisionToken
 from .errors import EngineError
 from .head_observation import observe_plot_head
 from .journal_identity import saved_command
-from .project_file import ProjectFileSaveUnconfirmed
-from .project_file_summary import PROJECT_FILE_EDIT_PROPERTIES, project_file_figure
+from .project_file import ProjectFileSaveUnconfirmed, ProjectFileSession
+from .project_file_summary import PROJECT_FILE_EDIT_PROPERTIES, project_file_figure, saved_project_file_figure
 
 if TYPE_CHECKING:
     from .application import ProjectApplication
@@ -87,14 +88,24 @@ def resume_project_file_intent(path: Path, request: dict[str, Any]) -> dict[str,
 
 def project_file_intent(service: "ProjectApplication", path: Path, request: dict[str, Any], *,
                         expected_project_id: str | None = None,
-                        expected_revision: RevisionToken | None = None) -> dict[str, Any]:
+                        expected_revision: RevisionToken | None = None,
+                        preview_session: ProjectFileSession | None = None) -> dict[str, Any]:
     """Only the archive owner may acknowledge a saved edit, not its disposable Store."""
     request = validate_intent(request)
     if request["property"] not in PROJECT_FILE_EDIT_PROPERTIES:
         raise EngineError("project_file_intent_unsupported",
                           "Choose an advertised axis title, major tick list, legend display name, or ordinary XY line color.",
                           action="inspect_project_file")
-    with project_file_figure(path, request["plot_id"]) as (session, owner, before):
+    # The editor may already hold a verified read for this exact file. A
+    # preview is read-only; apply always opens an independent write baseline.
+    if (request["mode"] == "plan" and preview_session is not None
+            and preview_session.path == path.expanduser().absolute() and preview_session.matches_path(path)):
+        owner, before = saved_project_file_figure(preview_session, request["plot_id"])
+        figure: AbstractContextManager[tuple[ProjectFileSession, AttachedProjectRepository, dict[str, Any]]]
+        figure = nullcontext((preview_session, owner, before))
+    else:
+        figure = project_file_figure(path, request["plot_id"])
+    with figure as (session, owner, before):
         if expected_project_id is not None and session.project_id != expected_project_id:
             raise EngineError("project_file_identity_conflict", "This path no longer contains the original project file.",
                               action="inspect_project_file")

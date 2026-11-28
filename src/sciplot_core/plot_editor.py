@@ -334,7 +334,8 @@ class PlotEditor(QtWidgets.QMainWindow):
         assert self._archive_service is not None
         try:
             plan = project_file_intent(self._archive_service, self.plot, {**request, "mode": "plan"},
-                                       expected_project_id=self.summary["project_id"], expected_revision=expected)
+                                       expected_project_id=self.summary["project_id"], expected_revision=expected,
+                                       preview_session=self._archive_session)
         except (OSError, ValueError, RuntimeError, KeyError) as exc:
             self._disable_editing()
             self.status.setText(f"未保存：{exc} 请读取最新版本。")
