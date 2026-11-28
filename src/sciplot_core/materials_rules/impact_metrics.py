@@ -9,7 +9,6 @@ import pandas as pd
 
 from sciplot_core.source_tables import read_raw_table
 from sciplot_core.foundation.text_values import token
-from sciplot_core.semantic_sources.impact_sources import require_same_impact_metric
 from sciplot_core.semantic_sources.impact_units import _is_impact_metric
 
 from sciplot_core.materials_rules.metric_tables import (
@@ -43,6 +42,8 @@ def _impact_metric_tables(processed_source: Path) -> list[tuple[str, pd.DataFram
 
 
 def _impact_metrics(processed_source: Path) -> list[dict[str, Any]]:
+    from sciplot_core.semantic_sources.impact_sources import require_same_impact_metric
+
     grouped_values: dict[tuple[str, str], tuple[str, list[float]]] = {}
     for table_name, raw in _impact_metric_tables(processed_source):
         if raw.shape[0] < 4:
