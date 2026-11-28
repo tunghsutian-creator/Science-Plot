@@ -105,7 +105,8 @@ def _same_legacy_science(candidate: StudioPreparationCandidate, previous: dict[s
             return False
         new_copy = candidate.resource_path(new_path)
         if kind == "file":
-            return file_sha256(new_copy) == snapshot["files"][old_path]["sha256"]
+            original_hash = snapshot["files"][old_path]["sha256"]
+            return isinstance(original_hash, str) and file_sha256(new_copy) == original_hash
         prefix = old_path + "/"
         old_members = {name[len(prefix):]: entry["sha256"] for name, entry in snapshot["files"].items()
                        if name.startswith(prefix)}
