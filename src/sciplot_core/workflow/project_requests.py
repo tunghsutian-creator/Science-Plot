@@ -153,7 +153,7 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
             # can refresh its exports without relabeling it ready.
             same_legacy_readiness = (delivery_record.get("complete") is True
                 and failed_gates == ["prerequisite_state_ready"]
-                and state == previous_step.get("state") == current_step.get("state")
+                and "needs_rule_repair" == state == previous_step.get("state") == current_step.get("state")
                 and bool(previous_step.get("state_reasons"))
                 and previous_step["state_reasons"] == current_step.get("state_reasons"))
             if not same_legacy_readiness:
