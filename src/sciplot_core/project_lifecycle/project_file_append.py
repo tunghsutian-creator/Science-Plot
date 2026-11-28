@@ -36,7 +36,7 @@ def _saved(store: FileProjectStore, entry: dict[str, Any], request: dict[str, An
         if state["request_hash"] != digest(request):
             raise EngineError("document_idempotency_conflict", "This key belongs to a different request.",
                               action="use_original_request")
-        document = owner.load_revision(root, 0)["document"]
+        document: dict[str, Any] = owner.load_revision(root, 0)["document"]
         if state["phase"] != "committed" or document["plot_id"] != entry["plot_id"]:
             raise EngineError("project_file_append_unconfirmed", "The saved entry does not identify a completed figure.",
                               action="inspect_project_file")
@@ -64,7 +64,8 @@ def _seal(store: FileProjectStore, snapshot: dict[str, Any], key: str, request: 
         owner.storage_batch(location.root),
         committed_managed_creation(request, location=location) as head,
     ):
-        return head["document"]
+        document: dict[str, Any] = head["document"]
+        return document
 
 
 def _result(kind: str, status: str, path: Path, project_id: str, generation: str,

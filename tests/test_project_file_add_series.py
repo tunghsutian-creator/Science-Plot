@@ -10,7 +10,9 @@ from sciplot_core.mcp_server.schemas import tool_definitions
 from sciplot_core.plot_engine.service import PlotService
 from sciplot_core.plot_protocol.rpc import invoke
 from sciplot_core.project_lifecycle.errors import EngineError
-from test_project_file_append import ordinary_archive  # noqa: F401
+import test_project_file_append
+
+ordinary_archive = test_project_file_append.ordinary_archive
 
 
 def _source(folder):

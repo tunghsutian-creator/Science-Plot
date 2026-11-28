@@ -65,7 +65,7 @@ def _saved(owner: Any, plan_id: str, *, replace: bool) -> dict[str, Any] | None:
                 or transaction["request"]["changes"][0]["property"] != expected):
             raise EngineError("project_file_series_unconfirmed", "Reopen the project before retrying this series.",
                               action="inspect_project_file")
-        document = transaction["document"]
+        document: dict[str, Any] = transaction["document"]
         accepted = owner.load_revision(root, document["revision"])["document"]
         if any(document[key] != accepted[key] for key in ("plot_id", "scientific_hash", "presentation_hash")):
             raise EngineError("project_file_series_unconfirmed", "The recorded series is not a saved revision of this project.",
@@ -133,14 +133,14 @@ def add_project_file_series(service: "ProjectApplication", path: Path, request: 
     """Plan against exact source bytes, then save the audited scientific delta."""
     validate_wire(request, project_file_series_schema(replace=replace), code="project_file_series_invalid_request")
     request = {**request, "source": str(canonical_path(Path(request["source"])))}
-    with project_file_figure(path, request["plot_id"], exact_plot_id=True) as (session, owner, before):
-        root = owner.attachment.root
+    with project_file_figure(path, request["plot_id"], exact_plot_id=True) as (session, opened_owner, before):
+        root = opened_owner.attachment.root
         apply = request["mode"] == "apply"
         if apply:
             plan_id = _identity(request, session.project_id, request["source_sha256"])
             if plan_id != request["plan_id"]:
                 raise EngineError("project_file_series_plan_changed", "Plan again for this exact figure, source and column selection.")
-            published = _saved(owner, plan_id, replace=replace)
+            published = _saved(opened_owner, plan_id, replace=replace)
             if published is not None:
                 return _result("already_saved", session, published, session.opened_generation, replace=replace, saved=True)
         if (before["revision"] != request["base_revision"]
@@ -153,7 +153,7 @@ def add_project_file_series(service: "ProjectApplication", path: Path, request: 
             # archive attachment and invocation-local source declarations.
             if not isinstance(service.repository, ComposedProjectRepository):
                 raise EngineError("project_file_series_unsupported", "Adding a series requires the composed Managed runtime.")
-            owner = service.repository.select(owner.attachment)
+            owner = service.repository.select(opened_owner.attachment)
             with owner.lease(root):
                 patch, plan_id, sha, selection = _patch(request, before, root, session.project_id)
                 with scientific_sources(owner, patch):

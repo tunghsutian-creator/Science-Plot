@@ -131,7 +131,7 @@ def run_request(
                 new_creation=_new_creation,
                 previous_request=_previous_request,
                 frequency_authority=authority,
-                **({"observed_plan": _observed_plan} if _observed_plan is not None else {}),
+                observed_plan=_observed_plan,
             )
 
 

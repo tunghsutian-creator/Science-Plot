@@ -49,7 +49,7 @@ def run_one_step(
         raise ValueError("Autoplot rule_id must be one non-empty canonical identifier.")
     fields = {}
     if _observed_plan is not None:
-        verified = dict(_observed_plan.payload)
+        verified = _observed_plan.payload
         options = verified.get("source_options", {})
         if ("categorical_binding" in options or "summary_statistic" in options
                 or (verified.get("data_mapping") or {}).get("mapping_shape") == "replicates"):
@@ -57,7 +57,7 @@ def run_one_step(
                 "Autoplot cannot execute this approved categorical or replicate selection. "
                 "Use the original task route to preserve the selected scientific method."
             )
-        fields = request_fields_from_verified_plan(input_path, verified)
+        fields = request_fields_from_verified_plan(input_path, dict(verified))
         fields.pop(REQUEST_DELIVERY_ROOT_KEY, None)
     project_dir = _one_step_project_dir(input_path, output_root, project_name)
     request_path = project_dir / "plot_request.json"

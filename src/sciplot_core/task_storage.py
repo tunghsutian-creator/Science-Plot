@@ -116,10 +116,10 @@ def task_summary(state: dict[str, Any]) -> dict[str, Any]:
     if isinstance(handles, list):
         summary["plot_objects"] = handles
     if "intent" in state["request"] and "semantic_plan" in state:
-        evidence = {} if archive_task_target(state["request"]) else {
+        plan_reference = {} if archive_task_target(state["request"]) else {
             "evidence": {"path": str(Path(state["task_dir"]) / "task.json"), "json_pointer": "/semantic_plan"},
         }
-        summary["source_plan"] = {**evidence, "sources": [{key: source[key] for key in ("source_id", "path", "sha256")}
+        summary["source_plan"] = {**plan_reference, "sources": [{key: source[key] for key in ("source_id", "path", "sha256")}
                                               for source in state["semantic_plan"].get("sources", [])],
                                   "confirmation": state.get("plan_confirmation", {"mode": "explicit_source_bound_answers"})}
         if "selection" in state["semantic_plan"]:
@@ -134,7 +134,7 @@ def task_summary(state: dict[str, Any]) -> dict[str, Any]:
             for candidate in question["mapping_candidates"]]}
         summary["question"] = question
     if isinstance(question, dict) and isinstance(question.get("evidence"), dict):
-        evidence = dict(question["evidence"])
+        evidence: dict[str, Any] = dict(question["evidence"])
         if evidence.get("kind") == "sciplot_table_columns":
             evidence.pop("table_snapshot", None)
         if evidence.get("kind") == "sciplot_table_choice":

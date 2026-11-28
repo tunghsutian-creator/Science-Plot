@@ -1,5 +1,7 @@
 """Compose recognized project runs with the single project publication owner."""
 
+from __future__ import annotations
+
 from collections.abc import Callable
 from contextlib import ExitStack
 from copy import deepcopy
@@ -161,8 +163,7 @@ def run_project_request(request_path: Path, request: dict[str, Any], *,
             delivery_result = private_output / "failed_delivery" / uuid4().hex
             archive_failed_delivery(stage, delivery_result, delivery_record)
         prepared = prepare_studio_candidate(candidate, regenerate_generated=new_creation, _new_creation=new_creation,
-            **({"_scientific_source": observed_plan.scientific_source}
-               if observed_plan is not None and observed_plan.scientific_source is not None else {}))
+            _scientific_source=observed_plan.scientific_source if observed_plan is not None else None)
         audits, sources = audit_studio_candidate(candidate, prepared)
         def workflow_location(path: str) -> str:
             if path == str(stage) or path.startswith(str(stage) + "/"):

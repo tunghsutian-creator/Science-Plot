@@ -202,8 +202,8 @@ def _handoff_figure(root: Path, request: dict[str, Any], backend: PlotBackend, *
             return result
         raise EngineError("figure_handoff_install_changed", "The task's selected-file delivery is missing, changed or not its own; nothing was replaced.")
     try:
-        with TemporaryDirectory(prefix=".sciplot-figure-", dir=out.parent) as temporary:
-            staged = Path(temporary) / "figure"
+        with TemporaryDirectory(prefix=".sciplot-figure-", dir=out.parent) as staging_directory:
+            staged = Path(staging_directory) / "figure"
             staged.mkdir()
             if isinstance(evidence, _PlottedSeal):
                 data = capture_plot_data(evidence.ir_path, sha256=evidence.ir_sha256,
@@ -217,7 +217,7 @@ def _handoff_figure(root: Path, request: dict[str, Any], backend: PlotBackend, *
             elif isinstance(evidence, _EditableSeal):
                 name = "figure.vsz"
                 portable = native_snapshot.stage_standalone_native(
-                    evidence.document, staged / name, Path(temporary) / "native-save", original_sha256=evidence.sha256)
+                    evidence.document, staged / name, Path(staging_directory) / "native-save", original_sha256=evidence.sha256)
                 result.update(exports=[{"format": "editable_vsz", "path": str(out / name),
                                         "sha256": portable["portable_sha256"]}],
                               mode="independent_native_snapshot", managed_project_included=False,
@@ -231,7 +231,7 @@ def _handoff_figure(root: Path, request: dict[str, Any], backend: PlotBackend, *
                 before_install({"directory_identity": _directory_identity(staged),
                                 "revision_token": token.to_payload(), "result": result})
             if _publication(root, out, request, backend,
-                            **({"private_publication": private_publication} if private_publication is not None else {})) != (token, evidence):
+                            private_publication=private_publication) != (token, evidence):
                 raise EngineError("figure_handoff_publication_changed", "The selected publication changed during handoff.")
             install_new_delivery(staged, out)
     except FileExistsError as exc:

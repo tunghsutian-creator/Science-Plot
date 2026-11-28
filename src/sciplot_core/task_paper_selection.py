@@ -18,7 +18,7 @@ from sciplot_core.source_coverage.file_snapshots import stable_file_snapshot, _a
 
 
 def _label(item: dict[str, Any], figure: dict[str, Any], figures: list[dict[str, Any]]) -> str:
-    label = item["label"]
+    label: str = item["label"]
     if not label.strip():
         raise TaskControlError("paper_group_label_invalid", "Give the selected group item a nonempty display label.")
     if len(figures) == 1:
@@ -34,7 +34,7 @@ def start_group_paper(group: Path, *, paper_dir: Path, out: Path, title: str | N
                       figure_refs: list[list[str]] | None = None) -> dict[str, Any]:
     """Capture once, then use frozen versions on every retry; never render a gallery."""
     group, root, out = group_path(group), _path(paper_dir), canonical_path(out)
-    origin = {"kind": "current_group_selection", "group": str(group),
+    origin: dict[str, Any] = {"kind": "current_group_selection", "group": str(group),
               "item_ids": item_ids, "title": title, "out": str(out)}
     if figure_refs is not None:
         if (item_ids is not None or not figure_refs

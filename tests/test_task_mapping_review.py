@@ -3,8 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from sciplot_core import task_control, task_execution
 from sciplot_core.data_mapping import (
     create_data_mapping_confirmation,
@@ -17,7 +15,6 @@ from sciplot_core.data_mapping.raw_tables import _read_raw_table
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.mapping_contract import DataColumnMapping, DataMappingProposal, DataSourceReference
 from sciplot_core.plan_preview import build_plan_preview
-from sciplot_core.task_contract import TaskControlError
 
 
 def _capture_creation(monkeypatch, tmp_path):

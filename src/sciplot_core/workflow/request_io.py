@@ -180,8 +180,8 @@ def require_run_source_separation(source: Path, *destinations: Path) -> None:
     source = resolve_source_path(source).resolve()
     if not source.is_dir():
         return
-    for destination in destinations:
-        destination = destination.resolve()
+    for requested_destination in destinations:
+        destination = requested_destination.resolve()
         # Compare directory identity because the same volume can accept mixed case.
         if any(ancestor.is_dir() and ancestor.samefile(source)
                for ancestor in (destination, *destination.parents)):

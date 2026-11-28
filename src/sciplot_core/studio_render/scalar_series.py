@@ -130,8 +130,9 @@ def _scalar_field_from_frames(
     if observed_rows != expected_rows:
         detail = ""
         if missing.any():
-            cell = field.loc[missing].iloc[0]
-            detail = f" Missing or nonnumeric Z at (X={cell[x_column]:g}, Y={cell[y_column]:g})."
+            x = field[x_column][missing].iloc[0]
+            y = field[y_column][missing].iloc[0]
+            detail = f" Missing or nonnumeric Z at (X={x:g}, Y={y:g})."
         raise StudioPreparationBlocked(
             "scalar_field_incomplete_grid",
             f"Scalar-field grid is incomplete: expected {expected_rows} unique X/Y cells "

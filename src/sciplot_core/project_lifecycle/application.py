@@ -164,7 +164,7 @@ class ProjectApplication(ManagedPlotApplication, CommandDispatch):
                 from .patch_execution import execute_patch
 
                 return execute_patch(root, patch, self.backend, defer_export=defer_export,
-                                     **({"explicit_alias": True} if explicit_alias else {}))
+                                     explicit_alias=explicit_alias)
             return self._patch(root, patch)
 
     def _patch(self, root: Path, request: RequestInput, *, rollback_request: dict[str, Any] | None = None) -> dict[str, Any]:

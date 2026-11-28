@@ -57,8 +57,8 @@ def saved_figure(tmp_path, monkeypatch):
                     "phase": "delivering", "status": "running", "project": str(plot), "result": result,
                     "request": _request(source, out, ["pdf"]), "source_hashes": {str(source): file_sha256(source)}})
 
-    def publication(_root, _out, _request, _backend, *, cold_export=False):
-        assert not cold_export
+    def publication(_root, _out, _request, _backend, *, cold_export=False, private_publication=None):
+        assert not cold_export and private_publication is None
         return token, result["exports"]
 
     monkeypatch.setattr(figure_handoff, "_publication", publication)

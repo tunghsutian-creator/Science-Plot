@@ -20,7 +20,6 @@ from sciplot_core._paths import resolve_fixture_path
 from sciplot_core.figure_plan import (
     CartesianMetricBinding,
     REQUIRED_FIGURE_PLAN_RULE_IDS,
-    ResolvedFigurePlan,
     resolve_figure_plan,
 )
 from sciplot_core.materials_rules import get_rule
