@@ -178,3 +178,28 @@ def test_compact_impact_conditions_are_not_interpreted_as_replicates(tmp_path):
 
     source.write_text(text.replace("unnotched", "notched"))
     assert _read_impact_source(source).values == ((7.0, 8.0, 22.0, 23.0),)
+
+    from sciplot_core.semantic import prepare_semantic_source
+
+    split = tmp_path / "split"
+    split.mkdir()
+    first = split / "first.csv"
+    second = split / "second.csv"
+    first.write_text(header + "E2,notched,7\nE2,notched,8\nE3,unnotched,31\n")
+    second.write_text(header + "E2,unnotched,22\nE2,unnotched,23\nE3,unnotched,32\n")
+    originals = (first.read_bytes(), second.read_bytes())
+    prepared = tmp_path / "prepared"
+    with pytest.raises(ImpactConditionConflict, match=r"first\.csv.*row 2.*second\.csv.*row 2.*notched.*unnotched"):
+        prepare_semantic_source(
+            split, output_dir=prepared, semantic={"rule_id": "impact_metric", "semantic_family": "impact_metric"},
+        )
+    assert not list(prepared.rglob("*.csv"))
+    assert (first.read_bytes(), second.read_bytes()) == originals
+
+    second.write_text(header + "E2,notched,22\nE2,notched,23\nE3,unnotched,32\n")
+    source.write_text(first.read_text() + "".join(second.read_text().splitlines(keepends=True)[1:]))
+    split_payload = _read_impact_source(split)
+    assert split_payload == _read_impact_source(source)
+    assert split_payload.samples == ("E2", "E3")
+    assert split_payload.values == ((7.0, 8.0, 22.0, 23.0), (31.0, 32.0))
+    assert split_payload.replicate_counts == (4, 2)

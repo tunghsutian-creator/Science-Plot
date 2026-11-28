@@ -119,7 +119,12 @@ def _wide_impact_columns(
             yield sample, values, raw_table.iat[1, column]
 
 
-def _read_impact_canonical_tables(source: Path) -> ImpactReplicatePayload:
+_CompactConditions = dict[str, tuple[str, Path, int]]
+
+
+def _read_impact_canonical_tables(
+    source: Path, *, conditions: _CompactConditions,
+) -> ImpactReplicatePayload:
     """Read three-label-row impact tables, preserving every workbook sheet."""
 
     parsed: list[tuple[str, str, list[float]]] = []
@@ -128,7 +133,7 @@ def _read_impact_canonical_tables(source: Path) -> ImpactReplicatePayload:
         if source.suffix.casefold() == ".csv" and _compact_condition_column(raw_table) is not None:
             # Explicit row metadata takes precedence over interpreting observations
             # as the three header rows of a wide replicate table.
-            return _read_impact_compact_table(source, raw=raw_table)
+            return _read_impact_compact_table(source, conditions=conditions, raw=raw_table)
         sheet_label = table_name.split(":", 1)[-1] if ":" in table_name else ""
         for sample, values, unit in _wide_impact_columns(table_name, raw_table):
             parsed.append((sheet_label, sample, values))
@@ -244,7 +249,7 @@ def _compact_condition_column(raw: pd.DataFrame) -> int | None:
 
 
 def _read_impact_compact_table(
-    source: Path, *, raw: pd.DataFrame | None = None,
+    source: Path, *, conditions: _CompactConditions, raw: pd.DataFrame | None = None,
 ) -> ImpactReplicatePayload:
     if raw is None:
         raw = read_raw_table(source)
@@ -273,7 +278,6 @@ def _read_impact_compact_table(
     if sample_col is None or metric_col is None:
         raise ValueError("Impact compact table needs sample and impact columns.")
     condition_col = _compact_condition_column(raw)
-    conditions: dict[str, tuple[str, int]] = {}
     header_unit = _impact_unit_candidate_from_header(
         _clean_text(raw.iat[0, metric_col])
     )
@@ -297,10 +301,15 @@ def _read_impact_compact_table(
                     f"{source.name}, sample {sample!r}: original row {original_row} has no declared "
                     "Impact Condition. Select exact condition rows separately; no values were pooled."
                 )
-            previous, previous_row = conditions.setdefault(sample, (condition, original_row))
+            previous, previous_source, previous_row = conditions.setdefault(sample, (condition, source, original_row))
             if previous != condition:
+                locations = (
+                    f"{source.name}, sample {sample!r}: original rows {previous_row} and {original_row}"
+                    if previous_source == source
+                    else f"Sample {sample!r}: {previous_source} row {previous_row} and {source} row {original_row}"
+                )
                 raise ImpactConditionConflict(
-                    f"{source.name}, sample {sample!r}: original rows {previous_row} and {original_row} "
+                    f"{locations} "
                     f"have different Impact Conditions ({previous!r} and {condition!r}). "
                     "Bind the existing categorical condition_column to compare groups, "
                     "or select one condition's rows; no values were pooled."
@@ -328,10 +337,12 @@ def _read_impact_source(source: Path) -> ImpactReplicatePayload:
     groups: dict[str, list[float]] = {}
     payload_units: list[object] = []
     errors: list[str] = []
+    # Sample labels are pooled across files, so their declared conditions must agree across files too.
+    conditions: _CompactConditions = {}
     for path in sources:
         try:
             try:
-                payload = _read_impact_canonical_tables(path)
+                payload = _read_impact_canonical_tables(path, conditions=conditions)
             except _ImpactDataValidationError:
                 raise
             except ValueError:
@@ -340,7 +351,7 @@ def _read_impact_source(source: Path) -> ImpactReplicatePayload:
                 except _ImpactDataValidationError:
                     raise
                 except ValueError:
-                    payload = _read_impact_compact_table(path)
+                    payload = _read_impact_compact_table(path, conditions=conditions)
         except _ImpactDataValidationError:
             raise
         except ValueError as exc:
