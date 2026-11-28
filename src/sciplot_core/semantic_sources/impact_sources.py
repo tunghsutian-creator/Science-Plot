@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -70,7 +71,9 @@ def _impact_metric_identity(header: str) -> str:
         if not tail.strip(" ])") and head:
             header = head.rstrip(" ([")
     label = " ".join(header.casefold().split())
-    if _token(label) in {"re", "impact", "impactstrength", "冲击", "冲击强度"}:
+    # Decimal suffixes on bare instrument Re headers identify repeated columns,
+    # not test conditions. Do not strip qualifiers such as notch or temperature.
+    if re.fullmatch(r"re\.[1-9]\d*", label) or _token(label) in {"re", "impact", "impactstrength", "冲击", "冲击强度"}:
         return "impact strength"
     return label
 

@@ -16,7 +16,7 @@ from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
-from sciplot_core.project_commands import NativeAdoption, ProjectCommands, ProjectMutation
+from sciplot_core.project_commands import MissingGeneratedOutput, NativeAdoption, ProjectCommands, ProjectMutation
 from sciplot_core.project_commands.resources import PreparedFile
 from sciplot_core.project_store import FileProjectStore, ResourceRoot
 from sciplot_core.project_store.runtime import project_runtime
@@ -110,6 +110,19 @@ def _admit_delivery_root(repository: FileProjectStore, root: Path, before: dict[
         yield selected
 
 
+def _prior_reconstruction_delivery(app: ProjectCommands, missing: tuple[MissingGeneratedOutput, ...]) -> dict[str, Any] | None:
+    """Recover the exact delivery receipt only from the proved missing-output producer."""
+    producers = {(item.owner_key, item.owner_digest) for item in missing}
+    if len(producers) != 1:
+        return None
+    key, digest = next(iter(producers))
+    prior = app.query(key) if key is not None else None
+    if prior is None or prior["phase"] != "complete" or prior["command_digest"] != digest:
+        return None
+    package = prior["result"].get("delivery_package")
+    return package if isinstance(package, dict) else None
+
+
 def _next_run(files: dict[str, Any]) -> str:
     index = 1
     while any(name.startswith(f"runs/studio_{index:03d}/") for name in files):
@@ -187,7 +200,7 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
         # Reuse the one committed registry for legacy delivery evidence and the
         # final projection; the command's full read binding still owns CAS.
         registry = read_intake_project_manifest(project, store=repository)
-        previous_delivery = registry.get("delivery_package") if registry is not None else None
+        previous_delivery = registry.get("delivery_package") if registry is not None else _prior_reconstruction_delivery(app, missing)
         if mapping_reads is not None:
             load_data_mapping_execution(mapping_reads.execution)
             mapping_reads.seal()

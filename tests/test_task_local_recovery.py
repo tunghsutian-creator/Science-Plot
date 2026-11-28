@@ -57,7 +57,7 @@ def editing(tmp_path, monkeypatch):
         effects.append("export")
         return {"project_dir": str(project), "studio_run": {"ready_to_use": True}}
     monkeypatch.setattr(shortcuts, "edit_context", context)
-    monkeypatch.setattr(control, "resolve_project_path", lambda _: project)
+    monkeypatch.setattr("sciplot_core.task_request_paths.resolve_project_path", lambda _: project)
     monkeypatch.setattr(storage, "resolve_project_path", lambda _: project)
     monkeypatch.setattr(control, "inspect_project", lambda _: {"project": str(project), "figures": [],
                         **{key: {"current": True} for key in ("source", "qa", "delivery")}})

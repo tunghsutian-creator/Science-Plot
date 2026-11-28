@@ -22,7 +22,7 @@ PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4
 
 def test_tool_discovery_uses_closed_shared_operation_schema():
     tools = {item.name: item for item in tool_definitions()}
-    assert len(tools) == 55
+    assert len(tools) == 57
     daily = {item.name: item for item in tool_definitions("daily")}
     for operation, required in {
         "bundle_export": {"project", "output_dir"},
@@ -34,6 +34,9 @@ def test_tool_discovery_uses_closed_shared_operation_schema():
         name = f"sciplot_project_{operation}"
         assert daily[name] == tools[name]
         assert set(daily[name].input_schema["required"]) == required
+    for name in ("sciplot_project_file_add_series", "sciplot_project_file_replace_series_source"):
+        assert daily[name] == tools[name]
+        assert set(daily[name].input_schema["required"]) == {"target", "request"}
     for name in ("sciplot_project_legacy_redraw", "sciplot_project_legacy_convert"):
         assert set(daily[name].input_schema["required"]) == {"target", "output_dir"}
         assert daily[name].annotations.read_only_hint is False

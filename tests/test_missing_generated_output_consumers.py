@@ -37,6 +37,7 @@ def rendered(publication, monkeypatch):
     def publish(**kwargs):
         import json
         from sciplot_core.policy import DELIVERY_PDF_DIR
+        from sciplot_core.delivery.contracts import DELIVERY_PACKAGE_CONTRACT_VERSION
         delivery = kwargs["delivery_dir"]
         target = delivery / DELIVERY_PDF_DIR / "figure.pdf"
         target.parent.mkdir(parents=True)
@@ -44,8 +45,10 @@ def rendered(publication, monkeypatch):
         manifest = {"result": {"scientific_data_verification": {"status": "passed"}}}
         (kwargs["output_dir"] / "manifest.json").write_text(json.dumps(manifest))
         return {"kind": "sciplot_studio_export_run", "ready_to_use": True, "state": "ready",
-            "exports": kwargs["exports"], "delivery_package": {"complete": True,
-                "figures": [{"format": "pdf", "path": str(target), "sha256": file_sha256(target)}]}}
+            "exports": kwargs["exports"], "delivery_package": {
+                "kind": "sciplot_user_delivery_package", "version": DELIVERY_PACKAGE_CONTRACT_VERSION,
+                "path": str(delivery), "complete": True,
+                "figures": [{"format": "pdf", "path": str(target), "delivery_sha256": file_sha256(target)}]}}
 
     monkeypatch.setattr(native_export_adapter, "export_studio_document", render)
     monkeypatch.setattr(publication_prepare, "prepare_studio_export_run", publish)
@@ -77,6 +80,9 @@ def test_public_export_regenerates_fresh_missing_output_and_keeps_original_histo
     fresh = execute(owner, project, tmp_path)
     assert output.read_bytes() != before_bytes and len(calls) == 2
     assert fresh["exports"][0]["sha256"] == file_sha256(output)
+    if owner == "whole":
+        delivered = Path(fresh["delivery_package"]["figures"][0]["path"])
+        assert delivered.read_bytes() == output.read_bytes()
     records = store.commands()
     reconstructed, = [record for record in records if record["metadata"].get("missing_outputs")]
     assert reconstructed["phase"] == "complete"

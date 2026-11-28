@@ -329,7 +329,7 @@ def _edit_task(tmp_path, monkeypatch, *, export=True):
     project = tmp_path / "project"
     project.mkdir()
     (project / "plot_request.json").write_text(json.dumps({"delivery_output": str(tmp_path / "Visible")}))
-    monkeypatch.setattr(control, "resolve_project_path", lambda _: project)
+    monkeypatch.setattr("sciplot_core.task_request_paths.resolve_project_path", lambda _: project)
     from sciplot_core import task_storage
     monkeypatch.setattr(task_storage, "resolve_project_path", lambda _: project)
     review = {"project": str(project), "operation_id": "a" * 64, "figure_id": "figure1",
@@ -525,7 +525,7 @@ def test_malformed_edit_is_rejected_before_task_directory_or_project_query(tmp_p
     from sciplot_core.studio_core.annotation_schema import AnnotationOperationError
     def unnecessary(*args):
         pytest.fail("Malformed operation reached project I/O")
-    monkeypatch.setattr(control, "resolve_project_path", unnecessary)
+    monkeypatch.setattr("sciplot_core.task_request_paths.resolve_project_path", unnecessary)
     task = tmp_path / "task"
     with pytest.raises(AnnotationOperationError) as failure:
         control.start_task({"version": 1, "action": "edit", "project": "/p",
