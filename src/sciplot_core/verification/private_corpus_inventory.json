@@ -9,7 +9,7 @@
     "static_review_complete": true,
     "nodeid_count": 10517,
     "nodeids_sha256": "1f8e34c30229e8460a7b34519944006d442cc95ee3f34e9c2d5c113553b083d0",
-    "test_sources_sha256": "b022338a0f3e20ed4e8fdb41d9d4ae17507e3f6868336c48bc5685e65cd0ea3b",
+    "test_sources_sha256": "8c26e1eb90990ee73ebff71ff75e493188faa2ea8758d90d2e829c217b7bee3f",
     "test_source_count": 674,
     "candidate_nodeids": [
       "tests/test_plot_template_native.py::test_legacy_paired_template_reauthored_as_managed_preserves_data_and_styles",
