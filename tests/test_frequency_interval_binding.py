@@ -278,10 +278,15 @@ def test_frequency_managed_native_delivery_replays_registered_storage_modulus(tm
             assert compiler.audit_ir(edited_ir, Path(edited["binding"]["document"]))["status"] == "passed"
         finally:
             compiler.close()
+        # The house policy chooses the first width that fits the legend. Check
+        # that native export honors the selected canvas across the label edit.
+        dimensions = ("width_mm", "height_mm")
+        expected_size = [ir["layout"][dimension] for dimension in dimensions]
+        assert [edited_ir["layout"][dimension] for dimension in dimensions] == expected_size
         pdf = next(item["path"] for item in styled["exports"] if item["format"] == "pdf")
         with pymupdf.open(pdf) as native_pdf:
             page = native_pdf[0]
-            assert [page.rect.width * 25.4 / 72, page.rect.height * 25.4 / 72] == pytest.approx([120., 55.], abs=.4)
+            assert [page.rect.width * 25.4 / 72, page.rect.height * 25.4 / 72] == pytest.approx(expected_size, abs=.4)
             assert page.get_drawings()
     finally:
         service.close()
