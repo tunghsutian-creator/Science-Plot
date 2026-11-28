@@ -159,6 +159,31 @@ def validate_writes(record: dict[str, Any], writes: dict[str, Any]) -> None:
             raise ProjectConflict("Missing-output publication requires exact-mode non-deleted fresh output bytes.")
 
 
+def prior_delivery_package(store: OutputStore, resource: str, *,
+                           generation: str, observed_sha256: str | None) -> dict[str, Any] | None:
+    """Recover the sealed whole-package receipt from the current identity writer."""
+    if observed_sha256 is None:
+        return None
+    with store._locked() as (io, bound), _proof(io, bound) as checked:
+        current = checked.current
+        if current["generation"] != generation:
+            raise ProjectConflict("The project changed while selecting prior delivery evidence.")
+        entry = current["files"].get(resource)
+        if entry is None or entry["sha256"] != observed_sha256:
+            return None
+        latest = _latest(io, current, resource, checked)
+        if latest is None or latest["metadata"]["kind"] not in {"publish", "native_import"}:
+            return None
+        written = latest["draft"]["writes"].get(resource)
+        if written is None or any(written[key] != entry[key] for key in ("sha256", "size", "mode")):
+            raise ProjectConflict("The delivery identity differs from its sealed producing write.")
+        package = latest["result"].get("delivery_package")
+        if (isinstance(package, dict) and package.get("kind") == "sciplot_user_delivery_package"
+                and package.get("complete") is True and package.get("identity_sha256") == observed_sha256):
+            return package
+        return None
+
+
 def completed_writes(store: OutputStore, records: Sequence[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Use installed immutable bytes, including selected projection merges."""
     result = {}

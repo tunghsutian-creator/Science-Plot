@@ -146,7 +146,7 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
         request_path=request_path, document_path=document_path)
     repository = _publication_store(project)
     before = repository.snapshot(import_legacy=True)
-    from sciplot_core.project_store.generated_outputs import discover, pending_barrier
+    from sciplot_core.project_store.generated_outputs import discover, pending_barrier, prior_delivery_package
     app = ProjectCommands(repository)
     pending_barrier(app, list(before["files"]), document=repository.logical_path(document))
     before = repository.snapshot()
@@ -190,7 +190,14 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
         _package_snapshot, _preserve_finder_metadata, protect_delivery_replacement,
     )
 
+    from sciplot_core.delivery_identity import DELIVERY_IDENTITY
+
     delivery_before = _package_snapshot(delivery_root)
+    owned_identity = (repository.logical_path(delivery_root / DELIVERY_IDENTITY)
+                      if delivery_namespace is not None else None)
+    sealed_delivery = (prior_delivery_package(repository, owned_identity, generation=before["generation"],
+                                               observed_sha256=delivery_before.get(DELIVERY_IDENTITY, (None, None))[0])
+                       if owned_identity is not None else None)
     delivery_identity = _delivery_identity(delivery_root)
     writes: dict[str, bytes | Path | PreparedFile | None] = {}
     with TemporaryDirectory(prefix="sciplot-publication-") as temporary, \
@@ -200,7 +207,8 @@ def publish_project_exports(*, project_dir: Path, request_path: Path, document_p
         # Reuse the one committed registry for legacy delivery evidence and the
         # final projection; the command's full read binding still owns CAS.
         registry = read_intake_project_manifest(project, store=repository)
-        previous_delivery = registry.get("delivery_package") if registry is not None else _prior_reconstruction_delivery(app, missing)
+        previous_delivery = sealed_delivery or (
+            registry.get("delivery_package") if registry is not None else _prior_reconstruction_delivery(app, missing))
         if mapping_reads is not None:
             load_data_mapping_execution(mapping_reads.execution)
             mapping_reads.seal()
