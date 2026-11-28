@@ -1,4 +1,4 @@
-"""Resolve request inputs and allocate or archive Studio run paths."""
+"""Resolve canonical Studio request and document paths and archive source inputs."""
 
 from __future__ import annotations
 
@@ -32,20 +32,6 @@ def _canonical_publish_paths(
             "figures are exported automatically into the same project receipt."
         )
     return project, request, document
-
-
-def _next_studio_run_dir(project_dir: Path) -> Path:
-    runs_dir = project_dir / "runs"
-    runs_dir.mkdir(parents=True, exist_ok=True)
-    index = 1
-    while True:
-        candidate = runs_dir / f"studio_{index:03d}"
-        try:
-            candidate.mkdir(exist_ok=False)
-        except FileExistsError:
-            index += 1
-        else:
-            return candidate
 
 
 def _resolve_request_input(request: dict[str, Any], *, base_dir: Path) -> Path | None:
