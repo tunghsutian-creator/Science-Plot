@@ -275,6 +275,10 @@ def test_automatic_frequency_groups_bind_original_regions_not_condition_display_
     assert only["path"] == str(first)
     assert (only["table_selection"]["header_rows"], only["table_selection"]["data_start_row"],
             only["table_selection"]["data_end_row"]) == ([7], 10, 26)
+    for split in (False, True):
+        probe = tmp_path / f"split-{split}"
+        probe.mkdir()
+        _assert_frequency_group_identity_does_not_depend_on_file_boundaries(probe, split)
 
 
 def test_frequency_group_binds_exact_files_and_metrics_even_if_local_ids_are_reordered(tmp_path):
@@ -593,8 +597,7 @@ def test_frequency_cli_does_not_fall_back_after_managed_science_replay_mismatch(
     assert not (output / "figures").exists()
 
 
-@pytest.mark.parametrize("split", [False, True])
-def test_frequency_group_identity_does_not_depend_on_file_boundaries(tmp_path, split):
+def _assert_frequency_group_identity_does_not_depend_on_file_boundaries(tmp_path, split):
     from sciplot_core.semantic_sources.scientific_source import resolve_scientific_source
 
     raw = tmp_path / "raw"
