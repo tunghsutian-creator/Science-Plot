@@ -245,12 +245,18 @@ def test_relocated_semantic_xy_can_save_twice_across_installations(tmp_path):
     old_source = old_install / "src"
     shutil.copytree(REPO_ROOT / "src/sciplot_core", old_source / "sciplot_core",
                     ignore=shutil.ignore_patterns("__pycache__"))
-    env = {**os.environ, "SCIPLOT_PYTHON": sys.executable, "MPLCONFIGDIR": str(tmp_path / "mpl")}
+    # The public startup guard must be owned by the same installation as its package.
+    old_wrapper = old_install / "skill/scripts/sciplot"
+    old_wrapper.parent.mkdir(parents=True)
+    shutil.copy2(REPO_ROOT / "skill/scripts/sciplot", old_wrapper)
+    env = {**os.environ, "SCIPLOT_REPO": str(REPO_ROOT), "SCIPLOT_SOURCE_ROOT": str(REPO_ROOT / "src"),
+           "SCIPLOT_PYTHON": sys.executable, "MPLCONFIGDIR": str(tmp_path / "mpl")}
 
     def cli(*args, previous=False, code=0):
         run = subprocess.run(
-            [str(REPO_ROOT / "skill/scripts/sciplot"), *map(str, args), "--json"],
-            env={**env, **({"SCIPLOT_SOURCE_ROOT": str(old_source)} if previous else {})},
+            [str(old_wrapper if previous else REPO_ROOT / "skill/scripts/sciplot"), *map(str, args), "--json"],
+            env={**env, **({"SCIPLOT_REPO": str(old_install), "SCIPLOT_SOURCE_ROOT": str(old_source)}
+                          if previous else {})},
             cwd=tmp_path, capture_output=True, text=True, timeout=120, check=False,
         )
         assert run.returncode == code, run.stdout + run.stderr

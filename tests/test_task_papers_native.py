@@ -218,7 +218,10 @@ def test_public_completed_group_freezes_once_and_reuses_current_native_publicati
     assert forward['ready_to_use'] is True and forward['readiness_evaluated'] is True
     assert forward['source_versions_current'] is True and forward['delivery_current'] is True
     assert 'no fresh native audit' in forward['readiness_scope']
-    assert [item['stem'] for item in forward['items']] == ['001_P0_3_0_7_log', '002_P0_5_0_5_linear']
+    # Group item + figure identity supplies the suffix, not the punctuated label.
+    uvvis, ftir = 'ac4eddafe01d32759dfc8255', 'b4db35a98188252c73f97160'
+    forward_ids = [f'001_{uvvis}', f'002_{ftir}']
+    assert [item['stem'] for item in forward['items']] == forward_ids
     out, paper = tmp_path / 'group-publication', tmp_path / 'group-paper'
     checkpoint = paper
     captures.clear()
@@ -226,10 +229,11 @@ def test_public_completed_group_freezes_once_and_reuses_current_native_publicati
     assert captures == list(reversed(documents))
     assert result['status'] == 'complete' and result['ready_to_use'] is True, result
     assert [Path(item['project']) for item in result['items']] == list(reversed(projects))
-    assert [item['stem'] for item in result['items']] == ['001_P0_5_0_5_linear', '002_P0_3_0_7_log']
-    assert sorted(path.name for path in (out / 'figures').glob('*.pdf')) == ['001_P0_5_0_5_linear.pdf', '002_P0_3_0_7_log.pdf']
+    reversed_ids = [f'001_{ftir}', f'002_{uvvis}']
+    assert [item['stem'] for item in result['items']] == reversed_ids
+    assert sorted(path.name for path in (out / 'figures').glob('*.pdf')) == [f'{stem}.pdf' for stem in reversed_ids]
     manifest = json.loads((out / 'data/figure_sources.json').read_text())
-    assert [item['label'] for item in manifest['items']] == ['P0_5_0_5_linear', 'P0_3_0_7_log']
+    assert [item['label'] for item in manifest['items']] == ['P0.5/0.5 linear', 'P0.3/0.7 log']
     state = json.loads((paper / 'paper.json').read_text())
     assert state['selection_origin']['group_state_sha256'] == group['state_sha256']
     for source, item, requested in zip(state['selections'], state['items'], state['request']['items'], strict=True):
